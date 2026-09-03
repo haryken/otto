@@ -339,6 +339,10 @@
                     <input type="radio" name="preset_mac_idx" value="6">
                     <span data-lang="course_mac_manual_option">Tự nhập MAC (điền ô dưới rồi Lưu)</span>
                 </label>
+                <label>
+                    <input type="radio" name="preset_mac_idx" value="7">
+                    <span><strong data-lang="course_daily">Giao tiếp hằng ngày</strong> <span class="course-mac" data-lang="course_daily_hint_short">(random MAC mỗi lần mở máy)</span></span>
+                </label>
             </fieldset>
             <div class="course-mac-input-wrap">
                 <label for="custom_mac" data-lang="course_mac_label">MAC Address (Device-Id)</label>
@@ -579,8 +583,10 @@
                 course_mac_fill_auto: 'Auto-fill MAC from selected course above',
                 course_mac_fill_manual: 'Enter MAC manually',
                 course_mac_manual_option: 'Custom MAC (type below, then Save)',
+                course_daily: 'Daily conversation',
+                course_daily_hint_short: '(random MAC each power-on)',
                 course_mac_label: 'MAC Address (Device-Id)',
-                course_mac_hint: 'Pick one of 7 options. Named courses fill MAC automatically. Custom configuration: leave empty to use chip MAC. Custom MAC: type the address, then Save.',
+                course_mac_hint: 'Pick a course. Named courses fill MAC automatically. Custom: leave empty = chip MAC. Manual MAC: type then Save. Daily chat: random MAC each reboot.',
                 otto_motor_test_forward: 'Motor test: move forward continuously',
                 otto_motor_test_forward_hint: 'Enable to make Otto walk forward continuously for motor/servo testing. Disable to stop immediately.',
                 save: 'Save'
@@ -1094,8 +1100,10 @@
                 course_mac_fill_auto: 'Tự động điền MAC theo khóa học đã chọn phía trên',
                 course_mac_fill_manual: 'Nhập MAC thủ công',
                 course_mac_manual_option: 'Tự nhập MAC (điền ô dưới rồi Lưu)',
+                course_daily: 'Giao tiếp hằng ngày',
+                course_daily_hint_short: '(random MAC mỗi lần mở máy)',
                 course_mac_label: 'Địa chỉ MAC (Device-Id)',
-                course_mac_hint: 'Chọn 1 trong 7 mục. Khóa học có sẵn: MAC điền sẵn. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ MAC rồi bấm Lưu.',
+                course_mac_hint: 'Chọn cấp độ. Khóa có sẵn: MAC điền sẵn. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu. Giao tiếp hằng ngày: random MAC mỗi lần mở máy.',
                 otto_motor_test_forward: 'Test động cơ: đi thẳng liên tục',
                 otto_motor_test_forward_hint: 'Bật rồi bấm Lưu để lưu vĩnh viễn (tắt nguồn vẫn nhớ). Bỏ tick + Lưu để tắt.',
                 save: 'Lưu'
@@ -1123,8 +1131,10 @@
                 course_mac_fill_auto: '根据上方所选课程自动填入 MAC',
                 course_mac_fill_manual: '手动输入 MAC',
                 course_mac_manual_option: '自定义 MAC（在下方填写后保存）',
+                course_daily: '日常对话',
+                course_daily_hint_short: '(每次开机随机 MAC)',
                 course_mac_label: 'MAC 地址 (Device-Id)',
-                course_mac_hint: '七选一。课程预设会自动填 MAC；自定义配置留空则用芯片 MAC；自定义 MAC 则输入后保存。',
+                course_mac_hint: '选择课程。预设会自动填 MAC；自定义留空用芯片 MAC；自定义 MAC 则输入后保存；日常对话每次开机随机 MAC。',
                 otto_motor_test_forward: '电机测试：持续前进',
                 otto_motor_test_forward_hint: '开启后 Otto 会持续向前走（用于测试舵机/电机），关闭则立即停止。',
                 save: '保存'
@@ -1429,16 +1439,7 @@
         };
 
         function isMacFieldReadOnlyForIdx(idx) {
-            return idx >= 1 && idx <= 5;
-        }
-
-        function updateCourseMacField() {
-            const input = document.getElementById('custom_mac');
-            if (!input) {
-                return;
-            }
-            const idx = getPresetMacIdxFromForm();
-            input.readOnly = isMacFieldReadOnlyForIdx(idx);
+            return (idx >= 1 && idx <= 5) || idx === 7;
         }
 
         function fillMacFromSelectedPreset() {
@@ -1451,11 +1452,20 @@
                 if (PRESET_MAC_BY_IDX[idx] !== undefined) {
                     input.value = PRESET_MAC_BY_IDX[idx];
                 }
-            } else if (idx === 0) {
+            } else if (idx === 0 || idx === 6) {
                 input.value = '';
-            } else if (idx === 6) {
-                input.value = '';
+            } else if (idx === 7) {
+                input.value = '(random mỗi lần mở máy)';
             }
+        }
+
+        function updateCourseMacField() {
+            const input = document.getElementById('custom_mac');
+            if (!input) {
+                return;
+            }
+            const idx = getPresetMacIdxFromForm();
+            input.readOnly = isMacFieldReadOnlyForIdx(idx);
         }
 
         function bindPresetMacAutoFill() {
@@ -1499,8 +1509,11 @@
 
         function getAdvancedConfigPayload() {
             const macEl = document.getElementById('custom_mac');
-            const mac = macEl ? normalizeMacInput(macEl.value) : '';
+            let mac = macEl ? normalizeMacInput(macEl.value) : '';
             const idx = getPresetMacIdxFromForm();
+            if (idx === 7) {
+                mac = '';
+            }
             if (idx === 6) {
                 if (!isValidMacString(mac)) {
                     throw new Error('Invalid MAC. Use format aa:bb:cc:dd:ee:ff');

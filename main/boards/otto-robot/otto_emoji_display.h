@@ -2,6 +2,8 @@
 
 #include "display/lcd_display.h"
 
+#include <memory>
+
 /**
  * @brief Otto机器人GIF表情显示类
  * 继承SpiLcdDisplay，通过EmojiCollection添加GIF表情支持
@@ -18,6 +20,8 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetChatMessage(const char* role, const char* content) override;
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
+    virtual void ShowQrCode(const char* text) override;
+    virtual void HideQrCode() override;
     virtual void SetupUI() override;
 
    private:
@@ -28,4 +32,10 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     /** Keep subtitle at bottom; multiline text draws above the full-screen eye GIF. */
     void ConfigureChatLayout();
     void RaiseStatusChrome();
+
+    lv_obj_t* qr_overlay_ = nullptr;
+    lv_obj_t* qr_image_ = nullptr;
+    std::unique_ptr<LvglImage> qr_image_holder_;
+    esp_timer_handle_t qr_timer_ = nullptr;
+    bool qr_visible_ = false;
 };

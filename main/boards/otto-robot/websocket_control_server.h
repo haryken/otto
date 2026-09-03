@@ -17,11 +17,29 @@ public:
 
     size_t GetClientCount() const;
 
+    // Self-control: read student info from NVS
+    static std::string GetStudentName();
+    static int GetPresetMacIdx();
+    static std::string GetUnitsForCourse(int course_idx);
+    static int GetYoungInnovatorsSubIdx();
+    static std::string GetYoungInnovatorsUnit(int sub_idx);
+    static int GetExplorersSubIdx();
+    static std::string GetExplorersUnit(int sub_idx);
+    static int GetFutureLeadersSubIdx();
+    static std::string GetFutureLeadersUnit(int sub_idx);
+    /** Sub-book index for courses that have subs; 0 otherwise. */
+    static int GetActiveSubIdx(int course_idx);
+    /** Selected unit id string for the active course (+ sub if any). */
+    static std::string GetActiveUnitSelection(int course_idx);
+
 private:
     httpd_handle_t server_handle_;
     std::map<int, httpd_req_t*> clients_;
 
     static esp_err_t ws_handler(httpd_req_t *req);
+    static esp_err_t self_control_page_handler(httpd_req_t *req);
+    static esp_err_t api_config_get_handler(httpd_req_t *req);
+    static esp_err_t api_config_post_handler(httpd_req_t *req);
     
     void HandleMessage(httpd_req_t *req, const char* data, size_t len);
     void AddClient(httpd_req_t *req);

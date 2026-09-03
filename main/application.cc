@@ -2,6 +2,7 @@
 #include "board.h"
 #include "display.h"
 #include "system_info.h"
+#include "device_identity_presets.h"
 #include "audio_codec.h"
 #include "mqtt_protocol.h"
 #include "websocket_protocol.h"
@@ -59,6 +60,12 @@ bool Application::SetDeviceState(DeviceState state) {
 }
 
 void Application::Initialize() {
+    // Daily-chat course: pick a random Device-Id from the 20-MAC pool on every boot.
+    if (ReadPresetMacIndexFromNvs() == kDailyChatPresetMacIndex) {
+        const char* mac = PickAndSaveDailyChatMac();
+        ESP_LOGI(TAG, "Daily chat boot MAC: %s", mac ? mac : "(none)");
+    }
+
     auto& board = Board::GetInstance();
     SetDeviceState(kDeviceStateStarting);
 
@@ -1267,6 +1274,85 @@ void Application::ResetProtocol() {
         }
         // Reset protocol
         protocol_.reset();
+    });
+}
+
+void Application::ApplyDeviceIdentity() {
+    Schedule([this]() {
+        if (identity_task_handle_ != nullptr || activation_task_handle_ != nullptr) {
+            ESP_LOGW(TAG, "ApplyDeviceIdentity: another identity/activation task is running");
+            return;
+        }
+
+        ESP_LOGI(TAG, "ApplyDeviceIdentity: Device-Id=%s", SystemInfo::GetMacAddress().c_str());
+        aborted_ = true;
+        if (protocol_) {
+            AbortSpeaking(kAbortReasonNone);
+            if (protocol_->IsAudioChannelOpened()) {
+                PrepareAudioChannelClose();
+                protocol_->CloseAudioChannel();
+            }
+        }
+        protocol_.reset();
+
+        auto state = GetDeviceState();
+        if (state == kDeviceStateListening || state == kDeviceStateSpeaking ||
+            state == kDeviceStateConnecting) {
+            SetDeviceState(kDeviceStateIdle);
+        }
+
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) {
+            display->ShowNotification("Đang đổi khóa học...", 4000);
+        }
+
+        xTaskCreate(
+            [](void* arg) {
+                auto* app = static_cast<Application*>(arg);
+                app->IdentityApplyTask();
+                app->identity_task_handle_ = nullptr;
+                vTaskDelete(nullptr);
+            },
+            "identity_apply", 8192, this, 2, &identity_task_handle_);
+    });
+}
+
+void Application::IdentityApplyTask() {
+    ESP_LOGI(TAG, "IdentityApplyTask: CheckVersion with new Device-Id");
+    ota_ = std::make_unique<Ota>();
+    esp_err_t err = ota_->CheckVersion();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "IdentityApplyTask: CheckVersion failed: %s", esp_err_to_name(err));
+        ota_.reset();
+        Schedule([this]() {
+            auto display = Board::GetInstance().GetDisplay();
+            if (display != nullptr) {
+                display->ShowNotification("Đổi khóa học thất bại", 4000);
+            }
+            SetDeviceState(kDeviceStateIdle);
+        });
+        return;
+    }
+
+    ota_->MarkCurrentVersionValid();
+    if (ota_->HasNewVersion()) {
+        ESP_LOGW(TAG, "IdentityApplyTask: firmware update available, skipped during course switch");
+    }
+
+    Schedule([this]() {
+        protocol_.reset();
+        if (ota_ != nullptr) {
+            InitializeProtocol();
+            ota_.reset();
+        }
+        SetDeviceState(kDeviceStateIdle);
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) {
+            display->SetChatMessage("system", "");
+            display->ShowNotification("Đã đổi khóa học", 3000);
+        }
+        ESP_LOGI(TAG, "IdentityApplyTask: cloud protocol restarted, Device-Id=%s",
+                 SystemInfo::GetMacAddress().c_str());
     });
 }
 

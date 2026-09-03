@@ -13,15 +13,20 @@
 
 #include "application.h"
 #include "board.h"
+#include "display.h"
 #include "config.h"
 #include "mcp_server.h"
+#include "otto_course_units.h"
 #include "otto_motor_test.h"
 #include "otto_movements.h"
 #include "otto_music_player.h"
 #include "power_manager.h"
 #include "sdkconfig.h"
 #include "settings.h"
+#include "websocket_control_server.h"
 #include "wifi_board.h"
+#include "device_identity_presets.h"
+#include "system_info.h"
 #include <nvs.h>
 #include <wifi_manager.h>
 
@@ -1114,6 +1119,133 @@ public:
                                OttoMusic::Stop();
                                return true;
                            });
+
+        // Tool: Lấy thông tin học viên (tên, cấp độ, unit đang học)
+        mcp_server.AddTool(
+            "self.otto.get_student_info",
+            "Lấy thông tin học viên: tên, khóa (0=Tự cấu hình, 1=Explorers, 2=Young Innovators, "
+            "3=Future Leaders, 4=IELTS, 5=TOEIC, 6=Tự nhập MAC, 7=Giao tiếp hằng ngày), "
+            "sách con nếu có, 1 unit đang chọn, và Device-Id (MAC) đang dùng.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                std::string name = WebSocketControlServer::GetStudentName();
+                int idx = WebSocketControlServer::GetPresetMacIdx();
+                int sub_idx = WebSocketControlServer::GetActiveSubIdx(idx);
+                std::string units = WebSocketControlServer::GetActiveUnitSelection(idx);
+                std::string unit_titles = ResolveOttoUnitNames(idx, sub_idx, units);
+                const OttoCourseDef* course = GetOttoCourse(idx);
+                const OttoUnitList* unit_list = GetOttoActiveUnitList(idx, sub_idx);
+                std::string device_id = SystemInfo::GetMacAddress();
+
+                cJSON* root = cJSON_CreateObject();
+                cJSON_AddStringToObject(root, "student_name", name.c_str());
+                cJSON_AddStringToObject(root, "course", course ? course->id : "unknown");
+                cJSON_AddStringToObject(root, "course_name", course ? course->display_name : "unknown");
+                cJSON_AddNumberToObject(root, "course_idx", idx);
+                cJSON_AddStringToObject(root, "device_id", device_id.c_str());
+                if (course && course->sub_count > 0 && unit_list) {
+                    cJSON_AddNumberToObject(root, "sub_idx", sub_idx);
+                    cJSON_AddStringToObject(root, "sub_name", unit_list->name);
+                }
+                cJSON_AddStringToObject(root, "units", units.c_str());
+                cJSON_AddStringToObject(root, "unit_names", unit_titles.c_str());
+                char* json = cJSON_PrintUnformatted(root);
+                std::string result = json ? json : "{}";
+                free(json);
+                cJSON_Delete(root);
+                return result;
+            });
+
+        // Tool: Hiện QR code trang Self-Control trên LCD
+        mcp_server.AddTool(
+            "self.otto.show_config_page",
+            "Hiện QR code trên màn hình LCD chứa URL trang cài đặt Self-Control (http://IP:8080). "
+            "Người dùng quét QR để mở trang web cấu hình tên, cấp độ, unit. "
+            "Dùng khi người dùng nói 'mở cài đặt', 'mở trang cấu hình', 'cài đặt thông tin'.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                auto& wifi = WifiManager::GetInstance();
+                std::string ip = wifi.GetIpAddress();
+                if (ip.empty()) {
+                    return "Lỗi: Robot chưa kết nối WiFi, không có IP.";
+                }
+                std::string url = "http://" + ip + ":8080";
+                auto* display = Board::GetInstance().GetDisplay();
+                if (display != nullptr) {
+                    display->ShowQrCode(url.c_str());
+                }
+                return "Đã hiện mã QR trên màn hình. URL trang Self-Control: " + url;
+            });
+
+        // Tool: Đổi cấp độ học bằng giọng nói
+        mcp_server.AddTool(
+            "self.otto.set_course",
+            "Đổi cấp độ khóa học ngay. course_idx: 0=Tự cấu hình (MAC chip hoặc custom_mac tùy chọn), "
+            "1=Explorers, 2=Young Innovators, 3=Future Leaders, 4=IELTS, 5=TOEIC, "
+            "6=Tự nhập MAC (bắt buộc kèm custom_mac dạng aa:bb:cc:dd:ee:ff), "
+            "7=Giao tiếp hằng ngày (random 1/20 MAC, mỗi lần tắt mở máy lại random). "
+            "Explorers/Young Innovators/Future Leaders có sách con chọn trên web. "
+            "Robot lưu NVS rồi kết nối lại server với Device-Id mới, không cần reboot. "
+            "Dùng khi người dùng nói 'đổi sang Explorers', 'chuyển giao tiếp hằng ngày', 'tự nhập MAC', 'đổi cấp độ'.",
+            PropertyList({
+                Property("course_idx", kPropertyTypeInteger, 1, 0, 7),
+                Property("custom_mac", kPropertyTypeString, "")
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                int idx = properties["course_idx"].value<int>();
+                std::string custom_mac = properties["custom_mac"].value<std::string>();
+                // normalize
+                for (char& c : custom_mac) {
+                    if (c == '-' || c == ' ') c = ':';
+                    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+                }
+                int old_idx = WebSocketControlServer::GetPresetMacIdx();
+                std::string old_mac = SystemInfo::GetMacAddress();
+
+                if (idx == kManualCustomMacIndex) {
+                    unsigned int b[6];
+                    char extra = 0;
+                    if (sscanf(custom_mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x%c",
+                               &b[0], &b[1], &b[2], &b[3], &b[4], &b[5], &extra) != 6) {
+                        return "Lỗi: Tự nhập MAC cần custom_mac đúng dạng aa:bb:cc:dd:ee:ff";
+                    }
+                    WriteCustomMacToNvs(custom_mac.c_str());
+                } else if (idx == 0) {
+                    if (!custom_mac.empty()) {
+                        unsigned int b[6];
+                        char extra = 0;
+                        if (sscanf(custom_mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x%c",
+                                   &b[0], &b[1], &b[2], &b[3], &b[4], &b[5], &extra) != 6) {
+                            return "Lỗi: custom_mac không hợp lệ";
+                        }
+                        WriteCustomMacToNvs(custom_mac.c_str());
+                    } else {
+                        WriteCustomMacToNvs("");
+                    }
+                } else if (idx == kDailyChatPresetMacIndex) {
+                    PickAndSaveDailyChatMac();
+                }
+
+                nvs_handle_t nvs;
+                if (nvs_open("wifi", NVS_READWRITE, &nvs) != ESP_OK) {
+                    return "Lỗi: Không thể mở NVS";
+                }
+                nvs_set_i32(nvs, "preset_mac", (int32_t)idx);
+                nvs_commit(nvs);
+                nvs_close(nvs);
+
+                const OttoCourseDef* course = GetOttoCourse(idx);
+                const char* name = course ? course->display_name : "Unknown";
+                std::string new_mac = SystemInfo::GetMacAddress();
+
+                if (idx != old_idx || new_mac != old_mac) {
+                    Application::GetInstance().ApplyDeviceIdentity();
+                    return std::string("Đã đổi cấp độ sang ") + name +
+                           ". Device-Id=" + new_mac +
+                           ". Robot đang kết nối lại server, hãy đợi vài giây rồi nói chuyện tiếp.";
+                }
+                return std::string("Đang ở cấp độ ") + name + ", không cần đổi.";
+            });
 
         mcp_server.AddTool(
             "self.system.reconfigure_wifi",

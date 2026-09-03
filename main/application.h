@@ -131,6 +131,11 @@ public:
      * This includes closing audio channel, resetting protocol and ota objects
      */
     void ResetProtocol();
+    /**
+     * Re-fetch cloud config with current Device-Id (course MAC) and reconnect MQTT/WS.
+     * Thread-safe. Does not reboot. Local self-control server on :8080 stays up.
+     */
+    void ApplyDeviceIdentity();
 
 private:
     Application();
@@ -156,6 +161,7 @@ private:
     bool music_playing_display_active_ = false;
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
+    TaskHandle_t identity_task_handle_ = nullptr;
 
 #if CONFIG_SILENCE_PROMPT_ENABLE
     std::chrono::steady_clock::time_point last_server_speech_activity_time_;
@@ -189,6 +195,7 @@ private:
     void CheckAssetsVersion();
     void CheckNewVersion();
     void InitializeProtocol();
+    void IdentityApplyTask();
     void ShowActivationCode(const std::string& code, const std::string& message);
     void SetListeningMode(ListeningMode mode);
     ListeningMode GetDefaultListeningMode() const;

@@ -75,8 +75,8 @@ private:
     int8_t max_tx_power_;
     bool remember_bssid_;
     bool sleep_mode_;
-    uint8_t preset_mac_idx_;  // 0 = chip/custom MAC, 1..5 = named presets, 6 = manual custom MAC
-    std::string custom_mac_;  // aa:bb:cc:dd:ee:ff when preset_mac_idx_ is 0 or 6
+    uint8_t preset_mac_idx_;  // 0 = chip/custom MAC, 1..5 = named presets, 6 = manual custom MAC, 7 = daily chat
+    std::string custom_mac_;  // aa:bb:cc:dd:ee:ff when preset_mac_idx_ is 0, 6, or 7
 
     // Callbacks
     std::function<void()> on_exit_requested_;

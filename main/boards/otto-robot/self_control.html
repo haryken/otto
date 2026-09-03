@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Otto Self Control</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #f4f6f8; color: #333; padding: 16px; }
+        h1 { font-size: 1.4em; text-align: center; margin-bottom: 16px; color: #2c3e50; }
+        .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .card h2 { font-size: 1.1em; margin-bottom: 10px; color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 6px; }
+        label { display: block; margin: 6px 0; cursor: pointer; }
+        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        input[type="radio"] { margin-right: 8px; }
+        .unit-grid { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+        .unit-grid label { display: flex; align-items: flex-start; gap: 8px; padding: 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; line-height: 1.35; }
+        .unit-grid label.checked { background: #d4edda; border-color: #28a745; }
+        .unit-grid input[type="radio"] { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+        .course-label { padding: 8px 12px; border-radius: 6px; margin: 4px 0; display: flex; align-items: center; }
+        .course-label.selected { background: #d6eaf8; font-weight: bold; }
+        .course-name { font-weight: bold; }
+        .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-save { background: #28a745; color: #fff; }
+        .btn-save:hover { background: #218838; }
+        .btn-save:disabled { background: #ccc; cursor: not-allowed; }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: opacity 0.3s; z-index: 999; }
+        .toast.show { opacity: 1; }
+        .status { text-align: center; font-size: 0.9em; color: #888; margin-top: 8px; }
+        .no-units { color: #999; font-style: italic; padding: 10px 0; }
+        .course-mac { color: #888; font-weight: normal; font-size: 0.9em; margin-left: 6px; }
+        #custom_mac[readonly] { background: #f0f0f0; color: #555; }
+        .mac-hint { color: #666; font-size: 0.85em; margin-top: 8px; line-height: 1.4; }
+        .device-id { font-family: monospace; background: #eef6ff; padding: 8px 10px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Otto Self Control</h1>
+    <div id="toast" class="toast"></div>
+
+    <!-- Tên học viên -->
+    <div class="card">
+        <h2>👤 Tên học viên</h2>
+        <input type="text" id="student_name" placeholder="Nhập tên học viên...">
+    </div>
+
+    <!-- Chọn cấp độ -->
+    <div class="card">
+        <h2>📚 Cấp độ học</h2>
+        <div id="course_list"></div>
+    </div>
+
+    <!-- MAC / Device-Id (giống hotspot) -->
+    <div class="card">
+        <h2>🔑 Địa chỉ MAC (Device-Id)</h2>
+        <input type="text" id="custom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+        <p class="mac-hint" id="mac_hint">Khóa có sẵn: MAC tự điền. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu. Giao tiếp hằng ngày: random mỗi lần mở máy.</p>
+        <div class="device-id" id="device_id_view">Device-Id đang dùng: ...</div>
+    </div>
+
+    <!-- Chọn sách / cấp độ con (Explorers, Young Innovators, ...) -->
+    <div class="card" id="sub_card" style="display: none;">
+        <h2 id="sub_card_title">📗 Sách / cấp độ con</h2>
+        <div id="sub_list"></div>
+    </div>
+    <div class="card" id="unit_card">
+        <h2>📖 Chọn Unit — <span id="current_course_name">...</span></h2>
+        <div id="unit_list"></div>
+    </div>
+
+    <!-- Nút lưu -->
+    <button class="btn btn-save" id="btn_save" onclick="saveConfig()">💾 Lưu cấu hình</button>
+    <div class="status" id="status"></div>
+
+    <script>
+        const MOCK_UNITS = ['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4', 'Unit 5', 'Unit 6'];
+        const COURSES = {
+            0: { name: 'Tự cấu hình', units: [], subs: [] },
+            1: { name: 'Explorers', units: [], subs: [
+                { name: 'Pre-Discovery A', units: [
+                    'Unit Routines',
+                    'Unit Welcome The Magic Forest',
+                    "Unit One Let's Draw",
+                    "Unit Two Let's Play",
+                    'Unit Review One',
+                    'Unit Three The Big Monster',
+                    'Unit Special Day One',
+                    'Unit Special Day Two'
+                ]},
+                { name: 'Pre-Discovery B', units: [
+                    'Unit Routines Review',
+                    'Unit Four My Family',
+                    'Unit Review Two',
+                    "Unit Five Where's My Bird?",
+                    'Unit Midterm Test',
+                    "Unit Six Let's Tidy Up!",
+                    'Unit Review Three',
+                    'Unit Special Day Three',
+                    'Unit Special Day Four',
+                    'Unit Review Four',
+                    'Unit Final Test'
+                ]},
+                { name: 'PRE-SPARK A', units: [
+                    'Unit Routines',
+                    "Unit Welcome Let's Remember",
+                    'Unit One The Surprise',
+                    'Unit Two The Brown Mouse',
+                    'Unit Review One',
+                    'Unit Three Where Is Greenman?',
+                    'Unit Special Day One',
+                    'Unit Special Day Two'
+                ]},
+                { name: 'SPARK Two A', units: [
+                    'Unit Our Friends',
+                    'Unit One Weather',
+                    'Unit Two Our Families',
+                    'Unit Three Our Places',
+                    'Unit Four Our Colors and Shapes'
+                ]},
+                { name: 'SPARK Three A', units: [
+                    'Unit Hello Again',
+                    'Unit One Our Day',
+                    'Unit Two Dinner Time',
+                    'Unit Three With My Friends',
+                    'Unit Four Our Colors and Shapes',
+                    'Unit Four Our Faces'
+                ]}
+            ]},
+            2: { name: 'Young Innovators', units: [], subs: [
+                { name: 'QUEST One A', units: [
+                    'Unit One Hello',
+                    'Unit Two My School',
+                    'Unit Three Favourite Toys',
+                    'Unit Four My Family',
+                    'Unit Five Our Pets',
+                    'Unit Six My Face'
+                ]},
+                { name: 'QUEST Two B', units: [
+                    'Unit Seven At the Farm',
+                    'Unit Eight My Town',
+                    'Unit Nine Our Clothes',
+                    'Unit Ten Our Hobbies',
+                    'Unit Eleven My Birthday',
+                    'Unit Twelve Our Holiday'
+                ]},
+                { name: 'QUEST Three A', units: [
+                    'Unit Hello',
+                    'Unit One Family Matters',
+                    'Unit Two Home Sweet Home',
+                    'Unit Values One and Two',
+                    'Unit Three A Day in the Life',
+                    'Unit Four In the City',
+                    'Unit Values Three and Four',
+                    'Unit YLE Movers Listening Skills Practice'
+                ]}
+            ]},
+            3: { name: 'Future Leaders', units: [], subs: [
+                { name: 'Summit One A', units: [
+                    'Unit Welcome',
+                    'Unit One Having a Good Time',
+                    'Unit Two Spending Money',
+                    'Unit Three We Are What We Eat',
+                    'Unit Four All in the Family',
+                    'Unit Five No Place Like Home',
+                    'Unit Six Friends Forever'
+                ]}
+            ]},
+            4: { name: 'IELTS', units: MOCK_UNITS, subs: [] },
+            5: { name: 'TOEIC', units: MOCK_UNITS, subs: [] },
+            6: { name: 'Tự nhập MAC', units: [], subs: [], noUnits: true },
+            7: { name: 'Giao tiếp hằng ngày', units: [], subs: [], noUnits: true, daily: true }
+        };
+
+        const DEFAULT_UNITS = "1";
+        const EX_IDX = 1;
+        const YI_IDX = 2;
+        const FL_IDX = 3;
+        const MANUAL_MAC_IDX = 6;
+        const DAILY_IDX = 7;
+
+        const PRESET_MAC_BY_IDX = {
+            1: 'ba:53:9e:c5:fa:10',
+            2: 'ba:53:9e:c5:fa:11',
+            3: 'ba:53:9e:c5:fa:12',
+            4: 'ba:53:9e:c5:fa:13',
+            5: 'ba:53:9e:c5:fa:14'
+        };
+
+        function emptySubUnits(count) {
+            const o = {};
+            for (let i = 0; i < count; i++) o[i] = DEFAULT_UNITS;
+            return o;
+        }
+
+        let currentConfig = {
+            preset_mac_idx: 1,
+            student_name: '',
+            custom_mac: '',
+            device_id: '',
+            all_units: { 1: DEFAULT_UNITS, 2: DEFAULT_UNITS, 3: DEFAULT_UNITS, 4: DEFAULT_UNITS, 5: DEFAULT_UNITS },
+            yi_sub: 0,
+            yi_units: emptySubUnits(3),
+            ex_sub: 0,
+            ex_units: emptySubUnits(5),
+            fl_sub: 0,
+            fl_units: emptySubUnits(1)
+        };
+        let savedCourseIdx = 1;
+        let savedCustomMac = '';
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        function normalizeMacInput(v) {
+            return String(v || '').trim().toLowerCase().replace(/-/g, ':').replace(/\s+/g, '');
+        }
+        function isValidMacString(mac) {
+            return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(normalizeMacInput(mac));
+        }
+        function isMacFieldReadOnlyForIdx(idx) {
+            return (idx >= 1 && idx <= 5) || idx === DAILY_IDX;
+        }
+        function courseLabel(idx, course) {
+            if (idx >= 1 && idx <= 5 && PRESET_MAC_BY_IDX[idx]) {
+                return course.name + ' <span class="course-mac">' + PRESET_MAC_BY_IDX[idx] + '</span>';
+            }
+            if (idx === DAILY_IDX) {
+                return course.name + ' <span class="course-mac">(random MAC mỗi lần mở máy)</span>';
+            }
+            return course.name;
+        }
+        function updateMacField() {
+            const input = document.getElementById('custom_mac');
+            const idx = currentConfig.preset_mac_idx;
+            input.readOnly = isMacFieldReadOnlyForIdx(idx);
+            if (idx >= 1 && idx <= 5) {
+                input.value = PRESET_MAC_BY_IDX[idx] || '';
+            } else if (idx === DAILY_IDX) {
+                input.value = currentConfig.device_id || '(random mỗi lần mở máy)';
+            } else if (idx === 0) {
+                // keep typed / empty for chip MAC
+            } else if (idx === MANUAL_MAC_IDX) {
+                // keep typed custom mac
+            }
+            document.getElementById('device_id_view').textContent =
+                'Device-Id đang dùng: ' + (currentConfig.device_id || '...');
+        }
+
+        function courseHasSubs(idx) {
+            const c = COURSES[idx];
+            return !!(c && c.subs && c.subs.length);
+        }
+
+        function getSubIdx(idx) {
+            if (idx === EX_IDX) return currentConfig.ex_sub || 0;
+            if (idx === YI_IDX) return currentConfig.yi_sub || 0;
+            if (idx === FL_IDX) return currentConfig.fl_sub || 0;
+            return 0;
+        }
+
+        function setSubIdx(idx, sub) {
+            if (idx === EX_IDX) currentConfig.ex_sub = sub;
+            else if (idx === YI_IDX) currentConfig.yi_sub = sub;
+            else if (idx === FL_IDX) currentConfig.fl_sub = sub;
+        }
+
+        function getSubUnitsMap(idx) {
+            if (idx === EX_IDX) return currentConfig.ex_units;
+            if (idx === YI_IDX) return currentConfig.yi_units;
+            if (idx === FL_IDX) return currentConfig.fl_units;
+            return null;
+        }
+
+        function setSubUnit(idx, sub, value) {
+            const map = getSubUnitsMap(idx);
+            if (map) map[sub] = value;
+        }
+
+        function renderCourses() {
+            const el = document.getElementById('course_list');
+            el.innerHTML = '';
+            for (const [idx, course] of Object.entries(COURSES)) {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (parseInt(idx) === currentConfig.preset_mac_idx ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="course" value="${idx}" ${parseInt(idx) === currentConfig.preset_mac_idx ? 'checked' : ''}>` +
+                    `<span class="course-name">${courseLabel(parseInt(idx), course)}</span>`;
+                div.querySelector('input').addEventListener('change', (e) => {
+                    const prev = currentConfig.preset_mac_idx;
+                    if (prev === 0 || prev === MANUAL_MAC_IDX) {
+                        currentConfig.custom_mac = normalizeMacInput(document.getElementById('custom_mac').value);
+                    }
+                    currentConfig.preset_mac_idx = parseInt(e.target.value);
+                    if (currentConfig.preset_mac_idx === 0 || currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
+                        document.getElementById('custom_mac').value = currentConfig.custom_mac || '';
+                    }
+                    renderCourses();
+                    updateMacField();
+                    renderSubs();
+                    renderUnits();
+                });
+                el.appendChild(div);
+            }
+        }
+
+        function getActiveUnits() {
+            const idx = currentConfig.preset_mac_idx;
+            const course = COURSES[idx];
+            if (courseHasSubs(idx)) {
+                const sub = course.subs[getSubIdx(idx)] || course.subs[0];
+                return sub.units;
+            }
+            return course.units || [];
+        }
+
+        function renderSubs() {
+            const card = document.getElementById('sub_card');
+            const el = document.getElementById('sub_list');
+            const idx = currentConfig.preset_mac_idx;
+            const course = COURSES[idx];
+            if (!courseHasSubs(idx)) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            document.getElementById('sub_card_title').textContent =
+                '📗 Sách / cấp độ con — ' + course.name;
+            card.style.display = 'block';
+            el.innerHTML = '';
+            const selectedSub = getSubIdx(idx);
+            course.subs.forEach((sub, i) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (i === selectedSub ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="course_sub" value="${i}" ${i === selectedSub ? 'checked' : ''}>` +
+                    `<span class="course-name">${sub.name}</span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    setSubIdx(idx, i);
+                    renderSubs();
+                    renderUnits();
+                });
+                el.appendChild(div);
+            });
+        }
+
+        function renderUnits() {
+            const idx = currentConfig.preset_mac_idx;
+            const course = COURSES[idx];
+            const unitCard = document.getElementById('unit_card');
+            const units = getActiveUnits();
+            const nameEl = document.getElementById('current_course_name');
+            if (courseHasSubs(idx) && course.subs[getSubIdx(idx)]) {
+                nameEl.textContent = course.name + ' → ' + course.subs[getSubIdx(idx)].name;
+            } else {
+                nameEl.textContent = course.name;
+            }
+
+            const el = document.getElementById('unit_list');
+            el.innerHTML = '';
+
+            if (course.noUnits || !units.length) {
+                unitCard.style.display = (course.noUnits || idx === 0) ? 'none' : 'block';
+                if (!course.noUnits && idx !== 0) {
+                    el.innerHTML = '<p class="no-units">Cấp độ này không có danh sách Unit</p>';
+                    unitCard.style.display = 'block';
+                }
+                return;
+            }
+            unitCard.style.display = 'block';
+
+            let selected = DEFAULT_UNITS;
+            if (courseHasSubs(idx)) {
+                const map = getSubUnitsMap(idx) || {};
+                selected = (map[getSubIdx(idx)] || DEFAULT_UNITS).split(',')[0].trim();
+            } else {
+                selected = (currentConfig.all_units[idx] || DEFAULT_UNITS).split(',')[0].trim();
+            }
+            if (!units[parseInt(selected, 10) - 1]) {
+                selected = DEFAULT_UNITS;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'unit-grid';
+            units.forEach((title, i) => {
+                const value = String(i + 1);
+                const checked = value === selected;
+                const lbl = document.createElement('label');
+                lbl.className = checked ? 'checked' : '';
+                lbl.innerHTML = `<input type="radio" name="unit" value="${value}" ${checked ? 'checked' : ''}><span>${title}</span>`;
+                lbl.querySelector('input').addEventListener('change', () => {
+                    grid.querySelectorAll('label').forEach((item) => item.classList.remove('checked'));
+                    lbl.classList.add('checked');
+                    updateUnitsInConfig();
+                });
+                grid.appendChild(lbl);
+            });
+            el.appendChild(grid);
+        }
+
+        function updateUnitsInConfig() {
+            const idx = currentConfig.preset_mac_idx;
+            const picked = document.querySelector('#unit_list input[type="radio"]:checked');
+            const value = picked ? picked.value : DEFAULT_UNITS;
+            if (courseHasSubs(idx)) {
+                setSubUnit(idx, getSubIdx(idx), value);
+            } else if (COURSES[idx].units.length) {
+                currentConfig.all_units[idx] = value;
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                document.getElementById('status').textContent = 'Đang tải cấu hình...';
+                const resp = await fetch('/api/config');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                currentConfig.preset_mac_idx = data.preset_mac_idx || 1;
+                savedCourseIdx = currentConfig.preset_mac_idx;
+                currentConfig.student_name = data.student_name || '';
+                if (data.all_units) {
+                    currentConfig.all_units = data.all_units;
+                }
+                for (let i = 1; i <= 5; i++) {
+                    if (!currentConfig.all_units[i]) {
+                        currentConfig.all_units[i] = DEFAULT_UNITS;
+                    }
+                }
+                if (data.yi_sub !== undefined) {
+                    currentConfig.yi_sub = Number(data.yi_sub) || 0;
+                }
+                if (data.yi_units) {
+                    currentConfig.yi_units = data.yi_units;
+                }
+                for (let i = 0; i < 3; i++) {
+                    if (!currentConfig.yi_units[i]) {
+                        currentConfig.yi_units[i] = DEFAULT_UNITS;
+                    }
+                }
+                if (data.ex_sub !== undefined) {
+                    currentConfig.ex_sub = Number(data.ex_sub) || 0;
+                }
+                if (data.ex_units) {
+                    currentConfig.ex_units = data.ex_units;
+                }
+                for (let i = 0; i < 5; i++) {
+                    if (!currentConfig.ex_units[i]) {
+                        currentConfig.ex_units[i] = DEFAULT_UNITS;
+                    }
+                }
+                if (data.fl_sub !== undefined) {
+                    currentConfig.fl_sub = Number(data.fl_sub) || 0;
+                }
+                if (data.fl_units) {
+                    currentConfig.fl_units = data.fl_units;
+                }
+                for (let i = 0; i < 1; i++) {
+                    if (!currentConfig.fl_units[i]) {
+                        currentConfig.fl_units[i] = DEFAULT_UNITS;
+                    }
+                }
+                if (data.preset_macs) {
+                    for (const [k, v] of Object.entries(data.preset_macs)) {
+                        PRESET_MAC_BY_IDX[Number(k)] = v;
+                    }
+                }
+                currentConfig.device_id = data.device_id || '';
+                currentConfig.custom_mac = normalizeMacInput(data.custom_mac || '');
+                savedCustomMac = currentConfig.custom_mac;
+                document.getElementById('student_name').value = currentConfig.student_name;
+                if (currentConfig.preset_mac_idx === 0 || currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
+                    document.getElementById('custom_mac').value = currentConfig.custom_mac;
+                }
+                renderCourses();
+                updateMacField();
+                renderSubs();
+                renderUnits();
+                document.getElementById('status').textContent = '';
+            } catch (err) {
+                document.getElementById('status').textContent = 'Lỗi tải cấu hình: ' + err.message;
+            }
+        }
+
+        async function saveConfig() {
+            const btn = document.getElementById('btn_save');
+            btn.disabled = true;
+            btn.textContent = 'Đang lưu...';
+
+            currentConfig.student_name = document.getElementById('student_name').value.trim();
+            updateUnitsInConfig();
+            const idx = currentConfig.preset_mac_idx;
+            let mac = normalizeMacInput(document.getElementById('custom_mac').value);
+            if (idx === MANUAL_MAC_IDX) {
+                if (!isValidMacString(mac)) {
+                    showToast('❌ MAC không hợp lệ (aa:bb:cc:dd:ee:ff)');
+                    btn.disabled = false;
+                    btn.textContent = '💾 Lưu cấu hình';
+                    return;
+                }
+            } else if (idx === 0) {
+                if (mac && !isValidMacString(mac)) {
+                    showToast('❌ MAC không hợp lệ (aa:bb:cc:dd:ee:ff)');
+                    btn.disabled = false;
+                    btn.textContent = '💾 Lưu cấu hình';
+                    return;
+                }
+            } else if (idx === DAILY_IDX || (idx >= 1 && idx <= 5)) {
+                mac = '';
+            }
+            currentConfig.custom_mac = mac;
+
+            try {
+                const resp = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentConfig)
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Lưu thất bại');
+                const courseChanged = currentConfig.preset_mac_idx !== savedCourseIdx;
+                const macChanged = (idx === 0 || idx === MANUAL_MAC_IDX) && mac !== savedCustomMac;
+                savedCourseIdx = currentConfig.preset_mac_idx;
+                savedCustomMac = mac;
+                if (courseChanged || macChanged) {
+                    showToast('✅ Đã lưu — robot đang áp dụng Device-Id mới (~vài giây)');
+                    setTimeout(loadConfig, 2500);
+                } else {
+                    showToast('✅ Đã lưu tên / unit (không reconnect)');
+                }
+            } catch (err) {
+                showToast('❌ Lỗi: ' + err.message);
+            }
+            btn.disabled = false;
+            btn.textContent = '💾 Lưu cấu hình';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadConfig);
+    </script>
+</body>
+</html>

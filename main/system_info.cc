@@ -40,7 +40,7 @@ std::string SystemInfo::GetMacAddress() {
         return preset_mac;
     }
     char custom_mac[CUSTOM_MAC_STR_MAX];
-    if ((idx == 0 || idx == 6) && ReadCustomMacFromNvs(custom_mac, sizeof(custom_mac))) {
+    if (UsesCustomMacNvs(idx) && ReadCustomMacFromNvs(custom_mac, sizeof(custom_mac))) {
         return std::string(custom_mac);
     }
     uint8_t mac[6];

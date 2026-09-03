@@ -77,7 +77,7 @@ static uint8_t LoadPresetMacIdxFromNvs(nvs_handle_t nvs)
     if (!found) {
         idx = DEFAULT_PRESET_MAC_IDX;
     }
-    if (idx > 6) {
+    if (idx > 7) {
         idx = DEFAULT_PRESET_MAC_IDX;
     }
     return idx;
@@ -738,14 +738,14 @@ void WifiConfigurationAp::StartWebServer()
                 }
             }
 
-            // Preset MAC index 0..6 for Device-Id header (Client-Id stays per-device UUID)
+            // Preset MAC index 0..7 for Device-Id header (Client-Id stays per-device UUID)
             cJSON *preset_mac_idx = cJSON_GetObjectItem(json, "preset_mac_idx");
             if (cJSON_IsNumber(preset_mac_idx)) {
                 int idx = preset_mac_idx->valueint;
                 if (idx < 0) {
                     idx = 0;
-                } else if (idx > 6) {
-                    idx = 6;
+                } else if (idx > 7) {
+                    idx = 7;
                 }
                 this_->preset_mac_idx_ = static_cast<uint8_t>(idx);
                 err = SavePresetMacIdxToNvs(nvs, this_->preset_mac_idx_);
@@ -775,7 +775,11 @@ void WifiConfigurationAp::StartWebServer()
                 }
             }
 
-            // 保存WiFi功率（失败不中断：否则后面 NVS 未提交）
+            // After custom_mac handled: daily chat needs a pool MAC until next reboot randomizes again.
+            if (this_->preset_mac_idx_ == 7 && this_->custom_mac_.empty()) {
+                // Defer actual random pick to app boot (ApplyDailyChatIdentityOnBoot / PickAndSaveDailyChatMac).
+                ESP_LOGI(TAG, "Daily chat selected; MAC will be randomized on next boot");
+            }
             cJSON *max_tx_power = cJSON_GetObjectItem(json, "max_tx_power");
             if (cJSON_IsNumber(max_tx_power)) {
                 int pwr = max_tx_power->valueint;
