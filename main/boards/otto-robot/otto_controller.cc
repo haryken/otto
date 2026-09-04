@@ -1185,7 +1185,7 @@ public:
             "6=Tự nhập MAC (bắt buộc kèm custom_mac dạng aa:bb:cc:dd:ee:ff), "
             "7=Giao tiếp hằng ngày (random 1/20 MAC, mỗi lần tắt mở máy lại random). "
             "Explorers/Young Innovators/Future Leaders có sách con chọn trên web. "
-            "Robot lưu NVS rồi kết nối lại server với Device-Id mới, không cần reboot. "
+            "Robot lưu NVS, đóng phiên nói, lấy credential MQTT/WS mới theo Device-Id rồi reconnect (không reboot, không màn hình đăng nhập). "
             "Dùng khi người dùng nói 'đổi sang Explorers', 'chuyển giao tiếp hằng ngày', 'tự nhập MAC', 'đổi cấp độ'.",
             PropertyList({
                 Property("course_idx", kPropertyTypeInteger, 1, 0, 7),
@@ -1242,7 +1242,7 @@ public:
                     Application::GetInstance().ApplyDeviceIdentity();
                     return std::string("Đã đổi cấp độ sang ") + name +
                            ". Device-Id=" + new_mac +
-                           ". Robot đang kết nối lại server, hãy đợi vài giây rồi nói chuyện tiếp.";
+                           ". Đang đóng phiên cũ và kết nối lại (~vài giây), rồi nói chuyện tiếp.";
                 }
                 return std::string("Đang ở cấp độ ") + name + ", không cần đổi.";
             });

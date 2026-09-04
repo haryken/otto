@@ -524,10 +524,10 @@
                 savedCourseIdx = currentConfig.preset_mac_idx;
                 savedCustomMac = mac;
                 if (courseChanged || macChanged) {
-                    showToast('✅ Đã lưu — robot đang áp dụng Device-Id mới (~vài giây)');
-                    setTimeout(loadConfig, 2500);
+                    showToast('✅ Đã lưu — đang đổi Device-Id (~vài giây), rồi nói tiếp');
+                    setTimeout(loadConfig, 3000);
                 } else {
-                    showToast('✅ Đã lưu tên / unit (không reconnect)');
+                    showToast('✅ Đã lưu tên / unit');
                 }
             } catch (err) {
                 showToast('❌ Lỗi: ' + err.message);

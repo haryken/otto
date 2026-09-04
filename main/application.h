@@ -132,8 +132,9 @@ public:
      */
     void ResetProtocol();
     /**
-     * Re-fetch cloud config with current Device-Id (course MAC) and reconnect MQTT/WS.
-     * Thread-safe. Does not reboot. Local self-control server on :8080 stays up.
+     * Close current chat session, refresh cloud MQTT/WS credentials for the Device-Id
+     * already saved in NVS (CheckVersion), then reconnect. Next conversation uses the new MAC.
+     * Does not reboot. Skips activation UI for course switches.
      */
     void ApplyDeviceIdentity();
 

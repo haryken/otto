@@ -1278,6 +1278,8 @@ void Application::ResetProtocol() {
 }
 
 void Application::ApplyDeviceIdentity() {
+    // MQTT credentials are bound to Device-Id from CheckVersion. Closing the audio
+    // session alone is not enough — must refresh mqtt/websocket NVS then reconnect.
     Schedule([this]() {
         if (identity_task_handle_ != nullptr || activation_task_handle_ != nullptr) {
             ESP_LOGW(TAG, "ApplyDeviceIdentity: another identity/activation task is running");
@@ -1293,6 +1295,7 @@ void Application::ApplyDeviceIdentity() {
                 protocol_->CloseAudioChannel();
             }
         }
+        // Drop old protocol so the next chat cannot reuse stale MQTT client_id.
         protocol_.reset();
 
         auto state = GetDeviceState();
@@ -1303,7 +1306,8 @@ void Application::ApplyDeviceIdentity() {
 
         auto display = Board::GetInstance().GetDisplay();
         if (display != nullptr) {
-            display->ShowNotification("Đang đổi khóa học...", 4000);
+            display->SetChatMessage("system", "");
+            display->ShowNotification("Đang đổi Device-Id...", 4000);
         }
 
         xTaskCreate(
@@ -1318,7 +1322,8 @@ void Application::ApplyDeviceIdentity() {
 }
 
 void Application::IdentityApplyTask() {
-    ESP_LOGI(TAG, "IdentityApplyTask: CheckVersion with new Device-Id");
+    ESP_LOGI(TAG, "IdentityApplyTask: CheckVersion for Device-Id=%s",
+             SystemInfo::GetMacAddress().c_str());
     ota_ = std::make_unique<Ota>();
     esp_err_t err = ota_->CheckVersion();
     if (err != ESP_OK) {
@@ -1327,7 +1332,7 @@ void Application::IdentityApplyTask() {
         Schedule([this]() {
             auto display = Board::GetInstance().GetDisplay();
             if (display != nullptr) {
-                display->ShowNotification("Đổi khóa học thất bại", 4000);
+                display->ShowNotification("Đổi Device-Id thất bại", 4000);
             }
             SetDeviceState(kDeviceStateIdle);
         });
@@ -1335,8 +1340,10 @@ void Application::IdentityApplyTask() {
     }
 
     ota_->MarkCurrentVersionValid();
-    if (ota_->HasNewVersion()) {
-        ESP_LOGW(TAG, "IdentityApplyTask: firmware update available, skipped during course switch");
+    if (ota_->HasActivationCode()) {
+        // Course/preset MACs are normally already activated — do not block on login UI.
+        ESP_LOGW(TAG, "IdentityApplyTask: server returned activation for this Device-Id; "
+                      "continuing without activation UI");
     }
 
     Schedule([this]() {
@@ -1349,9 +1356,9 @@ void Application::IdentityApplyTask() {
         auto display = Board::GetInstance().GetDisplay();
         if (display != nullptr) {
             display->SetChatMessage("system", "");
-            display->ShowNotification("Đã đổi khóa học", 3000);
+            display->ShowNotification("Đã đổi Device-Id", 2500);
         }
-        ESP_LOGI(TAG, "IdentityApplyTask: cloud protocol restarted, Device-Id=%s",
+        ESP_LOGI(TAG, "IdentityApplyTask: protocol ready, Device-Id=%s",
                  SystemInfo::GetMacAddress().c_str());
     });
 }
