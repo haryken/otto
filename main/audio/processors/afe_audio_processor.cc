@@ -46,9 +46,11 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     }
 
     if (ns_model_name != nullptr) {
+        // Neural NS (NSNet2) only — WebRTC NS crashes on 1-mic VC without AEC.
         afe_config->ns_init = true;
         afe_config->ns_model_name = ns_model_name;
         afe_config->afe_ns_mode = AFE_NS_MODE_NET;
+        ESP_LOGI(TAG, "Noise suppression: NSNet (%s)", ns_model_name);
     } else {
         afe_config->ns_init = false;
     }

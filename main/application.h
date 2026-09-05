@@ -132,9 +132,10 @@ public:
      */
     void ResetProtocol();
     /**
-     * Close current chat session, refresh cloud MQTT/WS credentials for the Device-Id
-     * already saved in NVS (CheckVersion), then reconnect. Next conversation uses the new MAC.
-     * Does not reboot. Skips activation UI for course switches.
+     * Close current chat and reopen with the Device-Id already saved in NVS.
+     * Fast path: no CheckVersion / no login UI — close session, then open again
+     * (WebSocket sends Device-Id header; MQTT patches client_id MAC then reconnects).
+     * Auto-starts a new chat so the server greets.
      */
     void ApplyDeviceIdentity();
 
@@ -158,6 +159,7 @@ private:
     bool aborted_ = false;
     bool assets_version_checked_ = false;
     bool suppress_listening_chime_ = false;  // Skip popup.ogg on next listening (goodbye/disconnect)
+    bool suppress_channel_closed_idle_ = false;  // Ignore stale OnAudioChannelClosed during course switch
     bool music_only_mode_entered_ = false;
     bool music_playing_display_active_ = false;
     int clock_ticks_ = 0;
@@ -195,8 +197,9 @@ private:
     // Helper methods
     void CheckAssetsVersion();
     void CheckNewVersion();
-    void InitializeProtocol();
-    void IdentityApplyTask();
+    void InitializeProtocol(bool prefer_websocket = false);
+    /** Rewrite mqtt client_id (and username if MAC-like) to the current Device-Id. */
+    void PatchMqttIdentityToCurrentMac();
     void ShowActivationCode(const std::string& code, const std::string& message);
     void SetListeningMode(ListeningMode mode);
     ListeningMode GetDefaultListeningMode() const;

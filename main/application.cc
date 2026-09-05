@@ -491,16 +491,30 @@ void Application::CheckNewVersion() {
     }
 }
 
-void Application::InitializeProtocol() {
+void Application::InitializeProtocol(bool prefer_websocket) {
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
     auto codec = board.GetAudioCodec();
 
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
-    if (ota_->HasMqttConfig()) {
+    Settings ws_settings("websocket", false);
+    Settings mqtt_settings("mqtt", false);
+    const bool has_ws = !ws_settings.GetString("url").empty() ||
+                        (ota_ && ota_->HasWebsocketConfig());
+    const bool has_mqtt = !mqtt_settings.GetString("endpoint").empty() ||
+                          (ota_ && ota_->HasMqttConfig());
+
+    if (prefer_websocket && has_ws) {
+        // Course switch: Device-Id is a per-connection WebSocket header.
+        protocol_ = std::make_unique<WebsocketProtocol>();
+    } else if (ota_ && ota_->HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
-    } else if (ota_->HasWebsocketConfig()) {
+    } else if (ota_ && ota_->HasWebsocketConfig()) {
+        protocol_ = std::make_unique<WebsocketProtocol>();
+    } else if (has_mqtt) {
+        protocol_ = std::make_unique<MqttProtocol>();
+    } else if (has_ws) {
         protocol_ = std::make_unique<WebsocketProtocol>();
     } else {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
@@ -537,6 +551,10 @@ void Application::InitializeProtocol() {
         PrepareAudioChannelClose();
         board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
         Schedule([this]() {
+            if (suppress_channel_closed_idle_) {
+                ESP_LOGI(TAG, "Skip idle after channel close (course switch in progress)");
+                return;
+            }
             if (audio_service_.IsLocalPlaybackActive()) {
                 ESP_LOGI(TAG, "Audio channel closed for music-only mode (playback continues)");
                 return;
@@ -1277,17 +1295,61 @@ void Application::ResetProtocol() {
     });
 }
 
+void Application::PatchMqttIdentityToCurrentMac() {
+    // Official / gateway MQTT client_id is often: GID_xxx@@@aa_bb_cc_dd_ee_ff@@@aa_bb_cc_dd_ee_ff
+    const std::string mac = SystemInfo::GetMacAddress();
+    std::string safe = mac;
+    for (char& c : safe) {
+        if (c == ':') {
+            c = '_';
+        }
+    }
+
+    Settings settings("mqtt", true);
+    std::string client_id = settings.GetString("client_id");
+    if (!client_id.empty()) {
+        auto pos = client_id.find("@@@");
+        if (pos != std::string::npos) {
+            std::string patched = client_id.substr(0, pos) + "@@@" + safe + "@@@" + safe;
+            if (patched != client_id) {
+                ESP_LOGI(TAG, "Patch MQTT client_id → %s", patched.c_str());
+                settings.SetString("client_id", patched);
+            }
+        }
+    }
+
+    std::string username = settings.GetString("username");
+    // Username is frequently the MAC (with : or _).
+    if (!username.empty()) {
+        const bool looks_like_mac =
+            (username.size() == 17 &&
+             (username.find(':') != std::string::npos || username.find('_') != std::string::npos));
+        if (looks_like_mac) {
+            const std::string& new_user = (username.find(':') != std::string::npos) ? mac : safe;
+            if (new_user != username) {
+                ESP_LOGI(TAG, "Patch MQTT username → %s", new_user.c_str());
+                settings.SetString("username", new_user);
+            }
+        }
+    }
+}
+
 void Application::ApplyDeviceIdentity() {
-    // MQTT credentials are bound to Device-Id from CheckVersion. Closing the audio
-    // session alone is not enough — must refresh mqtt/websocket NVS then reconnect.
+    // Fast path (matches other FW): close old session → open new with Device-Id from NVS.
+    // No CheckVersion / activation UI. Then simulate wake word so the server greets.
     Schedule([this]() {
         if (identity_task_handle_ != nullptr || activation_task_handle_ != nullptr) {
             ESP_LOGW(TAG, "ApplyDeviceIdentity: another identity/activation task is running");
             return;
         }
 
-        ESP_LOGI(TAG, "ApplyDeviceIdentity: Device-Id=%s", SystemInfo::GetMacAddress().c_str());
+        const std::string mac = SystemInfo::GetMacAddress();
+        ESP_LOGI(TAG, "ApplyDeviceIdentity (fast): Device-Id=%s", mac.c_str());
+
         aborted_ = true;
+        suppress_channel_closed_idle_ = true;
+        audio_service_.EnableVoiceProcessing(false);
+        audio_service_.EnableWakeWordDetection(false);
         if (protocol_) {
             AbortSpeaking(kAbortReasonNone);
             if (protocol_->IsAudioChannelOpened()) {
@@ -1295,71 +1357,42 @@ void Application::ApplyDeviceIdentity() {
                 protocol_->CloseAudioChannel();
             }
         }
-        // Drop old protocol so the next chat cannot reuse stale MQTT client_id.
         protocol_.reset();
 
         auto state = GetDeviceState();
         if (state == kDeviceStateListening || state == kDeviceStateSpeaking ||
-            state == kDeviceStateConnecting) {
+            state == kDeviceStateConnecting || state == kDeviceStateActivating) {
             SetDeviceState(kDeviceStateIdle);
         }
+
+        Settings ws_settings("websocket", false);
+        const bool has_ws = !ws_settings.GetString("url").empty();
+        if (has_ws) {
+            ESP_LOGI(TAG, "ApplyDeviceIdentity: reopen via WebSocket (Device-Id header)");
+        } else {
+            PatchMqttIdentityToCurrentMac();
+            ESP_LOGI(TAG, "ApplyDeviceIdentity: reopen via MQTT (patched client_id)");
+        }
+
+        InitializeProtocol(has_ws);
 
         auto display = Board::GetInstance().GetDisplay();
         if (display != nullptr) {
             display->SetChatMessage("system", "");
-            display->ShowNotification("Đang đổi Device-Id...", 4000);
+            display->ShowNotification("Đã đổi khóa", 2000);
         }
 
-        xTaskCreate(
-            [](void* arg) {
-                auto* app = static_cast<Application*>(arg);
-                app->IdentityApplyTask();
-                app->identity_task_handle_ = nullptr;
-                vTaskDelete(nullptr);
-            },
-            "identity_apply", 8192, this, 2, &identity_task_handle_);
-    });
-}
-
-void Application::IdentityApplyTask() {
-    ESP_LOGI(TAG, "IdentityApplyTask: CheckVersion for Device-Id=%s",
-             SystemInfo::GetMacAddress().c_str());
-    ota_ = std::make_unique<Ota>();
-    esp_err_t err = ota_->CheckVersion();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "IdentityApplyTask: CheckVersion failed: %s", esp_err_to_name(err));
-        ota_.reset();
+        // After stale CloseAudioChannel idle callback is drained, open like "Hi,Jason"
+        // so the server greets and the mic is ready.
         Schedule([this]() {
-            auto display = Board::GetInstance().GetDisplay();
-            if (display != nullptr) {
-                display->ShowNotification("Đổi Device-Id thất bại", 4000);
+            suppress_channel_closed_idle_ = false;
+            std::string wake_word = audio_service_.GetLastWakeWord();
+            if (wake_word.empty()) {
+                wake_word = "Hi,Jason";
             }
-            SetDeviceState(kDeviceStateIdle);
+            ESP_LOGI(TAG, "ApplyDeviceIdentity: auto greet via wake word '%s'", wake_word.c_str());
+            WakeWordInvoke(wake_word);
         });
-        return;
-    }
-
-    ota_->MarkCurrentVersionValid();
-    if (ota_->HasActivationCode()) {
-        // Course/preset MACs are normally already activated — do not block on login UI.
-        ESP_LOGW(TAG, "IdentityApplyTask: server returned activation for this Device-Id; "
-                      "continuing without activation UI");
-    }
-
-    Schedule([this]() {
-        protocol_.reset();
-        if (ota_ != nullptr) {
-            InitializeProtocol();
-            ota_.reset();
-        }
-        SetDeviceState(kDeviceStateIdle);
-        auto display = Board::GetInstance().GetDisplay();
-        if (display != nullptr) {
-            display->SetChatMessage("system", "");
-            display->ShowNotification("Đã đổi Device-Id", 2500);
-        }
-        ESP_LOGI(TAG, "IdentityApplyTask: protocol ready, Device-Id=%s",
-                 SystemInfo::GetMacAddress().c_str());
     });
 }
 
