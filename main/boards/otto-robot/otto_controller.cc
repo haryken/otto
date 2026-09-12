@@ -1120,12 +1120,10 @@ public:
                                return true;
                            });
 
-        // Tool: Lấy thông tin học viên (tên, cấp độ, unit đang học)
+        // Tool: Lấy tên học viên + unit đang học
         mcp_server.AddTool(
             "self.otto.get_student_info",
-            "Lấy thông tin học viên: tên, khóa (0=Tự cấu hình, 1=Explorers, 2=Young Innovators, "
-            "3=Future Leaders, 4=IELTS, 5=TOEIC, 6=Tự nhập MAC, 7=Giao tiếp hằng ngày), "
-            "sách con nếu có, 1 unit đang chọn, và Device-Id (MAC) đang dùng.",
+            "Lấy tên học viên và unit đang học. Dùng khi hỏi 'tao là ai', 'đang học unit gì'.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 std::string name = WebSocketControlServer::GetStudentName();
@@ -1133,21 +1131,9 @@ public:
                 int sub_idx = WebSocketControlServer::GetActiveSubIdx(idx);
                 std::string units = WebSocketControlServer::GetActiveUnitSelection(idx);
                 std::string unit_titles = ResolveOttoUnitNames(idx, sub_idx, units);
-                const OttoCourseDef* course = GetOttoCourse(idx);
-                const OttoUnitList* unit_list = GetOttoActiveUnitList(idx, sub_idx);
-                std::string device_id = SystemInfo::GetMacAddress();
 
                 cJSON* root = cJSON_CreateObject();
                 cJSON_AddStringToObject(root, "student_name", name.c_str());
-                cJSON_AddStringToObject(root, "course", course ? course->id : "unknown");
-                cJSON_AddStringToObject(root, "course_name", course ? course->display_name : "unknown");
-                cJSON_AddNumberToObject(root, "course_idx", idx);
-                cJSON_AddStringToObject(root, "device_id", device_id.c_str());
-                if (course && course->sub_count > 0 && unit_list) {
-                    cJSON_AddNumberToObject(root, "sub_idx", sub_idx);
-                    cJSON_AddStringToObject(root, "sub_name", unit_list->name);
-                }
-                cJSON_AddStringToObject(root, "units", units.c_str());
                 cJSON_AddStringToObject(root, "unit_names", unit_titles.c_str());
                 char* json = cJSON_PrintUnformatted(root);
                 std::string result = json ? json : "{}";
@@ -1222,8 +1208,8 @@ public:
                     } else {
                         WriteCustomMacToNvs("");
                     }
-                } else if (idx == kDailyChatPresetMacIndex) {
-                    PickAndSaveDailyChatMac();
+                } else if (CourseUsesMacPool(static_cast<uint8_t>(idx))) {
+                    PickAndSaveMacPoolForCourse(static_cast<uint8_t>(idx));
                 }
 
                 nvs_handle_t nvs;

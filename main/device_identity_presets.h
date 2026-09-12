@@ -20,13 +20,16 @@ inline constexpr uint8_t kDailyChatPresetMacIndex = 7;
 /** Stored preset_mac_idx: 0..7 */
 inline constexpr uint8_t kMaxStoredPresetMacIndex = 7;
 
+/** Default when NVS has no preset_mac: 1 = explorers (same value as kExplorersCourseIdx in otto_course_units.h). */
+inline constexpr uint8_t kDefaultPresetMacIndex = 1;
+
 struct DeviceIdentityPreset {
     const char* name;
     const char* mac;
 };
 
 inline constexpr DeviceIdentityPreset kDeviceIdentityPresets[] = {
-    {"explorers", "ba:53:9e:c5:fa:10"},
+    {"explorers", "ba:53:9e:c5:ba:10"},
     {"younginnovators", "ba:53:9e:c5:fa:11"},
     {"futureleaders", "ba:53:9e:c5:fa:12"},
     {"ielts", "ba:53:9e:c5:fa:13"},
@@ -35,6 +38,17 @@ inline constexpr DeviceIdentityPreset kDeviceIdentityPresets[] = {
 
 inline constexpr int kDeviceIdentityPresetCount =
     sizeof(kDeviceIdentityPresets) / sizeof(kDeviceIdentityPresets[0]);
+
+/**
+ * Explorers MAC pool — currently 1 MAC, but still uses random-pick + custom_mac
+ * so more MACs can be added later without changing the mechanism.
+ */
+inline constexpr const char* kExplorersMacPool[] = {
+    "ba:53:9e:c5:ba:10",
+};
+
+inline constexpr int kExplorersMacPoolCount =
+    sizeof(kExplorersMacPool) / sizeof(kExplorersMacPool[0]);
 
 /** 20 MACs for "Giao tiếp hằng ngày" — one picked at random each boot. */
 inline constexpr const char* kDailyChatMacPool[] = {
@@ -63,8 +77,12 @@ inline constexpr const char* kDailyChatMacPool[] = {
 inline constexpr int kDailyChatMacPoolCount =
     sizeof(kDailyChatMacPool) / sizeof(kDailyChatMacPool[0]);
 
-/** Default when NVS has no preset_mac: 1 = explorers */
-inline constexpr uint8_t kDefaultPresetMacIndex = 1;
+/** Courses that pick Device-Id from a MAC pool into custom_mac (boot + switch).
+ *  Explorers = kDefaultPresetMacIndex (1); do not redefine kExplorersCourseIdx here
+ *  (already in otto_course_units.h as int). */
+inline bool CourseUsesMacPool(uint8_t idx) {
+    return idx == kDefaultPresetMacIndex || idx == kDailyChatPresetMacIndex;
+}
 
 /** @param idx 1..kDeviceIdentityPresetCount, or 0 for none */
 inline const char* GetPresetMacByIndex(uint8_t idx) {
@@ -75,7 +93,7 @@ inline const char* GetPresetMacByIndex(uint8_t idx) {
 }
 
 inline bool UsesCustomMacNvs(uint8_t idx) {
-    return idx == 0 || idx == kManualCustomMacIndex || idx == kDailyChatPresetMacIndex;
+    return idx == 0 || idx == kManualCustomMacIndex || CourseUsesMacPool(idx);
 }
 
 /** Read preset_mac index from NVS (i32 preferred; migrates legacy u8/bool). */
@@ -147,31 +165,53 @@ inline bool WriteCustomMacToNvs(const char* mac) {
     return err == ESP_OK;
 }
 
-/** Pick one MAC from the daily pool and store it in custom_mac NVS. */
-inline const char* PickAndSaveDailyChatMac() {
-    if (kDailyChatMacPoolCount <= 0) {
+inline const char* PickAndSaveFromPool(const char* const* pool, int count) {
+    if (pool == nullptr || count <= 0) {
         return nullptr;
     }
     uint32_t r = esp_random();
-    int i = static_cast<int>(r % static_cast<uint32_t>(kDailyChatMacPoolCount));
-    const char* mac = kDailyChatMacPool[i];
+    int i = static_cast<int>(r % static_cast<uint32_t>(count));
+    const char* mac = pool[i];
     WriteCustomMacToNvs(mac);
     return mac;
 }
 
+/** Pick one MAC from the explorers pool and store it in custom_mac NVS. */
+inline const char* PickAndSaveExplorersMac() {
+    return PickAndSaveFromPool(kExplorersMacPool, kExplorersMacPoolCount);
+}
+
+/** Pick one MAC from the daily pool and store it in custom_mac NVS. */
+inline const char* PickAndSaveDailyChatMac() {
+    return PickAndSaveFromPool(kDailyChatMacPool, kDailyChatMacPoolCount);
+}
+
+/** Pick+save pool MAC for courses that use a pool; nullptr if course has no pool. */
+inline const char* PickAndSaveMacPoolForCourse(uint8_t idx) {
+    if (idx == kDefaultPresetMacIndex) {
+        return PickAndSaveExplorersMac();
+    }
+    if (idx == kDailyChatPresetMacIndex) {
+        return PickAndSaveDailyChatMac();
+    }
+    return nullptr;
+}
+
 /**
  * Call once early after NVS init (each boot).
- * If course is "Giao tiếp hằng ngày", randomize Device-Id from the 20-MAC pool.
+ * Explorers / daily-chat: randomize Device-Id from their MAC pool into custom_mac.
  */
-inline void ApplyDailyChatIdentityOnBoot() {
-    if (ReadPresetMacIndexFromNvs() != kDailyChatPresetMacIndex) {
+inline void ApplyMacPoolIdentityOnBoot() {
+    const uint8_t idx = ReadPresetMacIndexFromNvs();
+    if (!CourseUsesMacPool(idx)) {
         return;
     }
-    const char* mac = PickAndSaveDailyChatMac();
-    if (mac != nullptr) {
-        // Logging via ESP_LOGI needs a TAG; keep silent here — callers may log.
-        (void)mac;
-    }
+    (void)PickAndSaveMacPoolForCourse(idx);
+}
+
+/** @deprecated use ApplyMacPoolIdentityOnBoot */
+inline void ApplyDailyChatIdentityOnBoot() {
+    ApplyMacPoolIdentityOnBoot();
 }
 
 #endif

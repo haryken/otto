@@ -26,13 +26,18 @@ std::string Board::GetUuid() {
     Settings board_ro("board", false);
     std::string from_nvs = board_ro.GetString("uuid");
     if (!from_nvs.empty()) {
+        uuid_ = from_nvs;
         return from_nvs;
     }
+    return RegenerateUuid();
+}
+
+std::string Board::RegenerateUuid() {
+    uuid_ = GenerateUuid();
     Settings board_rw("board", true);
-    std::string fresh = GenerateUuid();
-    board_rw.SetString("uuid", fresh);
-    uuid_ = fresh;
-    return fresh;
+    board_rw.SetString("uuid", uuid_);
+    ESP_LOGI(TAG, "Regenerated Client-Id UUID=%s", uuid_.c_str());
+    return uuid_;
 }
 
 std::string Board::GenerateUuid() {

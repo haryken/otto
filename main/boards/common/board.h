@@ -67,6 +67,8 @@ public:
     virtual ~Board() = default;
     virtual std::string GetBoardType() = 0;
     virtual std::string GetUuid();
+    /** Generate a new UUID v4, persist to NVS, use as Client-Id (anti spam / fresh session). */
+    virtual std::string RegenerateUuid();
     virtual Backlight* GetBacklight() { return nullptr; }
     virtual Led* GetLed();
     virtual AudioCodec* GetAudioCodec() = 0;

@@ -35,6 +35,19 @@ size_t SystemInfo::GetFreeHeapSize() {
 
 std::string SystemInfo::GetMacAddress() {
     const uint8_t idx = ReadPresetMacIndexFromNvs();
+
+    // Explorers / daily-chat: Device-Id comes from custom_mac (picked from pool).
+    if (CourseUsesMacPool(idx)) {
+        char custom_mac[CUSTOM_MAC_STR_MAX];
+        if (ReadCustomMacFromNvs(custom_mac, sizeof(custom_mac))) {
+            return std::string(custom_mac);
+        }
+        const char* picked = PickAndSaveMacPoolForCourse(idx);
+        if (picked != nullptr) {
+            return std::string(picked);
+        }
+    }
+
     const char* preset_mac = GetPresetMacByIndex(idx);
     if (preset_mac != nullptr) {
         return preset_mac;

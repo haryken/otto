@@ -60,13 +60,17 @@ bool Application::SetDeviceState(DeviceState state) {
 }
 
 void Application::Initialize() {
-    // Daily-chat course: pick a random Device-Id from the 20-MAC pool on every boot.
-    if (ReadPresetMacIndexFromNvs() == kDailyChatPresetMacIndex) {
-        const char* mac = PickAndSaveDailyChatMac();
-        ESP_LOGI(TAG, "Daily chat boot MAC: %s", mac ? mac : "(none)");
+    // Pool courses (Explorers / daily-chat): pick Device-Id from MAC pool every boot.
+    const uint8_t boot_course = ReadPresetMacIndexFromNvs();
+    if (CourseUsesMacPool(boot_course)) {
+        const char* mac = PickAndSaveMacPoolForCourse(boot_course);
+        ESP_LOGI(TAG, "Boot MAC pool (course %u): %s", (unsigned)boot_course, mac ? mac : "(none)");
     }
 
+    // Fresh Client-Id every boot (with current Device-Id) to avoid server spam/timeout.
     auto& board = Board::GetInstance();
+    board.RegenerateUuid();
+
     SetDeviceState(kDeviceStateStarting);
 
     // Setup the display
@@ -1367,6 +1371,12 @@ void Application::ApplyDeviceIdentity() {
 
         Settings ws_settings("websocket", false);
         const bool has_ws = !ws_settings.GetString("url").empty();
+
+        // New Client-Id on every course/MAC switch (A→B) before reconnect.
+        Board::GetInstance().RegenerateUuid();
+        ESP_LOGI(TAG, "ApplyDeviceIdentity: new Client-Id=%s Device-Id=%s",
+                 Board::GetInstance().GetUuid().c_str(), mac.c_str());
+
         if (has_ws) {
             ESP_LOGI(TAG, "ApplyDeviceIdentity: reopen via WebSocket (Device-Id header)");
         } else {

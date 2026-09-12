@@ -544,9 +544,9 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
         }
     }
 
-    if (new_idx == kDailyChatPresetMacIndex && course_changed) {
-        const char* picked = PickAndSaveDailyChatMac();
-        ESP_LOGI(TAG, "Daily chat selected, first MAC: %s", picked ? picked : "(none)");
+    if (course_changed && CourseUsesMacPool(static_cast<uint8_t>(new_idx))) {
+        const char* picked = PickAndSaveMacPoolForCourse(static_cast<uint8_t>(new_idx));
+        ESP_LOGI(TAG, "MAC pool course %d picked: %s", new_idx, picked ? picked : "(none)");
     }
 
     std::string new_mac = SystemInfo::GetMacAddress();
