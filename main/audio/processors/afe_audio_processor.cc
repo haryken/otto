@@ -45,14 +45,14 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
         afe_config->vad_model_name = vad_model_name;
     }
 
+    // NSNet2 on 1-mic VoIP uplink often adds metallic / "é é" artifacts to cloud STT.
+    // Model may still be packaged for experiments; do not enable on the communication path.
+    afe_config->ns_init = false;
     if (ns_model_name != nullptr) {
-        // Neural NS (NSNet2) only — WebRTC NS crashes on 1-mic VC without AEC.
-        afe_config->ns_init = true;
-        afe_config->ns_model_name = ns_model_name;
-        afe_config->afe_ns_mode = AFE_NS_MODE_NET;
-        ESP_LOGI(TAG, "Noise suppression: NSNet (%s)", ns_model_name);
+        ESP_LOGI(TAG, "Noise suppression: off (NSNet %s available but skipped for uplink quality)",
+                 ns_model_name);
     } else {
-        afe_config->ns_init = false;
+        ESP_LOGI(TAG, "Noise suppression: off");
     }
 
     afe_config->agc_init = false;
