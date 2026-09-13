@@ -27,17 +27,24 @@
 
 static constexpr const char* kYoutubeApiHost = "https://youtube.kytuoi.com";
 static constexpr int kHttpTimeoutMs = 120000;
-static constexpr size_t kMp3ReadChunk = 4096;
+static constexpr size_t kMp3ReadChunk = 8192;
 static constexpr size_t kPcmDecodeBuf = 8192;
 /** HTTP connect id (1 is often used by WebSocket). */
 static constexpr int kMusicHttpConnectId = 2;
-/** Decode at most N MP3 frames per outer loop (keep CPU for Wi-Fi / IDLE). */
-static constexpr int kMaxMp3FramesPerLoop = 4;
-static constexpr int kMaxMp3DecodeIterations = 12;
+/**
+ * Decode budget per outer loop. Higher = fewer underruns (stutter), still yields
+ * so Wi-Fi + wake word can run. Wake word stays enabled during playback.
+ */
+static constexpr int kMaxMp3FramesPerLoop = 12;
+static constexpr int kMaxMp3DecodeIterations = 28;
 /** Pause HTTP read when carry buffer exceeds this (decode must catch up). */
 static constexpr size_t kMp3BufferPauseRead = 48 * 1024;
+/** Prefill MP3 before first PCM enqueue — hides early network jitter (keep small: low SRAM). */
+static constexpr size_t kMp3PrebufferBytes = 12 * 1024;
 /** MP3 frame can be large; decoding with less causes DATA_LACK / NOT_SUPPORT spam. */
 static constexpr size_t kMinMp3BytesBeforeDecode = 2048;
+/** otto_music task priority (wake word / AFE stay higher or equal elsewhere). */
+static constexpr UBaseType_t kMusicTaskPriority = 5;
 
 static std::atomic<bool> g_stop_requested{false};
 static std::atomic<bool> g_is_playing{false};
@@ -139,6 +146,7 @@ static bool FindMp3PayloadOffset(const uint8_t* data, size_t len, size_t& skip_o
 }
 
 static bool HttpGetBody(const std::string& url, std::string& body, int& status_code) {
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     ESP_LOGI(TAG, "HTTP GET begin: %s", url.c_str());
     auto http = Board::GetInstance().GetNetwork()->CreateHttp(kMusicHttpConnectId);
     if (!http) {
@@ -257,7 +265,10 @@ static void RestoreCaptureAfterMusic(Application& app) {
 }
 
 static void ScheduleRestoreAfterMusic(Application& app) {
-    app.Schedule([&app]() { RestoreCaptureAfterMusic(app); });
+    app.Schedule([&app]() {
+        // Allow normal idle power-save again after local stream ends.
+        RestoreCaptureAfterMusic(app);
+    });
 }
 
 static void StreamMp3Task(void* param);
@@ -311,8 +322,11 @@ static void StreamMp3Task(void* param) {
 
     auto& app = Application::GetInstance();
     auto& audio = app.GetAudioService();
+    // Music-only closes MQTT and may drop WiFi to LOW_POWER — force PERFORMANCE for stream.
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     audio.SetCaptureSuspended(true);
     audio.SetLocalPlaybackActive(true);
+    // Keep wake word on so user can interrupt with Hi,Jason / BOOT.
     audio.EnableWakeWordDetection(true);
     SuspendCaptureForMusic(app);
     audio.ResetDecoder();
@@ -396,6 +410,7 @@ static void StreamMp3Task(void* param) {
              http->GetStatusCode());
 
     app.EnterMusicOnlyMode();
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     app.ShowMusicPlayingOnDisplay();
 
     if (g_stop_requested.load()) {
@@ -407,6 +422,7 @@ static void StreamMp3Task(void* param) {
 
     std::vector<uint8_t> mp3_carry;
     bool id3_skipped = false;
+    bool prebuffer_done = false;
 
     while (!g_stop_requested.load()) {
         if (g_stop_requested.load()) {
@@ -447,9 +463,18 @@ static void StreamMp3Task(void* param) {
                      static_cast<unsigned>(mp3_carry.size()));
         }
 
+        if (!prebuffer_done) {
+            if (mp3_carry.size() < kMp3PrebufferBytes && n > 0) {
+                continue;
+            }
+            prebuffer_done = true;
+            ESP_LOGI(TAG, "Prebuffer ready: %u bytes (wake word still on)",
+                     static_cast<unsigned>(mp3_carry.size()));
+        }
+
         if (id3_skipped && mp3_carry.size() < kMinMp3BytesBeforeDecode) {
             if (n <= 0) {
-                vTaskDelay(pdMS_TO_TICKS(10));
+                vTaskDelay(pdMS_TO_TICKS(5));
             }
             continue;
         }
@@ -460,12 +485,12 @@ static void StreamMp3Task(void* param) {
         int max_frames = kMaxMp3FramesPerLoop;
         int max_iters = kMaxMp3DecodeIterations;
         if (mp3_carry.size() > 32 * 1024) {
-            max_frames = 8;
-            max_iters = 20;
+            max_frames = 16;
+            max_iters = 36;
         }
         if (mp3_carry.size() > 64 * 1024) {
-            max_frames = 16;
-            max_iters = 32;
+            max_frames = 24;
+            max_iters = 48;
         }
         while (mp3_pos < mp3_carry.size() && !g_stop_requested.load() && frames_this_loop < max_frames &&
                decode_iterations < max_iters) {
@@ -575,9 +600,10 @@ static void StreamMp3Task(void* param) {
         if (mp3_carry.size() >= kMp3BufferPauseRead) {
             vTaskDelay(pdMS_TO_TICKS(1));
         } else if (n <= 0) {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(5));
         } else {
-            vTaskDelay(pdMS_TO_TICKS(2));
+            // Actively filling/decoding — yield without sleeping so queue stays full.
+            taskYIELD();
         }
     }
 
@@ -626,7 +652,7 @@ std::string PlayFirstSearchResult(const std::string& query) {
 
     auto* query_copy = new std::string(query);
     BaseType_t created = xTaskCreatePinnedToCore(
-        SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, 2, &g_play_task, 0);
+        SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, kMusicTaskPriority, &g_play_task, 0);
     if (created != pdPASS) {
         delete query_copy;
         g_play_task = nullptr;
