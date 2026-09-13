@@ -331,7 +331,7 @@ void AudioService::OpusCodecTask() {
         std::unique_lock<std::mutex> lock(audio_queue_mutex_);
         audio_queue_cv_.wait(lock, [this]() {
             return service_stopped_ ||
-                (!audio_encode_queue_.empty() && audio_send_queue_.size() < MAX_SEND_PACKETS_IN_QUEUE) ||
+                !audio_encode_queue_.empty() ||
                 (
                     audio_playback_queue_.size() < MAX_PLAYBACK_TASKS_IN_QUEUE &&
                     (
@@ -486,7 +486,7 @@ void AudioService::OpusCodecTask() {
             }
         }
         /* Encode the audio to send queue */
-        if (!audio_encode_queue_.empty() && audio_send_queue_.size() < MAX_SEND_PACKETS_IN_QUEUE) {
+        if (!audio_encode_queue_.empty()) {
             auto task = std::move(audio_encode_queue_.front());
             audio_encode_queue_.pop_front();
             audio_queue_cv_.notify_all();
@@ -515,6 +515,10 @@ void AudioService::OpusCodecTask() {
                     if (task->type == kAudioTaskTypeEncodeToSendQueue) {
                         {
                             std::lock_guard<std::mutex> lock2(audio_queue_mutex_);
+                            /* Never stall encoding on a full send queue: drop oldest realtime packet. */
+                            if (audio_send_queue_.size() >= MAX_SEND_PACKETS_IN_QUEUE) {
+                                audio_send_queue_.pop_front();
+                            }
                             audio_send_queue_.push_back(std::move(packet));
                         }
                         if (callbacks_.on_send_queue_available) {
@@ -579,22 +583,39 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
     auto task = std::make_unique<AudioTask>();
     task->type = type;
     task->pcm = std::move(pcm);
-    /* Push the task to the encode queue */
-    std::unique_lock<std::mutex> lock(audio_queue_mutex_);
 
-    /* If the task is to send queue, we need to set the timestamp */
-    if (type == kAudioTaskTypeEncodeToSendQueue && !timestamp_queue_.empty()) {
-        if (timestamp_queue_.size() <= MAX_TIMESTAMPS_IN_QUEUE) {
-            task->timestamp = timestamp_queue_.front();
-        } else {
-            ESP_LOGW(TAG, "Timestamp queue (%u) is full, dropping timestamp", timestamp_queue_.size());
+    uint32_t dropped_total = 0;
+    {
+        /* Push the task to the encode queue */
+        std::unique_lock<std::mutex> lock(audio_queue_mutex_);
+
+        /* If the task is to send queue, we need to set the timestamp */
+        if (type == kAudioTaskTypeEncodeToSendQueue && !timestamp_queue_.empty()) {
+            if (timestamp_queue_.size() <= MAX_TIMESTAMPS_IN_QUEUE) {
+                task->timestamp = timestamp_queue_.front();
+            } else {
+                ESP_LOGW(TAG, "Timestamp queue (%u) is full, dropping timestamp", timestamp_queue_.size());
+            }
+            timestamp_queue_.pop_front();
         }
-        timestamp_queue_.pop_front();
+
+        /* Microphone audio is realtime: drop oldest instead of blocking the AFE/input path. */
+        if (audio_encode_queue_.size() >= MAX_ENCODE_TASKS_IN_QUEUE) {
+            audio_encode_queue_.pop_front();
+            dropped_total = ++debug_statistics_.encode_drop_count;
+        }
+        audio_encode_queue_.push_back(std::move(task));
+        audio_queue_cv_.notify_all();
     }
 
-    audio_queue_cv_.wait(lock, [this]() { return audio_encode_queue_.size() < MAX_ENCODE_TASKS_IN_QUEUE; });
-    audio_encode_queue_.push_back(std::move(task));
-    audio_queue_cv_.notify_all();
+    if (dropped_total > 0) {
+        int64_t now = esp_timer_get_time();
+        if (now - last_encode_drop_log_time_ >= 1000000) {
+            last_encode_drop_log_time_ = now;
+            ESP_LOGW(TAG, "Encode queue full, dropping oldest frame (dropped %lu so far)",
+                     (unsigned long)dropped_total);
+        }
+    }
 }
 
 void AudioService::EnqueuePlaybackPcm(std::vector<int16_t>&& pcm) {

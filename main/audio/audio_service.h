@@ -119,6 +119,7 @@ struct DebugStatistics {
     uint32_t decode_count = 0;
     uint32_t encode_count = 0;
     uint32_t playback_count = 0;
+    uint32_t encode_drop_count = 0;
 };
 
 class AudioService {
@@ -203,6 +204,7 @@ private:
     int decoder_frame_size_ = 0;
     DebugStatistics debug_statistics_;
     srmodel_list_t* models_list_ = nullptr;
+    int64_t last_encode_drop_log_time_ = 0;
 
     EventGroupHandle_t event_group_;
 
