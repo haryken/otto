@@ -1,6 +1,8 @@
 #include "websocket_control_server.h"
 #include "mcp_server.h"
 #include "application.h"
+#include "board.h"
+#include "audio_codec.h"
 #include "device_identity_presets.h"
 #include "system_info.h"
 #include <esp_log.h>
@@ -12,6 +14,7 @@
 #include <cctype>
 #include <map>
 #include <string>
+#include <algorithm>
 
 static const char* TAG = "WSControl";
 
@@ -431,6 +434,7 @@ esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
     cJSON_AddItemToObject(root, "all_units", all_units);
 
     cJSON_AddNumberToObject(root, "yi_sub", GetYoungInnovatorsSubIdx());
+    cJSON_AddNumberToObject(root, "yi_voice", ReadYiVoiceFromNvs());
     cJSON* yi_units = cJSON_CreateObject();
     for (int i = 0; i < YI_SUB_COUNT; i++) {
         char key[4];
@@ -441,6 +445,7 @@ esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
     cJSON_AddItemToObject(root, "yi_units", yi_units);
 
     cJSON_AddNumberToObject(root, "ex_sub", GetExplorersSubIdx());
+    cJSON_AddNumberToObject(root, "ex_voice", ReadExplorersVoiceFromNvs());
     cJSON* ex_units = cJSON_CreateObject();
     for (int i = 0; i < EXPLORERS_SUB_COUNT; i++) {
         char key[4];
@@ -451,6 +456,7 @@ esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
     cJSON_AddItemToObject(root, "ex_units", ex_units);
 
     cJSON_AddNumberToObject(root, "fl_sub", GetFutureLeadersSubIdx());
+    cJSON_AddNumberToObject(root, "fl_voice", ReadFlVoiceFromNvs());
     cJSON* fl_units = cJSON_CreateObject();
     for (int i = 0; i < FL_SUB_COUNT; i++) {
         char key[4];
@@ -459,6 +465,9 @@ esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
         cJSON_AddStringToObject(fl_units, key, u.c_str());
     }
     cJSON_AddItemToObject(root, "fl_units", fl_units);
+
+    cJSON_AddNumberToObject(root, "ielts_voice", ReadIeltsVoiceFromNvs());
+    cJSON_AddNumberToObject(root, "toeic_voice", ReadToeicVoiceFromNvs());
 
     char* json_str = cJSON_PrintUnformatted(root);
     httpd_resp_sendstr(req, json_str);
@@ -500,8 +509,18 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
 
     int old_idx = GetPresetMacIdx();
     std::string old_mac = SystemInfo::GetMacAddress();
+    const uint8_t old_ex_voice = ReadExplorersVoiceFromNvs();
+    const uint8_t old_yi_voice = ReadYiVoiceFromNvs();
+    const uint8_t old_fl_voice = ReadFlVoiceFromNvs();
+    const uint8_t old_ielts_voice = ReadIeltsVoiceFromNvs();
+    const uint8_t old_toeic_voice = ReadToeicVoiceFromNvs();
     bool course_changed = false;
     bool identity_changed = false;
+    bool explorers_voice_changed = false;
+    bool yi_voice_changed = false;
+    bool fl_voice_changed = false;
+    bool ielts_voice_changed = false;
+    bool toeic_voice_changed = false;
 
     cJSON* name_item = cJSON_GetObjectItem(root, "student_name");
     if (name_item && cJSON_IsString(name_item)) {
@@ -544,13 +563,88 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
         }
     }
 
-    if (course_changed && CourseUsesMacPool(static_cast<uint8_t>(new_idx))) {
+    cJSON* ex_voice_item = cJSON_GetObjectItem(root, "ex_voice");
+    if (ex_voice_item && cJSON_IsNumber(ex_voice_item)) {
+        uint8_t voice = static_cast<uint8_t>(ex_voice_item->valueint);
+        if (voice != kExplorersVoiceEnglish) {
+            voice = kExplorersVoiceBilingual;
+        }
+        if (voice != old_ex_voice) {
+            explorers_voice_changed = true;
+        }
+        WriteExplorersVoiceToNvs(voice);
+        ESP_LOGI(TAG, "Saved ex_voice: %u (was %u)", (unsigned)voice, (unsigned)old_ex_voice);
+    }
+
+    cJSON* yi_voice_item = cJSON_GetObjectItem(root, "yi_voice");
+    if (yi_voice_item && cJSON_IsNumber(yi_voice_item)) {
+        uint8_t voice = static_cast<uint8_t>(yi_voice_item->valueint);
+        if (voice != kYiVoiceEnglish) {
+            voice = kYiVoiceVietnamese;
+        }
+        if (voice != old_yi_voice) {
+            yi_voice_changed = true;
+        }
+        WriteYiVoiceToNvs(voice);
+        ESP_LOGI(TAG, "Saved yi_voice: %u (was %u)", (unsigned)voice, (unsigned)old_yi_voice);
+    }
+
+    cJSON* fl_voice_item = cJSON_GetObjectItem(root, "fl_voice");
+    if (fl_voice_item && cJSON_IsNumber(fl_voice_item)) {
+        uint8_t voice = static_cast<uint8_t>(fl_voice_item->valueint);
+        if (voice != kFlVoiceEnglish) {
+            voice = kFlVoiceVietnamese;
+        }
+        if (voice != old_fl_voice) {
+            fl_voice_changed = true;
+        }
+        WriteFlVoiceToNvs(voice);
+        ESP_LOGI(TAG, "Saved fl_voice: %u (was %u)", (unsigned)voice, (unsigned)old_fl_voice);
+    }
+
+    cJSON* ielts_voice_item = cJSON_GetObjectItem(root, "ielts_voice");
+    if (ielts_voice_item && cJSON_IsNumber(ielts_voice_item)) {
+        uint8_t voice = static_cast<uint8_t>(ielts_voice_item->valueint);
+        if (voice != kIeltsVoiceEnglish) {
+            voice = kIeltsVoiceVietnamese;
+        }
+        if (voice != old_ielts_voice) {
+            ielts_voice_changed = true;
+        }
+        WriteIeltsVoiceToNvs(voice);
+        ESP_LOGI(TAG, "Saved ielts_voice: %u (was %u)", (unsigned)voice, (unsigned)old_ielts_voice);
+    }
+
+    cJSON* toeic_voice_item = cJSON_GetObjectItem(root, "toeic_voice");
+    if (toeic_voice_item && cJSON_IsNumber(toeic_voice_item)) {
+        uint8_t voice = static_cast<uint8_t>(toeic_voice_item->valueint);
+        if (voice != kToeicVoiceEnglish) {
+            voice = kToeicVoiceVietnamese;
+        }
+        if (voice != old_toeic_voice) {
+            toeic_voice_changed = true;
+        }
+        WriteToeicVoiceToNvs(voice);
+        ESP_LOGI(TAG, "Saved toeic_voice: %u (was %u)", (unsigned)voice, (unsigned)old_toeic_voice);
+    }
+
+    if ((course_changed && CourseUsesMacPool(static_cast<uint8_t>(new_idx))) ||
+        (new_idx == static_cast<int>(kDefaultPresetMacIndex) && explorers_voice_changed) ||
+        (new_idx == static_cast<int>(kYoungInnovatorsPresetMacIndex) && yi_voice_changed) ||
+        (new_idx == static_cast<int>(kFutureLeadersPresetMacIndex) && fl_voice_changed) ||
+        (new_idx == static_cast<int>(kIeltsPresetMacIndex) && ielts_voice_changed) ||
+        (new_idx == static_cast<int>(kToeicPresetMacIndex) && toeic_voice_changed)) {
         const char* picked = PickAndSaveMacPoolForCourse(static_cast<uint8_t>(new_idx));
         ESP_LOGI(TAG, "MAC pool course %d picked: %s", new_idx, picked ? picked : "(none)");
     }
 
     std::string new_mac = SystemInfo::GetMacAddress();
-    if (course_changed || new_mac != old_mac) {
+    if (course_changed || new_mac != old_mac ||
+        (new_idx == static_cast<int>(kDefaultPresetMacIndex) && explorers_voice_changed) ||
+        (new_idx == static_cast<int>(kYoungInnovatorsPresetMacIndex) && yi_voice_changed) ||
+        (new_idx == static_cast<int>(kFutureLeadersPresetMacIndex) && fl_voice_changed) ||
+        (new_idx == static_cast<int>(kIeltsPresetMacIndex) && ielts_voice_changed) ||
+        (new_idx == static_cast<int>(kToeicPresetMacIndex) && toeic_voice_changed)) {
         identity_changed = true;
     }
 
@@ -632,6 +726,97 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::api_robot_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    auto& board = Board::GetInstance();
+    cJSON* root = cJSON_CreateObject();
+    int volume = 70;
+    auto* codec = board.GetAudioCodec();
+    if (codec) {
+        volume = codec->output_volume();
+    }
+    cJSON_AddNumberToObject(root, "volume", volume);
+
+    auto* backlight = board.GetBacklight();
+    if (backlight) {
+        cJSON_AddNumberToObject(root, "brightness", backlight->brightness());
+        cJSON_AddBoolToObject(root, "has_brightness", true);
+    } else {
+        cJSON_AddBoolToObject(root, "has_brightness", false);
+    }
+
+    char* json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) {
+        httpd_resp_sendstr(req, "{\"volume\":70,\"has_brightness\":false}");
+        return ESP_OK;
+    }
+    httpd_resp_sendstr(req, json);
+    free(json);
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_robot_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 1024) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    auto& board = Board::GetInstance();
+    cJSON* vol = cJSON_GetObjectItem(root, "volume");
+    if (vol && cJSON_IsNumber(vol)) {
+        int v = vol->valueint;
+        v = std::max(0, std::min(100, v));
+        auto* codec = board.GetAudioCodec();
+        if (codec) {
+            codec->SetOutputVolume(v);
+            ESP_LOGI(TAG, "Robot volume set to %d", v);
+        }
+    }
+    cJSON* bri = cJSON_GetObjectItem(root, "brightness");
+    if (bri && cJSON_IsNumber(bri)) {
+        int b = bri->valueint;
+        b = std::max(0, std::min(100, b));
+        auto* backlight = board.GetBacklight();
+        if (backlight) {
+            backlight->SetBrightness(static_cast<uint8_t>(b), true);
+            ESP_LOGI(TAG, "Robot brightness set to %d", b);
+        }
+    }
+    cJSON_Delete(root);
+
+    httpd_resp_sendstr(req, "{\"success\":true}");
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
@@ -639,7 +824,7 @@ bool WebSocketControlServer::Start(int port) {
     config.server_port = port;
     config.max_open_sockets = 7;
     config.ctrl_port = 32769;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 16;
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",
@@ -673,11 +858,29 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_robot_get_uri = {
+        .uri = "/api/robot",
+        .method = HTTP_GET,
+        .handler = api_robot_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_robot_post_uri = {
+        .uri = "/api/robot",
+        .method = HTTP_POST,
+        .handler = api_robot_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
         httpd_register_uri_handler(server_handle_, &ws_uri);
         httpd_register_uri_handler(server_handle_, &page_uri);
         httpd_register_uri_handler(server_handle_, &api_get_uri);
         httpd_register_uri_handler(server_handle_, &api_post_uri);
+        httpd_register_uri_handler(server_handle_, &api_robot_get_uri);
+        httpd_register_uri_handler(server_handle_, &api_robot_post_uri);
         ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d", port);
         return true;
     }

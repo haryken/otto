@@ -38,11 +38,11 @@ Tham chiếu Otto (repo này):
 | idx | id | Tên UI | Device-Id / MAC | Có unit? |
 |---|---|---|---|---|
 | 0 | custom | Tự cấu hình | MAC chip; hoặc `custom_mac` nếu nhập | Không |
-| 1 | explorers | Explorers | Pool random (hiện 1 MAC: `ba:53:9e:c5:ba:10`) — cùng cơ chế daily | Có — **5 sách con** |
-| 2 | younginnovators | Young Innovators | `ba:53:9e:c5:fa:11` | Có — **3 sách QUEST** |
-| 3 | futureleaders | Future Leaders | `ba:53:9e:c5:fa:12` | Có — **1 sách Summit** |
-| 4 | ielts | IELTS | `ba:53:9e:c5:fa:13` | Mock Unit 1–6 |
-| 5 | toeic | TOEIC | `ba:53:9e:c5:fa:14` | Mock Unit 1–6 |
+| 1 | explorers | Explorers | 2 giọng × pool 10 MAC: Song ngữ `ba:10–19`, English `fe:10–19` | Có — **5 sách con** |
+| 2 | younginnovators | Young Innovators | 2 giọng × pool 10: Việt `ef:10–19`, Anh `c6:fe:10–19` (riêng Explorers) | Có — **3 sách QUEST** |
+| 3 | futureleaders | Future Leaders | 2 giọng × pool 10: Việt `c7:ef:10–19`, Anh `c8:ef:10–19` | Có — **1 sách Summit** |
+| 4 | ielts | IELTS | 2 giọng × pool 10: Việt `c2:ef:10–19`, Anh `c3:ef:10–19` | Mock Unit 1–6 |
+| 5 | toeic | TOEIC | 2 giọng × pool 10: Việt `c9:ef:10–19`, Anh `c1:ef:10–19` | Mock Unit 1–6 |
 | 6 | manual_mac | Tự nhập MAC | Bắt buộc `custom_mac` `aa:bb:cc:dd:ee:ff` | Không |
 | 7 | daily_chat | Giao tiếp hằng ngày | Random 1/20 MAC trong pool; mỗi lần boot (hoặc lần chọn mới) random lại, ghi `custom_mac` | Không |
 
@@ -63,21 +63,93 @@ Xiaozhi cloud dễ timeout / coi spam nếu cùng Client-Id gắn nhiều sessio
 WebSocket: mỗi lần `OpenAudioChannel` gửi header `Client-Id` = UUID mới.  
 MQTT: patch `client_id` theo MAC như cũ; Client-Id UUID vẫn dùng cho hello/OTA/header nếu codebase có.
 
-### Explorers (idx=1) — pool MAC (cơ chế random, hiện 1 MAC)
+### Explorers (idx=1) — 2 giọng + pool MAC
 
-Dù pool chỉ có **1** MAC `ba:53:9e:c5:ba:10`, vẫn dùng **cùng cơ chế random** như daily chat (để sau này thêm MAC không đổi code).
+Field `ex_voice` (NVS `wifi/ex_voice`):
+
+| `ex_voice` | Giọng UI | Pool |
+|---|---|---|
+| **0** (mặc định) | Song ngữ Anh – Việt | `ba:53:9e:c5:ba:10` … `ba:19` |
+| **1** | Tiếng Anh | `ba:53:9e:c5:fe:10` … `fe:19` |
 
 | Thời điểm | Hành vi |
 |---|---|
-| **Boot** mà `preset_mac_idx == 1` | Random 1 phần tử trong `kExplorersMacPool` → ghi `custom_mac` → Device-Id |
-| **Đổi sang** idx 1 | Random pool → ghi `custom_mac` → ApplyDeviceIdentity (+ random Client-Id) |
-| Đang idx 1, chỉ sửa tên/unit | Không random lại MAC |
+| **Boot** mà `preset_mac_idx == 1` | Random 1 MAC trong pool theo `ex_voice` → `custom_mac` |
+| **Đổi sang** idx 1 | Random pool theo `ex_voice` → ApplyDeviceIdentity |
+| **Đổi `ex_voice`** khi đang idx 1 | Random lại pool giọng mới → ApplyDeviceIdentity |
+| Chỉ sửa tên/unit/sách con | Không random lại MAC |
 
-#### Pool Explorers (hiện 1 MAC)
+#### Pool Song ngữ (`ex_voice=0`)
 
 ```
-ba:53:9e:c5:ba:10
+ba:53:9e:c5:ba:10 … ba:53:9e:c5:ba:19
 ```
+
+#### Pool Tiếng Anh (`ex_voice=1`)
+
+```
+ba:53:9e:c5:fe:10 … ba:53:9e:c5:fe:19
+```
+
+### Young Innovators (idx=2) — 2 giọng + pool MAC (riêng Explorers)
+
+Field `yi_voice` (NVS `wifi/yi_voice`) — **không dùng chung** `ex_voice`.
+
+| `yi_voice` | Giọng UI | Pool |
+|---|---|---|
+| **0** (mặc định) | Tiếng Việt | `ba:53:9e:c5:ef:10` … `ef:19` |
+| **1** | Tiếng Anh | `ba:53:9e:c6:fe:10` … `fe:19` |
+
+| Thời điểm | Hành vi |
+|---|---|
+| **Boot** mà `preset_mac_idx == 2` | Random 1 MAC theo `yi_voice` → `custom_mac` |
+| **Đổi sang** idx 2 | Random pool theo `yi_voice` → ApplyDeviceIdentity |
+| **Đổi `yi_voice`** khi đang idx 2 | Random lại pool giọng mới → ApplyDeviceIdentity |
+
+### Future Leaders (idx=3) — 2 giọng + pool MAC
+
+Field `fl_voice` (NVS `wifi/fl_voice`) — riêng với `ex_voice` / `yi_voice`.
+
+| `fl_voice` | Giọng UI | Pool |
+|---|---|---|
+| **0** (mặc định) | Tiếng Việt | `ba:53:9e:c7:ef:10` … `ef:19` |
+| **1** | Tiếng Anh | `ba:53:9e:c8:ef:10` … `ef:19` |
+
+| Thời điểm | Hành vi |
+|---|---|
+| **Boot** mà `preset_mac_idx == 3` | Random 1 MAC theo `fl_voice` → `custom_mac` |
+| **Đổi sang** idx 3 | Random pool theo `fl_voice` → ApplyDeviceIdentity |
+| **Đổi `fl_voice`** khi đang idx 3 | Random lại pool giọng mới → ApplyDeviceIdentity |
+
+### IELTS (idx=4) — 2 giọng + pool MAC
+
+Field `ielts_voice` (NVS `wifi/ielts_voice`).
+
+| `ielts_voice` | Giọng UI | Pool |
+|---|---|---|
+| **0** (mặc định) | Tiếng Việt | `ba:53:9e:c2:ef:10` … `ef:19` |
+| **1** | Tiếng Anh | `ba:53:9e:c3:ef:10` … `ef:19` |
+
+| Thời điểm | Hành vi |
+|---|---|
+| **Boot** mà `preset_mac_idx == 4` | Random 1 MAC theo `ielts_voice` → `custom_mac` |
+| **Đổi sang** idx 4 | Random pool theo `ielts_voice` → ApplyDeviceIdentity |
+| **Đổi `ielts_voice`** khi đang idx 4 | Random lại pool giọng mới → ApplyDeviceIdentity |
+
+### TOEIC (idx=5) — 2 giọng + pool MAC
+
+Field `toeic_voice` (NVS `wifi/toeic_voice`).
+
+| `toeic_voice` | Giọng UI | Pool |
+|---|---|---|
+| **0** (mặc định) | Tiếng Việt | `ba:53:9e:c9:ef:10` … `ef:19` |
+| **1** | Tiếng Anh | `ba:53:9e:c1:ef:10` … `ef:19` |
+
+| Thời điểm | Hành vi |
+|---|---|
+| **Boot** mà `preset_mac_idx == 5` | Random 1 MAC theo `toeic_voice` → `custom_mac` |
+| **Đổi sang** idx 5 | Random pool theo `toeic_voice` → ApplyDeviceIdentity |
+| **Đổi `toeic_voice`** khi đang idx 5 | Random lại pool giọng mới → ApplyDeviceIdentity |
 
 ### Giao tiếp hằng ngày (idx=7) — random 1/20 MAC (bắt buộc)
 
@@ -162,6 +234,8 @@ Unit Welcome; Unit One Having a Good Time; Unit Two Spending Money; Unit Three W
 
 Mock Unit 1..6; lưu `units_4` / `units_5` (string số unit, mặc định `"1"`).
 
+Có chọn giọng Việt/Anh (`ielts_voice` / `toeic_voice`) + random MAC pool như Future Leaders.
+
 ### idx 0 / 6 / 7
 
 Không hiện Unit.
@@ -229,16 +303,21 @@ Agent **không được tự thiết kế lại** trang. Phải clone hành vi/l
     "1": "ba:53:9e:c5:ba:10",
     "2": "ba:53:9e:c5:fa:11",
     "3": "ba:53:9e:c5:fa:12",
-    "4": "ba:53:9e:c5:fa:13",
-    "5": "ba:53:9e:c5:fa:14"
+    "4": "ba:53:9e:c2:ef:10",
+    "5": "ba:53:9e:c9:ef:10"
   },
   "all_units": { "1": "1", "2": "1", "3": "1", "4": "1", "5": "1" },
   "yi_sub": 0,
+  "yi_voice": 0,
   "yi_units": { "0": "1", "1": "1", "2": "1" },
   "ex_sub": 0,
+  "ex_voice": 0,
   "ex_units": { "0": "1", "1": "1", "2": "1", "3": "1", "4": "1" },
   "fl_sub": 0,
-  "fl_units": { "0": "1" }
+  "fl_voice": 0,
+  "fl_units": { "0": "1" },
+  "ielts_voice": 0,
+  "toeic_voice": 0
 }
 ```
 
@@ -246,7 +325,7 @@ Agent **không được tự thiết kế lại** trang. Phải clone hành vi/l
 
 - `student_name`, `preset_mac_idx`, `custom_mac` (khi cần)
 - `all_units` (cho 1..5 flat nếu dùng)
-- `yi_sub`, `yi_units`, `ex_sub`, `ex_units`, `fl_sub`, `fl_units`
+- `yi_sub`, `yi_voice`, `yi_units`, `ex_sub`, `ex_voice`, `ex_units`, `fl_sub`, `fl_voice`, `fl_units`, `ielts_voice`, `toeic_voice`
 
 ### Quy tắc Save
 
@@ -270,6 +349,7 @@ Android: SharedPreferences / DataStore / SQLite — tương đương NVS Otto.
 | `ex_sub`, `ex_u0`…`ex_u4` | Explorers |
 | `yi_sub`, `yi_u0`…`yi_u2` | Young Innovators |
 | `fl_sub`, `fl_u0` | Future Leaders |
+| `ielts_voice`, `toeic_voice` | IELTS / TOEIC giọng (0 Việt / 1 Anh) |
 
 ### Device-Id runtime (`GetMacAddress`)
 
@@ -387,7 +467,9 @@ Dùng khi "đổi sang Explorers / giao tiếp hằng ngày / tự nhập MAC…
 - [ ] Đổi khóa xong robot/app **tự chào**, mic sẵn sàng (không cần gọi wake word lại)
 - [ ] Không reboot, không màn đăng nhập khi đổi khóa
 - [ ] **Client-Id:** mỗi boot random UUID mới; đổi khóa A→B cũng random UUID mới (WS header / storage)
-- [ ] **Explorers idx=1:** pool mechanism (hiện 1 MAC `ba:53:9e:c5:ba:10`); boot/switch sang 1 đều pick vào `custom_mac`
+- [ ] **Explorers idx=1:** chọn giọng Song ngữ / Tiếng Anh (`ex_voice`); pool `ba:10–19` / `fe:10–19`; boot/switch/đổi giọng đều pick `custom_mac`
+- [ ] **Young Innovators idx=2 / Future Leaders idx=3:** `yi_voice` / `fl_voice` Việt–Anh + pool riêng
+- [ ] **IELTS idx=4 / TOEIC idx=5:** `ielts_voice` / `toeic_voice` Việt–Anh; pool `c2`/`c3` và `c9`/`c1`
 - [ ] **idx 7 Giao tiếp hằng ngày:** random đúng 1/20 MAC trong pool; ghi `custom_mac`; boot lại khi đang idx 7 thì random lại; đổi sang 7 từ khóa khác thì random + ApplyDeviceIdentity + tự chào
 - [ ] MCP/voice: hỏi tên/khóa/unit; mở trang cấu hình; đổi khóa bằng giọng nói
 - [ ] Client-Id **được random** khi boot và khi đổi khóa; không giữ Client-Id cố định suốt đời máy khi spam đổi MAC

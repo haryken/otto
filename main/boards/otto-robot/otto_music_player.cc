@@ -139,8 +139,10 @@ static bool FindMp3PayloadOffset(const uint8_t* data, size_t len, size_t& skip_o
 }
 
 static bool HttpGetBody(const std::string& url, std::string& body, int& status_code) {
+    ESP_LOGI(TAG, "HTTP GET begin: %s", url.c_str());
     auto http = Board::GetInstance().GetNetwork()->CreateHttp(kMusicHttpConnectId);
     if (!http) {
+        ESP_LOGE(TAG, "HTTP CreateHttp failed (connect_id=%d)", kMusicHttpConnectId);
         return false;
     }
     http->SetTimeout(kHttpTimeoutMs);
@@ -157,6 +159,8 @@ static bool HttpGetBody(const std::string& url, std::string& body, int& status_c
     }
     body = http->ReadAll();
     http->Close();
+    ESP_LOGI(TAG, "HTTP GET ok: status=%d body_len=%u", status_code,
+             static_cast<unsigned>(body.size()));
     return true;
 }
 
@@ -168,13 +172,17 @@ struct SearchResult {
 static bool YoutubeSearchFirst(const std::string& query, SearchResult& out) {
     const std::string url =
         std::string(kYoutubeApiHost) + "/api/search?q=" + UrlEncodeQuery(query) + "&limit=1";
+    ESP_LOGI(TAG, "Search start query=\"%s\"", query.c_str());
     std::string body;
     int status = 0;
     if (!HttpGetBody(url, body, status)) {
+        ESP_LOGE(TAG, "Search HTTP failed query=\"%s\"", query.c_str());
         return false;
     }
     cJSON* root = cJSON_Parse(body.c_str());
     if (!root) {
+        ESP_LOGE(TAG, "Search JSON parse fail body_len=%u head=\"%.80s\"",
+                 static_cast<unsigned>(body.size()), body.c_str());
         return false;
     }
     bool ok = false;
@@ -188,7 +196,12 @@ static bool YoutubeSearchFirst(const std::string& query, SearchResult& out) {
             out.id = id->valuestring;
             out.title = title->valuestring;
             ok = true;
+            ESP_LOGI(TAG, "Search hit id=%s title=\"%s\"", out.id.c_str(), out.title.c_str());
         }
+    }
+    if (!ok) {
+        ESP_LOGE(TAG, "Search empty/no hit body_len=%u head=\"%.120s\"",
+                 static_cast<unsigned>(body.size()), body.c_str());
     }
     cJSON_Delete(root);
     return ok;
@@ -253,6 +266,8 @@ static void StreamMp3Task(void* param);
 static void SearchAndPlayTask(void* param) {
     auto& app = Application::GetInstance();
     std::unique_ptr<std::string> query(static_cast<std::string*>(param));
+    ESP_LOGI(TAG, "SearchAndPlayTask enter query=\"%s\" stop=%d playing=%d", query->c_str(),
+             g_stop_requested.load() ? 1 : 0, g_is_playing.load() ? 1 : 0);
     SearchResult result;
     if (!YoutubeSearchFirst(*query, result)) {
         ESP_LOGE(TAG, "Search failed: %s", query->c_str());
@@ -263,11 +278,14 @@ static void SearchAndPlayTask(void* param) {
             app.GetAudioService().SetCaptureSuspended(false);
             app.GetAudioService().EnableWakeWordDetection(true);
         });
+        g_play_task = nullptr;
         vTaskDelete(nullptr);
         return;
     }
     if (g_stop_requested.load()) {
+        ESP_LOGW(TAG, "SearchAndPlayTask aborted after search (stop requested)");
         g_is_playing.store(false);
+        g_play_task = nullptr;
         vTaskDelete(nullptr);
         return;
     }
@@ -279,6 +297,7 @@ static void SearchAndPlayTask(void* param) {
     audio.SetCaptureSuspended(true);
     audio.SetLocalPlaybackActive(true);
     audio.EnableWakeWordDetection(true);
+    ESP_LOGI(TAG, "Hand off to StreamMp3Task id=%s", result.id.c_str());
 
     auto* track = new SearchResult(std::move(result));
     StreamMp3Task(track);
@@ -288,6 +307,7 @@ static void StreamMp3Task(void* param) {
     std::unique_ptr<SearchResult> track(static_cast<SearchResult*>(param));
     g_is_playing.store(true);
     g_stop_requested.store(false);
+    ESP_LOGI(TAG, "StreamMp3Task enter id=%s title=\"%s\"", track->id.c_str(), track->title.c_str());
 
     auto& app = Application::GetInstance();
     auto& audio = app.GetAudioService();
@@ -305,9 +325,11 @@ static void StreamMp3Task(void* param) {
     // format=stream returns fragmented MP4 (ftyp dash) — NOT MP3. format=mp3 returns audio/mpeg.
     const std::string stream_url = std::string(kYoutubeApiHost) + "/api/stream/mp3?id=" + track->id +
                                    "&format=mp3";
+    ESP_LOGI(TAG, "Stream URL: %s", stream_url.c_str());
 
     auto http = Board::GetInstance().GetNetwork()->CreateHttp(kMusicHttpConnectId);
     if (!http) {
+        ESP_LOGE(TAG, "Stream CreateHttp failed (connect_id=%d)", kMusicHttpConnectId);
         g_is_playing.store(false);
         g_play_task = nullptr;
         ScheduleRestoreAfterMusic(app);
@@ -589,7 +611,10 @@ void Stop() {
 }
 
 std::string PlayFirstSearchResult(const std::string& query) {
+    ESP_LOGI(TAG, "PlayFirstSearchResult called query=\"%s\" was_playing=%d task=%p",
+             query.c_str(), g_is_playing.load() ? 1 : 0, static_cast<void*>(g_play_task));
     if (query.empty()) {
+        ESP_LOGE(TAG, "PlayFirstSearchResult: empty query");
         return R"({"success":false,"error":"query is empty"})";
     }
 
@@ -604,8 +629,13 @@ std::string PlayFirstSearchResult(const std::string& query) {
         SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, 2, &g_play_task, 0);
     if (created != pdPASS) {
         delete query_copy;
+        g_play_task = nullptr;
+        ESP_LOGE(TAG, "PlayFirstSearchResult: xTaskCreate failed");
         return R"({"success":false,"error":"failed to start playback task"})";
     }
+
+    ESP_LOGI(TAG, "PlayFirstSearchResult: otto_music task started handle=%p",
+             static_cast<void*>(g_play_task));
 
     cJSON* json = cJSON_CreateObject();
     cJSON_AddBoolToObject(json, "success", true);

@@ -1110,12 +1110,16 @@ public:
             PropertyList({Property("query", kPropertyTypeString)}),
             [](const PropertyList& properties) -> ReturnValue {
                 std::string q = properties["query"].value<std::string>();
-                return OttoMusic::PlayFirstSearchResult(q);
+                ESP_LOGI(TAG, "MCP self.otto.music.play query=\"%s\"", q.c_str());
+                std::string result = OttoMusic::PlayFirstSearchResult(q);
+                ESP_LOGI(TAG, "MCP self.otto.music.play result=%s", result.c_str());
+                return result;
             });
 
         mcp_server.AddTool("self.otto.music.stop", "Dừng phát nhạc YouTube đang chạy trên loa.", PropertyList(),
                            [](const PropertyList& properties) -> ReturnValue {
                                (void)properties;
+                               ESP_LOGI(TAG, "MCP self.otto.music.stop");
                                OttoMusic::Stop();
                                return true;
                            });

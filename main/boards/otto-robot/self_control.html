@@ -32,12 +32,27 @@
         #custom_mac[readonly] { background: #f0f0f0; color: #555; }
         .mac-hint { color: #666; font-size: 0.85em; margin-top: 8px; line-height: 1.4; }
         .device-id { font-family: monospace; background: #eef6ff; padding: 8px 10px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tab-btn { flex: 1; padding: 12px 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-weight: bold; cursor: pointer; color: #555; }
+        .tab-btn.active { background: #3498db; color: #fff; border-color: #3498db; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .slider-row { margin: 14px 0; }
+        .slider-row label { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; }
+        .slider-row input[type="range"] { width: 100%; }
+        .hint { color: #666; font-size: 0.85em; margin-top: 6px; }
     </style>
 </head>
 <body>
     <h1>🤖 Otto Self Control</h1>
     <div id="toast" class="toast"></div>
 
+    <div class="tabs">
+        <button type="button" class="tab-btn active" id="tab_btn_course" onclick="switchTab('course')">📚 Khóa học</button>
+        <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt robot</button>
+    </div>
+
+    <div id="tab_course" class="tab-panel active">
     <!-- Tên học viên -->
     <div class="card">
         <h2>👤 Tên học viên</h2>
@@ -54,8 +69,43 @@
     <div class="card">
         <h2>🔑 Địa chỉ MAC (Device-Id)</h2>
         <input type="text" id="custom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
-        <p class="mac-hint" id="mac_hint">Khóa có sẵn: MAC tự điền. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu. Giao tiếp hằng ngày: random mỗi lần mở máy.</p>
+        <p class="mac-hint" id="mac_hint">Explorers / Young Innovators / Future Leaders / IELTS / TOEIC / Giao tiếp hằng ngày: random MAC theo giọng hoặc pool. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu.</p>
         <div class="device-id" id="device_id_view">Device-Id đang dùng: ...</div>
+    </div>
+
+    <!-- Giọng Explorers -->
+    <div class="card" id="ex_voice_card" style="display: none;">
+        <h2>🗣️ Giọng Explorers</h2>
+        <div id="ex_voice_list"></div>
+        <p class="mac-hint">Đổi giọng sẽ random MAC trong pool tương ứng và đổi Device-Id.</p>
+    </div>
+
+    <!-- Giọng Young Innovators (riêng với Explorers) -->
+    <div class="card" id="yi_voice_card" style="display: none;">
+        <h2>🗣️ Giọng Young Innovators</h2>
+        <div id="yi_voice_list"></div>
+        <p class="mac-hint">Chọn Việt / Anh riêng; đổi giọng sẽ random MAC pool và đổi Device-Id.</p>
+    </div>
+
+    <!-- Giọng Future Leaders -->
+    <div class="card" id="fl_voice_card" style="display: none;">
+        <h2>🗣️ Giọng Future Leaders</h2>
+        <div id="fl_voice_list"></div>
+        <p class="mac-hint">Chọn Việt / Anh riêng; đổi giọng sẽ random MAC pool và đổi Device-Id.</p>
+    </div>
+
+    <!-- Giọng IELTS -->
+    <div class="card" id="ielts_voice_card" style="display: none;">
+        <h2>🗣️ Giọng IELTS</h2>
+        <div id="ielts_voice_list"></div>
+        <p class="mac-hint">Chọn Việt / Anh riêng; đổi giọng sẽ random MAC pool và đổi Device-Id.</p>
+    </div>
+
+    <!-- Giọng TOEIC -->
+    <div class="card" id="toeic_voice_card" style="display: none;">
+        <h2>🗣️ Giọng TOEIC</h2>
+        <div id="toeic_voice_list"></div>
+        <p class="mac-hint">Chọn Việt / Anh riêng; đổi giọng sẽ random MAC pool và đổi Device-Id.</p>
     </div>
 
     <!-- Chọn sách / cấp độ con (Explorers, Young Innovators, ...) -->
@@ -71,6 +121,27 @@
     <!-- Nút lưu -->
     <button class="btn btn-save" id="btn_save" onclick="saveConfig()">💾 Lưu cấu hình</button>
     <div class="status" id="status"></div>
+    </div>
+
+    <div id="tab_robot" class="tab-panel">
+        <div class="card">
+            <h2>🔊 Âm lượng</h2>
+            <div class="slider-row">
+                <label><span>Loa</span><span id="volume_val">70</span></label>
+                <input type="range" id="volume" min="0" max="100" value="70" oninput="onVolumeInput()">
+            </div>
+            <p class="hint">0–100. Lưu vào robot ngay khi bấm Lưu bên dưới.</p>
+        </div>
+        <div class="card" id="brightness_card">
+            <h2>💡 Độ sáng màn hình</h2>
+            <div class="slider-row">
+                <label><span>Backlight</span><span id="brightness_val">50</span></label>
+                <input type="range" id="brightness" min="0" max="100" value="50" oninput="onBrightnessInput()">
+            </div>
+        </div>
+        <button class="btn btn-save" id="btn_save_robot" onclick="saveRobotSettings()">💾 Lưu cài đặt robot</button>
+        <div class="status" id="robot_status"></div>
+    </div>
 
     <script>
         const MOCK_UNITS = ['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4', 'Unit 5', 'Unit 6'];
@@ -175,6 +246,8 @@
         const EX_IDX = 1;
         const YI_IDX = 2;
         const FL_IDX = 3;
+        const IELTS_IDX = 4;
+        const TOEIC_IDX = 5;
         const MANUAL_MAC_IDX = 6;
         const DAILY_IDX = 7;
 
@@ -182,8 +255,8 @@
             1: 'ba:53:9e:c5:ba:10',
             2: 'ba:53:9e:c5:fa:11',
             3: 'ba:53:9e:c5:fa:12',
-            4: 'ba:53:9e:c5:fa:13',
-            5: 'ba:53:9e:c5:fa:14'
+            4: 'ba:53:9e:c2:ef:10',
+            5: 'ba:53:9e:c9:ef:10'
         };
 
         function emptySubUnits(count) {
@@ -199,14 +272,24 @@
             device_id: '',
             all_units: { 1: DEFAULT_UNITS, 2: DEFAULT_UNITS, 3: DEFAULT_UNITS, 4: DEFAULT_UNITS, 5: DEFAULT_UNITS },
             yi_sub: 0,
+            yi_voice: 0,
             yi_units: emptySubUnits(3),
             ex_sub: 0,
+            ex_voice: 0,
             ex_units: emptySubUnits(5),
             fl_sub: 0,
-            fl_units: emptySubUnits(1)
+            fl_voice: 0,
+            fl_units: emptySubUnits(1),
+            ielts_voice: 0,
+            toeic_voice: 0
         };
         let savedCourseIdx = 1;
         let savedCustomMac = '';
+        let savedExVoice = 0;
+        let savedYiVoice = 0;
+        let savedFlVoice = 0;
+        let savedIeltsVoice = 0;
+        let savedToeicVoice = 0;
 
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -222,11 +305,15 @@
             return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(normalizeMacInput(mac));
         }
         function isMacFieldReadOnlyForIdx(idx) {
-            return (idx >= 1 && idx <= 5) || idx === DAILY_IDX;
+            return idx === EX_IDX || idx === YI_IDX || idx === FL_IDX ||
+                idx === IELTS_IDX || idx === TOEIC_IDX || idx === DAILY_IDX;
         }
         function courseLabel(idx, course) {
-            if (idx >= 1 && idx <= 5 && PRESET_MAC_BY_IDX[idx]) {
-                return course.name + ' <span class="course-mac">' + PRESET_MAC_BY_IDX[idx] + '</span>';
+            if (idx === EX_IDX) {
+                return course.name + ' <span class="course-mac">(2 giọng · random MAC)</span>';
+            }
+            if (idx === YI_IDX || idx === FL_IDX || idx === IELTS_IDX || idx === TOEIC_IDX) {
+                return course.name + ' <span class="course-mac">(Việt/Anh · random MAC)</span>';
             }
             if (idx === DAILY_IDX) {
                 return course.name + ' <span class="course-mac">(random MAC mỗi lần mở máy)</span>';
@@ -237,9 +324,8 @@
             const input = document.getElementById('custom_mac');
             const idx = currentConfig.preset_mac_idx;
             input.readOnly = isMacFieldReadOnlyForIdx(idx);
-            if (idx >= 1 && idx <= 5) {
-                input.value = PRESET_MAC_BY_IDX[idx] || '';
-            } else if (idx === DAILY_IDX) {
+            if (idx === EX_IDX || idx === YI_IDX || idx === FL_IDX ||
+                idx === IELTS_IDX || idx === TOEIC_IDX || idx === DAILY_IDX) {
                 input.value = currentConfig.device_id || '(random mỗi lần mở máy)';
             } else if (idx === 0) {
                 // keep typed / empty for chip MAC
@@ -299,11 +385,161 @@
                     }
                     renderCourses();
                     updateMacField();
+                    renderExVoice();
+                    renderYiVoice();
+                    renderFlVoice();
+                    renderIeltsVoice();
+                    renderToeicVoice();
                     renderSubs();
                     renderUnits();
                 });
                 el.appendChild(div);
             }
+        }
+
+        function renderExVoice() {
+            const card = document.getElementById('ex_voice_card');
+            const el = document.getElementById('ex_voice_list');
+            const idx = currentConfig.preset_mac_idx;
+            if (idx !== EX_IDX) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            card.style.display = 'block';
+            const voices = [
+                { id: 0, name: 'Song ngữ Anh – Việt', hint: 'pool ba:10–ba:19' },
+                { id: 1, name: 'Tiếng Anh', hint: 'pool fe:10–fe:19' }
+            ];
+            const selected = currentConfig.ex_voice === 1 ? 1 : 0;
+            el.innerHTML = '';
+            voices.forEach((v) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (v.id === selected ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="ex_voice" value="${v.id}" ${v.id === selected ? 'checked' : ''}>` +
+                    `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    currentConfig.ex_voice = v.id;
+                    renderExVoice();
+                });
+                el.appendChild(div);
+            });
+        }
+
+        function renderYiVoice() {
+            const card = document.getElementById('yi_voice_card');
+            const el = document.getElementById('yi_voice_list');
+            const idx = currentConfig.preset_mac_idx;
+            if (idx !== YI_IDX) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            card.style.display = 'block';
+            const voices = [
+                { id: 0, name: 'Tiếng Việt', hint: 'pool ef:10–ef:19' },
+                { id: 1, name: 'Tiếng Anh', hint: 'pool c6:fe:10–fe:19' }
+            ];
+            const selected = currentConfig.yi_voice === 1 ? 1 : 0;
+            el.innerHTML = '';
+            voices.forEach((v) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (v.id === selected ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="yi_voice" value="${v.id}" ${v.id === selected ? 'checked' : ''}>` +
+                    `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    currentConfig.yi_voice = v.id;
+                    renderYiVoice();
+                });
+                el.appendChild(div);
+            });
+        }
+
+        function renderFlVoice() {
+            const card = document.getElementById('fl_voice_card');
+            const el = document.getElementById('fl_voice_list');
+            const idx = currentConfig.preset_mac_idx;
+            if (idx !== FL_IDX) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            card.style.display = 'block';
+            const voices = [
+                { id: 0, name: 'Tiếng Việt', hint: 'pool c7:ef:10–ef:19' },
+                { id: 1, name: 'Tiếng Anh', hint: 'pool c8:ef:10–ef:19' }
+            ];
+            const selected = currentConfig.fl_voice === 1 ? 1 : 0;
+            el.innerHTML = '';
+            voices.forEach((v) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (v.id === selected ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="fl_voice" value="${v.id}" ${v.id === selected ? 'checked' : ''}>` +
+                    `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    currentConfig.fl_voice = v.id;
+                    renderFlVoice();
+                });
+                el.appendChild(div);
+            });
+        }
+
+        function renderIeltsVoice() {
+            const card = document.getElementById('ielts_voice_card');
+            const el = document.getElementById('ielts_voice_list');
+            const idx = currentConfig.preset_mac_idx;
+            if (idx !== IELTS_IDX) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            card.style.display = 'block';
+            const voices = [
+                { id: 0, name: 'Tiếng Việt', hint: 'pool c2:ef:10–ef:19' },
+                { id: 1, name: 'Tiếng Anh', hint: 'pool c3:ef:10–ef:19' }
+            ];
+            const selected = currentConfig.ielts_voice === 1 ? 1 : 0;
+            el.innerHTML = '';
+            voices.forEach((v) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (v.id === selected ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="ielts_voice" value="${v.id}" ${v.id === selected ? 'checked' : ''}>` +
+                    `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    currentConfig.ielts_voice = v.id;
+                    renderIeltsVoice();
+                });
+                el.appendChild(div);
+            });
+        }
+
+        function renderToeicVoice() {
+            const card = document.getElementById('toeic_voice_card');
+            const el = document.getElementById('toeic_voice_list');
+            const idx = currentConfig.preset_mac_idx;
+            if (idx !== TOEIC_IDX) {
+                card.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            card.style.display = 'block';
+            const voices = [
+                { id: 0, name: 'Tiếng Việt', hint: 'pool c9:ef:10–ef:19' },
+                { id: 1, name: 'Tiếng Anh', hint: 'pool c1:ef:10–ef:19' }
+            ];
+            const selected = currentConfig.toeic_voice === 1 ? 1 : 0;
+            el.innerHTML = '';
+            voices.forEach((v) => {
+                const div = document.createElement('label');
+                div.className = 'course-label' + (v.id === selected ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="toeic_voice" value="${v.id}" ${v.id === selected ? 'checked' : ''}>` +
+                    `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
+                div.querySelector('input').addEventListener('change', () => {
+                    currentConfig.toeic_voice = v.id;
+                    renderToeicVoice();
+                });
+                el.appendChild(div);
+            });
         }
 
         function getActiveUnits() {
@@ -430,6 +666,10 @@
                 if (data.yi_sub !== undefined) {
                     currentConfig.yi_sub = Number(data.yi_sub) || 0;
                 }
+                if (data.yi_voice !== undefined) {
+                    currentConfig.yi_voice = Number(data.yi_voice) === 1 ? 1 : 0;
+                }
+                savedYiVoice = currentConfig.yi_voice;
                 if (data.yi_units) {
                     currentConfig.yi_units = data.yi_units;
                 }
@@ -441,6 +681,10 @@
                 if (data.ex_sub !== undefined) {
                     currentConfig.ex_sub = Number(data.ex_sub) || 0;
                 }
+                if (data.ex_voice !== undefined) {
+                    currentConfig.ex_voice = Number(data.ex_voice) === 1 ? 1 : 0;
+                }
+                savedExVoice = currentConfig.ex_voice;
                 if (data.ex_units) {
                     currentConfig.ex_units = data.ex_units;
                 }
@@ -452,6 +696,10 @@
                 if (data.fl_sub !== undefined) {
                     currentConfig.fl_sub = Number(data.fl_sub) || 0;
                 }
+                if (data.fl_voice !== undefined) {
+                    currentConfig.fl_voice = Number(data.fl_voice) === 1 ? 1 : 0;
+                }
+                savedFlVoice = currentConfig.fl_voice;
                 if (data.fl_units) {
                     currentConfig.fl_units = data.fl_units;
                 }
@@ -460,6 +708,14 @@
                         currentConfig.fl_units[i] = DEFAULT_UNITS;
                     }
                 }
+                if (data.ielts_voice !== undefined) {
+                    currentConfig.ielts_voice = Number(data.ielts_voice) === 1 ? 1 : 0;
+                }
+                savedIeltsVoice = currentConfig.ielts_voice;
+                if (data.toeic_voice !== undefined) {
+                    currentConfig.toeic_voice = Number(data.toeic_voice) === 1 ? 1 : 0;
+                }
+                savedToeicVoice = currentConfig.toeic_voice;
                 if (data.preset_macs) {
                     for (const [k, v] of Object.entries(data.preset_macs)) {
                         PRESET_MAC_BY_IDX[Number(k)] = v;
@@ -474,6 +730,11 @@
                 }
                 renderCourses();
                 updateMacField();
+                renderExVoice();
+                renderYiVoice();
+                renderFlVoice();
+                renderIeltsVoice();
+                renderToeicVoice();
                 renderSubs();
                 renderUnits();
                 document.getElementById('status').textContent = '';
@@ -521,9 +782,20 @@
                 if (!data.success) throw new Error(data.error || 'Lưu thất bại');
                 const courseChanged = currentConfig.preset_mac_idx !== savedCourseIdx;
                 const macChanged = (idx === 0 || idx === MANUAL_MAC_IDX) && mac !== savedCustomMac;
+                const voiceChanged =
+                    (idx === EX_IDX && currentConfig.ex_voice !== savedExVoice) ||
+                    (idx === YI_IDX && currentConfig.yi_voice !== savedYiVoice) ||
+                    (idx === FL_IDX && currentConfig.fl_voice !== savedFlVoice) ||
+                    (idx === IELTS_IDX && currentConfig.ielts_voice !== savedIeltsVoice) ||
+                    (idx === TOEIC_IDX && currentConfig.toeic_voice !== savedToeicVoice);
                 savedCourseIdx = currentConfig.preset_mac_idx;
                 savedCustomMac = mac;
-                if (courseChanged || macChanged) {
+                savedExVoice = currentConfig.ex_voice;
+                savedYiVoice = currentConfig.yi_voice;
+                savedFlVoice = currentConfig.fl_voice;
+                savedIeltsVoice = currentConfig.ielts_voice;
+                savedToeicVoice = currentConfig.toeic_voice;
+                if (courseChanged || macChanged || voiceChanged) {
                     showToast('✅ Đã lưu — đang đổi Device-Id (~vài giây), rồi nói tiếp');
                     setTimeout(loadConfig, 3000);
                 } else {
@@ -534,6 +806,74 @@
             }
             btn.disabled = false;
             btn.textContent = '💾 Lưu cấu hình';
+        }
+
+        function switchTab(name) {
+            document.getElementById('tab_course').classList.toggle('active', name === 'course');
+            document.getElementById('tab_robot').classList.toggle('active', name === 'robot');
+            document.getElementById('tab_btn_course').classList.toggle('active', name === 'course');
+            document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
+            if (name === 'robot') {
+                loadRobotSettings();
+            }
+        }
+
+        function onVolumeInput() {
+            document.getElementById('volume_val').textContent = document.getElementById('volume').value;
+        }
+        function onBrightnessInput() {
+            document.getElementById('brightness_val').textContent = document.getElementById('brightness').value;
+        }
+
+        async function loadRobotSettings() {
+            try {
+                document.getElementById('robot_status').textContent = 'Đang tải...';
+                const resp = await fetch('/api/robot');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                const vol = Math.max(0, Math.min(100, Number(data.volume) || 70));
+                document.getElementById('volume').value = vol;
+                document.getElementById('volume_val').textContent = vol;
+                const briCard = document.getElementById('brightness_card');
+                if (data.has_brightness) {
+                    briCard.style.display = '';
+                    const bri = Math.max(0, Math.min(100, Number(data.brightness) || 50));
+                    document.getElementById('brightness').value = bri;
+                    document.getElementById('brightness_val').textContent = bri;
+                } else {
+                    briCard.style.display = 'none';
+                }
+                document.getElementById('robot_status').textContent = '';
+            } catch (err) {
+                document.getElementById('robot_status').textContent = 'Lỗi tải: ' + err.message;
+            }
+        }
+
+        async function saveRobotSettings() {
+            const btn = document.getElementById('btn_save_robot');
+            btn.disabled = true;
+            btn.textContent = 'Đang lưu...';
+            try {
+                const body = {
+                    volume: parseInt(document.getElementById('volume').value, 10)
+                };
+                const briCard = document.getElementById('brightness_card');
+                if (briCard.style.display !== 'none') {
+                    body.brightness = parseInt(document.getElementById('brightness').value, 10);
+                }
+                const resp = await fetch('/api/robot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Lưu thất bại');
+                showToast('✅ Đã lưu cài đặt robot');
+            } catch (err) {
+                showToast('❌ ' + err.message);
+            }
+            btn.disabled = false;
+            btn.textContent = '💾 Lưu cài đặt robot';
         }
 
         document.addEventListener('DOMContentLoaded', loadConfig);
