@@ -132,10 +132,21 @@ public:
     /** Close voice session and go idle while MP3 plays (wake word / boot still work). */
     void EnterMusicOnlyMode();
     void ResetMusicOnlySession();
-    /** Show "Đang phát nhạc" on screen (thread-safe). */
+    /** Show "Đang tìm nhạc" while YouTube search / stream setup runs. */
+    void ShowMusicSearchingOnDisplay();
+    /** Show "Đang phát nhạc" once MP3 stream is actually playing. */
     void ShowMusicPlayingOnDisplay();
     /** Clear music overlay so TTS/STT text can show again (thread-safe). */
     void ClearMusicPlayingOnDisplay();
+    /**
+     * Search/stream failed: show "Tìm không được nhạc" and re-open chat via
+     * listen/detect text "nhạc thất bại" (same wake path as ApplyDeviceIdentity).
+     */
+    void NotifyMusicSearchFailed();
+    /**
+     * Track finished naturally: show "hết nhạc" then wake detect "phát hết nhạc".
+     */
+    void NotifyMusicFinished();
     AudioService& GetAudioService() { return audio_service_; }
     
     /**
@@ -215,7 +226,10 @@ private:
     void ContinueOpenAudioChannel(ListeningMode mode);
     void ContinueWakeWordInvoke(const std::string& wake_word);
     void EnterMusicOnlyModeImpl();
-    void ShowMusicPlayingOnDisplayImpl();
+    void ShowMusicStatusOnDisplayImpl(const char* message);
+    void NotifyMusicEndedImpl(const char* status_text, const char* wake_text);
+    void NotifyMusicSearchFailedImpl();
+    void NotifyMusicFinishedImpl();
 
     // Activation task (runs in background)
     void ActivationTask();

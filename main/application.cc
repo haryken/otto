@@ -1083,22 +1083,23 @@ void Application::EnterMusicOnlyModeImpl() {
         SetDeviceState(kDeviceStateIdle);
     }
     audio_service_.EnableWakeWordDetection(true);
-    ShowMusicPlayingOnDisplayImpl();
-    ESP_LOGI(TAG, "Music-only mode: standby, wake word or BOOT to stop");
+    ShowMusicStatusOnDisplayImpl("Đang tìm nhạc");
+    ESP_LOGI(TAG, "Music-only mode: searching, wake word or BOOT to stop");
 }
 
-void Application::ShowMusicPlayingOnDisplayImpl() {
-    if (music_playing_display_active_) {
-        return;
-    }
+void Application::ShowMusicStatusOnDisplayImpl(const char* message) {
     auto display = Board::GetInstance().GetDisplay();
     display->ClearChatMessages();
-    display->SetChatMessage("system", "Đang phát nhạc");
+    display->SetChatMessage("system", message ? message : "");
     music_playing_display_active_ = true;
 }
 
+void Application::ShowMusicSearchingOnDisplay() {
+    Schedule([this]() { ShowMusicStatusOnDisplayImpl("Đang tìm nhạc"); });
+}
+
 void Application::ShowMusicPlayingOnDisplay() {
-    Schedule([this]() { ShowMusicPlayingOnDisplayImpl(); });
+    Schedule([this]() { ShowMusicStatusOnDisplayImpl("Đang phát nhạc"); });
 }
 
 void Application::ClearMusicPlayingOnDisplay() {
@@ -1109,6 +1110,39 @@ void Application::ClearMusicPlayingOnDisplay() {
         Board::GetInstance().GetDisplay()->ClearChatMessages();
         music_playing_display_active_ = false;
     });
+}
+
+void Application::NotifyMusicEndedImpl(const char* status_text, const char* wake_text) {
+    music_only_mode_entered_ = false;
+    music_playing_display_active_ = false;
+    audio_service_.SetLocalPlaybackActive(false);
+    audio_service_.SetCaptureSuspended(false);
+    audio_service_.RestoreAudioHardwareAfterLocalPlayback();
+    audio_service_.EnableWakeWordDetection(true);
+
+    auto display = Board::GetInstance().GetDisplay();
+    display->ClearChatMessages();
+    display->SetChatMessage("system", status_text ? status_text : "");
+
+    ESP_LOGI(TAG, "Music ended status=\"%s\" → wake detect \"%s\"",
+             status_text ? status_text : "", wake_text ? wake_text : "");
+    WakeWordInvoke(wake_text ? wake_text : "");
+}
+
+void Application::NotifyMusicSearchFailedImpl() {
+    NotifyMusicEndedImpl("Tìm không được nhạc", "nhạc thất bại");
+}
+
+void Application::NotifyMusicSearchFailed() {
+    Schedule([this]() { NotifyMusicSearchFailedImpl(); });
+}
+
+void Application::NotifyMusicFinishedImpl() {
+    NotifyMusicEndedImpl("hết nhạc", "phát hết nhạc");
+}
+
+void Application::NotifyMusicFinished() {
+    Schedule([this]() { NotifyMusicFinishedImpl(); });
 }
 
 void Application::EnterMusicOnlyMode() {

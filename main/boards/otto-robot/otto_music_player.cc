@@ -271,6 +271,12 @@ static void ScheduleRestoreAfterMusic(Application& app) {
     });
 }
 
+static void FailMusicBeforePlay(Application& app) {
+    g_is_playing.store(false);
+    g_play_task = nullptr;
+    app.NotifyMusicSearchFailed();
+}
+
 static void StreamMp3Task(void* param);
 
 /** Search YouTube then stream — runs off the main thread so TTS UDP is not starved. */
@@ -279,17 +285,11 @@ static void SearchAndPlayTask(void* param) {
     std::unique_ptr<std::string> query(static_cast<std::string*>(param));
     ESP_LOGI(TAG, "SearchAndPlayTask enter query=\"%s\" stop=%d playing=%d", query->c_str(),
              g_stop_requested.load() ? 1 : 0, g_is_playing.load() ? 1 : 0);
+    app.ShowMusicSearchingOnDisplay();
     SearchResult result;
     if (!YoutubeSearchFirst(*query, result)) {
         ESP_LOGE(TAG, "Search failed: %s", query->c_str());
-        g_is_playing.store(false);
-        app.Schedule([&app]() {
-            app.ResetMusicOnlySession();
-            app.GetAudioService().SetLocalPlaybackActive(false);
-            app.GetAudioService().SetCaptureSuspended(false);
-            app.GetAudioService().EnableWakeWordDetection(true);
-        });
-        g_play_task = nullptr;
+        FailMusicBeforePlay(app);
         vTaskDelete(nullptr);
         return;
     }
@@ -344,9 +344,7 @@ static void StreamMp3Task(void* param) {
     auto http = Board::GetInstance().GetNetwork()->CreateHttp(kMusicHttpConnectId);
     if (!http) {
         ESP_LOGE(TAG, "Stream CreateHttp failed (connect_id=%d)", kMusicHttpConnectId);
-        g_is_playing.store(false);
-        g_play_task = nullptr;
-        ScheduleRestoreAfterMusic(app);
+        FailMusicBeforePlay(app);
         vTaskDelete(nullptr);
         return;
     }
@@ -356,18 +354,14 @@ static void StreamMp3Task(void* param) {
     if (!http->Open("GET", stream_url)) {
         ESP_LOGE(TAG, "Stream open failed (err %d)", http->GetLastError());
         http->Close();
-        g_is_playing.store(false);
-        g_play_task = nullptr;
-        ScheduleRestoreAfterMusic(app);
+        FailMusicBeforePlay(app);
         vTaskDelete(nullptr);
         return;
     }
     if (http->GetStatusCode() != 200 && http->GetStatusCode() != 206) {
         ESP_LOGE(TAG, "Stream HTTP %d", http->GetStatusCode());
         http->Close();
-        g_is_playing.store(false);
-        g_play_task = nullptr;
-        ScheduleRestoreAfterMusic(app);
+        FailMusicBeforePlay(app);
         vTaskDelete(nullptr);
         return;
     }
@@ -377,9 +371,7 @@ static void StreamMp3Task(void* param) {
     if (esp_mp3_dec_open(nullptr, 0, &mp3_dec) != ESP_AUDIO_ERR_OK || mp3_dec == nullptr) {
         ESP_LOGE(TAG, "MP3 decoder open failed");
         http->Close();
-        g_is_playing.store(false);
-        g_play_task = nullptr;
-        ScheduleRestoreAfterMusic(app);
+        FailMusicBeforePlay(app);
         vTaskDelete(nullptr);
         return;
     }
@@ -390,7 +382,7 @@ static void StreamMp3Task(void* param) {
     int src_rate = 0;
     int src_channels = 1;
 
-    auto cleanup = [&]() {
+    auto cleanup = [&](bool natural_end) {
         if (resampler) {
             esp_ae_rate_cvt_close(resampler);
             resampler = nullptr;
@@ -402,7 +394,11 @@ static void StreamMp3Task(void* param) {
         http->Close();
         g_is_playing.store(false);
         g_play_task = nullptr;
-        ScheduleRestoreAfterMusic(app);
+        if (natural_end) {
+            app.NotifyMusicFinished();
+        } else {
+            ScheduleRestoreAfterMusic(app);
+        }
     };
 
     const std::string content_type = http->GetResponseHeader("Content-Type");
@@ -415,7 +411,7 @@ static void StreamMp3Task(void* param) {
 
     if (g_stop_requested.load()) {
         ESP_LOGW(TAG, "Playback cancelled before read");
-        cleanup();
+        cleanup(false);
         vTaskDelete(nullptr);
         return;
     }
@@ -423,26 +419,33 @@ static void StreamMp3Task(void* param) {
     std::vector<uint8_t> mp3_carry;
     bool id3_skipped = false;
     bool prebuffer_done = false;
+    bool stream_eof = false;
 
     while (!g_stop_requested.load()) {
         if (g_stop_requested.load()) {
             break;
         }
         int n = 0;
-        if (mp3_carry.size() < kMp3BufferPauseRead) {
+        if (!stream_eof && mp3_carry.size() < kMp3BufferPauseRead) {
             n = http->Read(reinterpret_cast<char*>(read_buf.data()), read_buf.size());
             if (n > 0) {
                 mp3_carry.insert(mp3_carry.end(), read_buf.data(), read_buf.data() + n);
+            } else {
+                // EOF/error: exit after draining carry — leftover bytes used to spin forever
+                // with "Đang phát nhạc" and never NotifyMusicFinished.
+                stream_eof = true;
+                ESP_LOGI(TAG, "MP3 HTTP EOF (read=%d), carry=%u bytes", n,
+                         static_cast<unsigned>(mp3_carry.size()));
             }
         }
-        if (n <= 0 && mp3_carry.empty()) {
-            ESP_LOGW(TAG, "MP3 stream ended early (read=%d)", n);
+        if (stream_eof && mp3_carry.empty()) {
+            ESP_LOGI(TAG, "MP3 stream drained");
             break;
         }
         if (!id3_skipped) {
             size_t skip = 0;
             if (!FindMp3PayloadOffset(mp3_carry.data(), mp3_carry.size(), skip)) {
-                if (mp3_carry.size() > 256 * 1024) {
+                if (stream_eof || mp3_carry.size() > 256 * 1024) {
                     ESP_LOGE(TAG, "No MP3 frame sync in stream (wrong format?)");
                     break;
                 }
@@ -464,7 +467,7 @@ static void StreamMp3Task(void* param) {
         }
 
         if (!prebuffer_done) {
-            if (mp3_carry.size() < kMp3PrebufferBytes && n > 0) {
+            if (!stream_eof && mp3_carry.size() < kMp3PrebufferBytes && n > 0) {
                 continue;
             }
             prebuffer_done = true;
@@ -473,9 +476,12 @@ static void StreamMp3Task(void* param) {
         }
 
         if (id3_skipped && mp3_carry.size() < kMinMp3BytesBeforeDecode) {
-            if (n <= 0) {
-                vTaskDelay(pdMS_TO_TICKS(5));
+            if (stream_eof) {
+                ESP_LOGW(TAG, "EOF with incomplete MP3 tail (%u bytes), ending",
+                         static_cast<unsigned>(mp3_carry.size()));
+                break;
             }
+            vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
 
@@ -594,21 +600,34 @@ static void StreamMp3Task(void* param) {
             mp3_carry.erase(mp3_carry.begin(), mp3_carry.begin() + static_cast<std::ptrdiff_t>(mp3_pos));
         }
 
-        if (n <= 0 && mp3_carry.empty()) {
-            break;
+        if (stream_eof) {
+            if (mp3_carry.empty() || frames_this_loop == 0) {
+                if (!mp3_carry.empty()) {
+                    ESP_LOGW(TAG, "EOF dropping %u leftover MP3 bytes",
+                             static_cast<unsigned>(mp3_carry.size()));
+                    mp3_carry.clear();
+                }
+                break;
+            }
         }
+
         if (mp3_carry.size() >= kMp3BufferPauseRead) {
             vTaskDelay(pdMS_TO_TICKS(1));
-        } else if (n <= 0) {
-            vTaskDelay(pdMS_TO_TICKS(5));
+        } else if (stream_eof) {
+            vTaskDelay(pdMS_TO_TICKS(1));
         } else {
-            // Actively filling/decoding — yield without sleeping so queue stays full.
             taskYIELD();
         }
     }
 
-    cleanup();
-    ESP_LOGI(TAG, "Playback finished: %s", track->title.c_str());
+    // Let speaker finish queued PCM before "hết nhạc" + wake.
+    if (!g_stop_requested.load()) {
+        audio.WaitForPlaybackQueueEmpty();
+    }
+
+    const bool natural_end = !g_stop_requested.load();
+    cleanup(natural_end);
+    ESP_LOGI(TAG, "Playback finished: %s (natural=%d)", track->title.c_str(), natural_end ? 1 : 0);
     vTaskDelete(nullptr);
 }
 
@@ -641,6 +660,7 @@ std::string PlayFirstSearchResult(const std::string& query) {
              query.c_str(), g_is_playing.load() ? 1 : 0, static_cast<void*>(g_play_task));
     if (query.empty()) {
         ESP_LOGE(TAG, "PlayFirstSearchResult: empty query");
+        Application::GetInstance().NotifyMusicSearchFailed();
         return R"({"success":false,"error":"query is empty"})";
     }
 
@@ -650,6 +670,8 @@ std::string PlayFirstSearchResult(const std::string& query) {
     }
     g_stop_requested.store(false);
 
+    Application::GetInstance().ShowMusicSearchingOnDisplay();
+
     auto* query_copy = new std::string(query);
     BaseType_t created = xTaskCreatePinnedToCore(
         SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, kMusicTaskPriority, &g_play_task, 0);
@@ -657,6 +679,7 @@ std::string PlayFirstSearchResult(const std::string& query) {
         delete query_copy;
         g_play_task = nullptr;
         ESP_LOGE(TAG, "PlayFirstSearchResult: xTaskCreate failed");
+        Application::GetInstance().NotifyMusicSearchFailed();
         return R"({"success":false,"error":"failed to start playback task"})";
     }
 
