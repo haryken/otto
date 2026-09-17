@@ -12,6 +12,7 @@
 #include "settings.h"
 
 #include <cstring>
+#include <cctype>
 #include <esp_log.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
@@ -941,8 +942,17 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
     while (auto packet = audio_service_.PopWakeWordPacket()) {
         protocol_->SendAudio(std::move(packet));
     }
-    // Set the chat state to wake word detected
-    protocol_->SendWakeWordDetected(wake_word);
+    // Real wake models report "Hi,Jason" / "Hi,ESP" — send a short Vietnamese greet
+    // for listen/detect. Synthetic wakes (music end/fail, silence prompt) keep their text.
+    std::string detect_text = wake_word;
+    auto lower = wake_word;
+    for (char& c : lower) {
+        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    }
+    if (lower == "hi,jason" || lower == "hi,esp" || lower == "hi jason" || lower == "hi esp") {
+        detect_text = "xin chào";
+    }
+    protocol_->SendWakeWordDetected(detect_text);
     SetListeningMode(GetDefaultListeningMode());
 #else
     SetListeningMode(GetDefaultListeningMode());
