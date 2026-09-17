@@ -152,7 +152,7 @@
     <div id="tab_ota" class="tab-panel">
         <div class="card">
             <h2>🔄 Cập nhật firmware (OTA)</h2>
-            <p class="hint">Hai cách: dán <b>URL</b> hoặc chọn file <b>xiaozhi.bin</b> rồi bấm cập nhật. Fail → giữ phần mềm cũ. Web :8080 vẫn chạy khi ghi flash; thành công sẽ reboot.</p>
+            <p class="hint">Hai cách: dán <b>URL</b> hoặc chọn file <b>xiaozhi.bin</b> (trong thư mục <code>build/</code>) rồi bấm cập nhật. <b>Không</b> dùng <code>merged-binary.bin</code> / full flash. Fail → giữ phần mềm cũ. Thành công sẽ reboot.</p>
 
             <label class="hint" style="display:block;margin-top:8px">Từ link</label>
             <input type="text" id="ota_url" placeholder="https://example.com/xiaozhi.bin" autocomplete="off" spellcheck="false">
@@ -937,6 +937,11 @@
                 showToast('❌ Chọn file .bin trước');
                 return;
             }
+            const name = (file.name || '').toLowerCase();
+            if (name.includes('merged') || name.includes('flash') || name === 'bootloader.bin') {
+                showToast('❌ Sai file: cần xiaozhi.bin (app OTA), không dùng merged-binary / full flash');
+                return;
+            }
             if (file.size < 64 * 1024) {
                 showToast('❌ File quá nhỏ — hãy chọn xiaozhi.bin');
                 return;
@@ -955,8 +960,8 @@
                 if (!e.lengthComputable) return;
                 const pct = Math.round(e.loaded * 100 / e.total);
                 document.getElementById('ota_bar').style.width = pct + '%';
-                document.getElementById('ota_msg').textContent = 'Đang tải lên... ' + pct + '% (' + Math.round(e.loaded/1024) + '/' + Math.round(e.total/1024) + ' KB)';
-                document.getElementById('ota_status').textContent = 'Upload: ' + pct + '%';
+                document.getElementById('ota_msg').textContent = 'Upload mạng... ' + pct + '% (chưa ghi flash) · ' + Math.round(e.loaded/1024) + '/' + Math.round(e.total/1024) + ' KB';
+                document.getElementById('ota_status').textContent = 'Upload TCP: ' + pct + '% — chờ robot ghi OTA';
             };
             xhr.onload = function () {
                 let data = {};

@@ -882,7 +882,7 @@ config SILENCE_PROMPT_ENABLE
 config SILENCE_PROMPT_TIMEOUT_SEC
     int "User silence timeout before uplink prompt (seconds)"
     range 3 60
-    default 15
+    default 30
     depends on SILENCE_PROMPT_ENABLE
     help
         Seconds without server STT/TTS before sending (or re-sending) the prompt text.
