@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include <esp_err.h>
 #include "board.h"
@@ -22,6 +23,10 @@ public:
     bool HasServerTime() { return has_server_time_; }
     bool StartUpgrade(std::function<void(int progress, size_t speed)> callback);
     static bool Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback);
+    /** Stream firmware into the next OTA partition. reader returns bytes read, 0=EOF, <0=error. */
+    static bool UpgradeFromReader(size_t content_length,
+                                  std::function<int(char* buf, size_t max_len)> reader,
+                                  std::function<void(int progress, size_t speed)> callback);
     void MarkCurrentVersionValid();
 
     const std::string& GetFirmwareVersion() const { return firmware_version_; }

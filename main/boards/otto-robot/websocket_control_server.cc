@@ -7,6 +7,9 @@
 #include "system_info.h"
 #include <esp_log.h>
 #include <esp_http_server.h>
+#include <esp_ota_ops.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <nvs.h>
 #include <sys/param.h>
 #include <cstring>
@@ -554,8 +557,11 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
             SaveCustomMacToWifiNvs(mac.c_str());
             ESP_LOGI(TAG, "Saved custom_mac: %s", mac.c_str());
         } else if (new_idx == 0) {
-            if (mac.empty()) {
+            // Tự cấu hình: để trống = chip. Không giữ MAC pool khóa cũ (vd. ba:53:…fe:19).
+            if (mac.empty() || IsMacInAnyCoursePool(mac.c_str())) {
                 SaveCustomMacToWifiNvs("");
+                ESP_LOGI(TAG, "idx=0 → clear custom_mac (chip MAC)%s",
+                         mac.empty() ? "" : " — ignored pool leftover");
             } else if (IsValidMacString(mac.c_str())) {
                 SaveCustomMacToWifiNvs(mac.c_str());
                 ESP_LOGI(TAG, "Saved custom_mac (custom course): %s", mac.c_str());
@@ -817,6 +823,149 @@ esp_err_t WebSocketControlServer::api_robot_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::api_ota_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    std::string json = Application::GetInstance().GetWebOtaStatusJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_ota_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    if (Application::GetInstance().IsWebOtaBusy()) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OTA đang chạy\"}");
+        return ESP_OK;
+    }
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 2048) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Body không hợp lệ\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+    cJSON* url_item = cJSON_GetObjectItem(root, "url");
+    if (!url_item || !cJSON_IsString(url_item) || !url_item->valuestring) {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu url\"}");
+        return ESP_OK;
+    }
+    std::string url = url_item->valuestring;
+    cJSON_Delete(root);
+
+    bool ok = Application::GetInstance().StartWebOta(url);
+    if (!ok) {
+        httpd_resp_sendstr(req,
+            "{\"success\":false,\"error\":\"Không bắt đầu được OTA (URL/busy)\"}");
+        return ESP_OK;
+    }
+    httpd_resp_sendstr(req, "{\"success\":true,\"message\":\"Đã bắt đầu cập nhật\"}");
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_ota_upload_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "close");
+
+    auto drain_body = [req]() {
+        char tmp[512];
+        int left = req->content_len;
+        while (left > 0) {
+            int chunk = left > (int)sizeof(tmp) ? (int)sizeof(tmp) : left;
+            int r = httpd_req_recv(req, tmp, chunk);
+            if (r <= 0) break;
+            left -= r;
+        }
+    };
+
+    if (Application::GetInstance().IsWebOtaBusy()) {
+        drain_body();
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OTA đang chạy\"}");
+        return ESP_OK;
+    }
+
+    int total_len = req->content_len;
+    if (total_len <= 0) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu Content-Length (cần raw .bin)\"}");
+        return ESP_OK;
+    }
+
+    const esp_partition_t* part = esp_ota_get_next_update_partition(NULL);
+    if (!part) {
+        drain_body();
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Không có phân vùng OTA\"}");
+        return ESP_OK;
+    }
+    if (static_cast<size_t>(total_len) > part->size) {
+        drain_body();
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"File lớn hơn phân vùng OTA\"}");
+        return ESP_OK;
+    }
+    if (total_len < 64 * 1024) {
+        drain_body();
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"File quá nhỏ (không phải firmware?)\"}");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "OTA upload start: %d bytes", total_len);
+
+    size_t received = 0;
+    bool ok = Application::GetInstance().RunWebOtaUpload(
+        static_cast<size_t>(total_len),
+        [req, total_len, &received](char* buf, size_t max_len) -> int {
+            size_t remaining = static_cast<size_t>(total_len) - received;
+            if (remaining == 0) {
+                return 0;
+            }
+            size_t want = max_len < remaining ? max_len : remaining;
+            int ret = httpd_req_recv(req, buf, want);
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                ret = httpd_req_recv(req, buf, want);
+            }
+            if (ret <= 0) {
+                return -1;
+            }
+            received += static_cast<size_t>(ret);
+            return ret;
+        });
+
+    if (!ok) {
+        httpd_resp_sendstr(req,
+            "{\"success\":false,\"error\":\"Upload/ghi flash thất bại — giữ firmware cũ\"}");
+        return ESP_OK;
+    }
+
+    httpd_resp_sendstr(req, "{\"success\":true,\"message\":\"Cập nhật OK — đang reboot\"}");
+    vTaskDelay(pdMS_TO_TICKS(800));
+    Application::GetInstance().Reboot();
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
@@ -824,7 +973,11 @@ bool WebSocketControlServer::Start(int port) {
     config.server_port = port;
     config.max_open_sockets = 7;
     config.ctrl_port = 32769;
-    config.max_uri_handlers = 16;
+    config.max_uri_handlers = 24;
+    // Large firmware upload over Wi‑Fi can be slow
+    config.recv_wait_timeout = 60;
+    config.send_wait_timeout = 30;
+    config.stack_size = 8192;
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",
@@ -874,6 +1027,30 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_ota_get_uri = {
+        .uri = "/api/ota",
+        .method = HTTP_GET,
+        .handler = api_ota_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_ota_post_uri = {
+        .uri = "/api/ota",
+        .method = HTTP_POST,
+        .handler = api_ota_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_ota_upload_uri = {
+        .uri = "/api/ota/upload",
+        .method = HTTP_POST,
+        .handler = api_ota_upload_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
         httpd_register_uri_handler(server_handle_, &ws_uri);
         httpd_register_uri_handler(server_handle_, &page_uri);
@@ -881,6 +1058,9 @@ bool WebSocketControlServer::Start(int port) {
         httpd_register_uri_handler(server_handle_, &api_post_uri);
         httpd_register_uri_handler(server_handle_, &api_robot_get_uri);
         httpd_register_uri_handler(server_handle_, &api_robot_post_uri);
+        httpd_register_uri_handler(server_handle_, &api_ota_get_uri);
+        httpd_register_uri_handler(server_handle_, &api_ota_post_uri);
+        httpd_register_uri_handler(server_handle_, &api_ota_upload_uri);
         ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d", port);
         return true;
     }

@@ -264,36 +264,30 @@ void Ota::MarkCurrentVersionValid() {
     }
 }
 
-bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback) {
-    ESP_LOGI(TAG, "Upgrading firmware from %s", firmware_url.c_str());
+bool Ota::UpgradeFromReader(size_t content_length,
+                            std::function<int(char* buf, size_t max_len)> reader,
+                            std::function<void(int progress, size_t speed)> callback) {
+    if (content_length == 0 || !reader) {
+        ESP_LOGE(TAG, "Invalid upgrade reader / length");
+        return false;
+    }
+
     esp_ota_handle_t update_handle = 0;
     auto update_partition = esp_ota_get_next_update_partition(NULL);
     if (update_partition == NULL) {
         ESP_LOGE(TAG, "Failed to get update partition");
         return false;
     }
+    if (content_length > update_partition->size) {
+        ESP_LOGE(TAG, "Firmware too large: %u > partition %lu",
+                 (unsigned)content_length, (unsigned long)update_partition->size);
+        return false;
+    }
 
-    ESP_LOGI(TAG, "Writing to partition %s at offset 0x%lx", update_partition->label, update_partition->address);
+    ESP_LOGI(TAG, "Writing to partition %s at offset 0x%lx (%u bytes)",
+             update_partition->label, update_partition->address, (unsigned)content_length);
     bool image_header_checked = false;
     std::string image_header;
-
-    auto network = Board::GetInstance().GetNetwork();
-    auto http = network->CreateHttp(0);
-    if (!http->Open("GET", firmware_url)) {
-        ESP_LOGE(TAG, "Failed to open HTTP connection");
-        return false;
-    }
-
-    if (http->GetStatusCode() != 200) {
-        ESP_LOGE(TAG, "Failed to get firmware, status code: %d", http->GetStatusCode());
-        return false;
-    }
-
-    size_t content_length = http->GetBodyLength();
-    if (content_length == 0) {
-        ESP_LOGE(TAG, "Failed to get content length");
-        return false;
-    }
 
     constexpr size_t PAGE_SIZE = 4096;
     char* buffer = (char*)heap_caps_malloc(PAGE_SIZE, MALLOC_CAP_INTERNAL);
@@ -302,36 +296,56 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         return false;
     }
 
-    size_t buffer_offset = 0;  // Current data size in buffer
+    size_t buffer_offset = 0;
     size_t total_read = 0, recent_read = 0;
     auto last_calc_time = esp_timer_get_time();
-    while (true) {
-        int ret = http->Read(buffer + buffer_offset, PAGE_SIZE - buffer_offset);
+    while (total_read < content_length) {
+        size_t want = PAGE_SIZE - buffer_offset;
+        size_t remaining = content_length - total_read;
+        if (want > remaining) {
+            want = remaining;
+        }
+        int ret = reader(buffer + buffer_offset, want);
         if (ret < 0) {
-            ESP_LOGE(TAG, "Failed to read HTTP data: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "Failed to read firmware stream");
+            if (image_header_checked) {
+                esp_ota_abort(update_handle);
+            }
+            heap_caps_free(buffer);
+            return false;
+        }
+        if (ret == 0) {
+            ESP_LOGE(TAG, "Unexpected EOF at %u/%u", (unsigned)total_read, (unsigned)content_length);
+            if (image_header_checked) {
+                esp_ota_abort(update_handle);
+            }
             heap_caps_free(buffer);
             return false;
         }
 
-        // Calculate speed and progress every second
         recent_read += ret;
         total_read += ret;
         buffer_offset += ret;
-        if (esp_timer_get_time() - last_calc_time >= 1000000 || ret == 0) {
+        if (esp_timer_get_time() - last_calc_time >= 1000000 || total_read >= content_length) {
             size_t progress = total_read * 100 / content_length;
-            ESP_LOGI(TAG, "Progress: %u%% (%u/%u), Speed: %uB/s", progress, total_read, content_length, recent_read);
+            ESP_LOGI(TAG, "Progress: %u%% (%u/%u), Speed: %uB/s",
+                     (unsigned)progress, (unsigned)total_read, (unsigned)content_length, (unsigned)recent_read);
             if (callback) {
-                callback(progress, recent_read);
+                callback(static_cast<int>(progress), recent_read);
             }
             last_calc_time = esp_timer_get_time();
             recent_read = 0;
         }
 
         if (!image_header_checked) {
-            image_header.append(buffer, buffer_offset);
+            // Only newly read bytes (avoid duplicating when buffer accumulates across reads)
+            image_header.append(buffer + (buffer_offset - static_cast<size_t>(ret)), static_cast<size_t>(ret));
             if (image_header.size() >= sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)) {
                 esp_app_desc_t new_app_info;
-                memcpy(&new_app_info, image_header.data() + sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t), sizeof(esp_app_desc_t));
+                memcpy(&new_app_info,
+                       image_header.data() + sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t),
+                       sizeof(esp_app_desc_t));
+                ESP_LOGI(TAG, "New firmware version: %s", new_app_info.version);
 
                 if (esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &update_handle)) {
                     esp_ota_abort(update_handle);
@@ -345,9 +359,13 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
             }
         }
 
-        // Write to flash when buffer is full (4KB) or it's the last chunk
-        bool is_last_chunk = (ret == 0);
+        bool is_last_chunk = (total_read >= content_length);
         if (buffer_offset == PAGE_SIZE || (is_last_chunk && buffer_offset > 0)) {
+            if (!image_header_checked) {
+                ESP_LOGE(TAG, "Image header incomplete before write");
+                heap_caps_free(buffer);
+                return false;
+            }
             auto err = esp_ota_write(update_handle, buffer, buffer_offset);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to write OTA data: %s", esp_err_to_name(err));
@@ -355,16 +373,15 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
                 heap_caps_free(buffer);
                 return false;
             }
-
             buffer_offset = 0;
         }
-
-        if (is_last_chunk) {
-            break;
-        }
     }
-    http->Close();
     heap_caps_free(buffer);
+
+    if (!image_header_checked) {
+        ESP_LOGE(TAG, "Firmware too small / invalid header");
+        return false;
+    }
 
     esp_err_t err = esp_ota_end(update_handle);
     if (err != ESP_OK) {
@@ -384,6 +401,36 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
 
     ESP_LOGI(TAG, "Firmware upgrade successful");
     return true;
+}
+
+bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback) {
+    ESP_LOGI(TAG, "Upgrading firmware from %s", firmware_url.c_str());
+
+    auto network = Board::GetInstance().GetNetwork();
+    auto http = network->CreateHttp(0);
+    if (!http->Open("GET", firmware_url)) {
+        ESP_LOGE(TAG, "Failed to open HTTP connection");
+        return false;
+    }
+
+    if (http->GetStatusCode() != 200) {
+        ESP_LOGE(TAG, "Failed to get firmware, status code: %d", http->GetStatusCode());
+        return false;
+    }
+
+    size_t content_length = http->GetBodyLength();
+    if (content_length == 0) {
+        ESP_LOGE(TAG, "Failed to get content length");
+        return false;
+    }
+
+    bool ok = UpgradeFromReader(content_length,
+        [&http](char* buf, size_t max_len) -> int {
+            return http->Read(buf, max_len);
+        },
+        callback);
+    http->Close();
+    return ok;
 }
 
 bool Ota::StartUpgrade(std::function<void(int progress, size_t speed)> callback) {

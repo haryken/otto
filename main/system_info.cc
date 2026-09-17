@@ -54,7 +54,12 @@ std::string SystemInfo::GetMacAddress() {
     }
     char custom_mac[CUSTOM_MAC_STR_MAX];
     if (UsesCustomMacNvs(idx) && ReadCustomMacFromNvs(custom_mac, sizeof(custom_mac))) {
-        return std::string(custom_mac);
+        // idx=0: không dùng MAC pool còn sót — để trống = MAC chip thật.
+        if (idx == 0 && IsMacInAnyCoursePool(custom_mac)) {
+            ESP_LOGW(TAG, "idx=0 ignore leftover pool MAC %s → chip", custom_mac);
+        } else {
+            return std::string(custom_mac);
+        }
     }
     uint8_t mac[6];
 #if CONFIG_IDF_TARGET_ESP32P4

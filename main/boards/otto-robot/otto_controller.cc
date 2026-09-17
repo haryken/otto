@@ -1149,9 +1149,9 @@ public:
         // Tool: Hiện QR code trang Self-Control trên LCD
         mcp_server.AddTool(
             "self.otto.show_config_page",
-            "Hiện QR code trên màn hình LCD chứa URL trang cài đặt Self-Control (http://IP:8080). "
-            "Người dùng quét QR để mở trang web cấu hình tên, cấp độ, unit. "
-            "Dùng khi người dùng nói 'mở cài đặt', 'mở trang cấu hình', 'cài đặt thông tin'.",
+            "Hiện mã QR trang cấu hình Self-Control trên màn hình (60 giây). "
+            "Dùng khi người dùng nói 'mở cài đặt', 'mở trang cấu hình', 'hiện QR'. "
+            "Chỉ nói ngắn: 'Đã mở mã QR.' — tuyệt đối KHÔNG đọc URL, IP, đường dẫn, http, :8080.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 auto& wifi = WifiManager::GetInstance();
@@ -1164,7 +1164,8 @@ public:
                 if (display != nullptr) {
                     display->ShowQrCode(url.c_str());
                 }
-                return "Đã hiện mã QR trên màn hình. URL trang Self-Control: " + url;
+                // Không trả URL trong tool result — tránh TTS đọc đường link (giống Android Mini).
+                return "Đã mở mã QR.";
             });
 
         // Tool: Đổi cấp độ học bằng giọng nói

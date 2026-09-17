@@ -11,6 +11,7 @@
 #include <deque>
 #include <memory>
 #include <chrono>
+#include <atomic>
 
 #include "protocol.h"
 #include "ota.h"
@@ -107,6 +108,18 @@ public:
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
+    /** Start OTA from Self-Control web (:8080 stays up). Returns false if already busy / bad URL. */
+    bool StartWebOta(const std::string& url);
+    /**
+     * Stream-uploaded firmware OTA (POST /api/ota/upload body = raw .bin).
+     * Runs on the HTTP worker. On success returns true — caller must reply then Reboot().
+     * On failure restores audio and returns false.
+     */
+    bool RunWebOtaUpload(size_t content_length,
+                         std::function<int(char* buf, size_t max_len)> reader);
+    /** JSON for GET /api/ota — {state,progress,speed_kbps,message,error}. */
+    std::string GetWebOtaStatusJson();
+    bool IsWebOtaBusy() const;
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
     void SetAecMode(AecMode mode);
@@ -156,6 +169,8 @@ private:
     std::unique_ptr<Ota> ota_;
 
     bool has_server_time_ = false;
+    /** Mute TTS audio when cloud speaks URL/IP (Self-Control QR leak). */
+    std::atomic<bool> mute_url_tts_{false};
     bool aborted_ = false;
     bool assets_version_checked_ = false;
     bool suppress_listening_chime_ = false;  // Skip popup.ogg on next listening (goodbye/disconnect)
@@ -165,6 +180,18 @@ private:
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
     TaskHandle_t identity_task_handle_ = nullptr;
+
+    // Self-Control web OTA status (:8080 progress UI)
+    mutable std::mutex web_ota_mutex_;
+    std::string web_ota_state_ = "idle";  // idle | running | success | failed
+    int web_ota_progress_ = 0;
+    size_t web_ota_speed_ = 0;
+    std::string web_ota_message_;
+    std::string web_ota_error_;
+    std::string web_ota_url_;
+    void SetWebOtaState(const std::string& state, const std::string& message = "",
+                        const std::string& error = "");
+    void SetWebOtaProgress(int progress, size_t speed);
 
 #if CONFIG_SILENCE_PROMPT_ENABLE
     std::chrono::steady_clock::time_point last_server_speech_activity_time_;

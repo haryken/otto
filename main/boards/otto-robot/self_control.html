@@ -41,6 +41,11 @@
         .slider-row label { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; }
         .slider-row input[type="range"] { width: 100%; }
         .hint { color: #666; font-size: 0.85em; margin-top: 6px; }
+        .progress-wrap { background: #e9ecef; border-radius: 8px; height: 18px; overflow: hidden; margin-top: 10px; }
+        .progress-bar { background: #3498db; height: 100%; width: 0%; transition: width 0.3s; }
+        .progress-bar.failed { background: #e74c3c; }
+        .progress-bar.success { background: #28a745; }
+        .ota-msg { font-family: monospace; margin-top: 10px; font-size: 0.9em; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -50,6 +55,7 @@
     <div class="tabs">
         <button type="button" class="tab-btn active" id="tab_btn_course" onclick="switchTab('course')">📚 Khóa học</button>
         <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt robot</button>
+        <button type="button" class="tab-btn" id="tab_btn_ota" onclick="switchTab('ota')">🔄 Cập nhật</button>
     </div>
 
     <div id="tab_course" class="tab-panel active">
@@ -141,6 +147,27 @@
         </div>
         <button class="btn btn-save" id="btn_save_robot" onclick="saveRobotSettings()">💾 Lưu cài đặt robot</button>
         <div class="status" id="robot_status"></div>
+    </div>
+
+    <div id="tab_ota" class="tab-panel">
+        <div class="card">
+            <h2>🔄 Cập nhật firmware (OTA)</h2>
+            <p class="hint">Hai cách: dán <b>URL</b> hoặc chọn file <b>xiaozhi.bin</b> rồi bấm cập nhật. Fail → giữ phần mềm cũ. Web :8080 vẫn chạy khi ghi flash; thành công sẽ reboot.</p>
+
+            <label class="hint" style="display:block;margin-top:8px">Từ link</label>
+            <input type="text" id="ota_url" placeholder="https://example.com/xiaozhi.bin" autocomplete="off" spellcheck="false">
+            <button class="btn btn-save" id="btn_ota" onclick="startOta()">⬇️ Cập nhật từ URL</button>
+
+            <hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0">
+
+            <label class="hint" style="display:block">Từ file trên máy</label>
+            <input type="file" id="ota_file" accept=".bin,application/octet-stream" style="width:100%;margin:8px 0;font-size:14px">
+            <button class="btn btn-save" id="btn_ota_upload" onclick="startOtaUpload()">📤 Tải lên và cập nhật</button>
+
+            <div class="progress-wrap"><div class="progress-bar" id="ota_bar"></div></div>
+            <div class="ota-msg" id="ota_msg">Chưa chạy</div>
+            <div class="status" id="ota_status"></div>
+        </div>
     </div>
 
     <script>
@@ -380,7 +407,11 @@
                         currentConfig.custom_mac = normalizeMacInput(document.getElementById('custom_mac').value);
                     }
                     currentConfig.preset_mac_idx = parseInt(e.target.value);
-                    if (currentConfig.preset_mac_idx === 0 || currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
+                    // Tự cấu hình: để trống = MAC chip — không mang MAC pool khóa cũ.
+                    if (currentConfig.preset_mac_idx === 0) {
+                        currentConfig.custom_mac = '';
+                        document.getElementById('custom_mac').value = '';
+                    } else if (currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
                         document.getElementById('custom_mac').value = currentConfig.custom_mac || '';
                     }
                     renderCourses();
@@ -652,7 +683,12 @@
                 const resp = await fetch('/api/config');
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
-                currentConfig.preset_mac_idx = data.preset_mac_idx || 1;
+                currentConfig.preset_mac_idx =
+                    data.preset_mac_idx != null ? Number(data.preset_mac_idx) : 1;
+                if (!Number.isFinite(currentConfig.preset_mac_idx) ||
+                    currentConfig.preset_mac_idx < 0 || currentConfig.preset_mac_idx > 7) {
+                    currentConfig.preset_mac_idx = 1;
+                }
                 savedCourseIdx = currentConfig.preset_mac_idx;
                 currentConfig.student_name = data.student_name || '';
                 if (data.all_units) {
@@ -811,11 +847,145 @@
         function switchTab(name) {
             document.getElementById('tab_course').classList.toggle('active', name === 'course');
             document.getElementById('tab_robot').classList.toggle('active', name === 'robot');
+            document.getElementById('tab_ota').classList.toggle('active', name === 'ota');
             document.getElementById('tab_btn_course').classList.toggle('active', name === 'course');
             document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
+            document.getElementById('tab_btn_ota').classList.toggle('active', name === 'ota');
             if (name === 'robot') {
                 loadRobotSettings();
             }
+            if (name === 'ota') {
+                pollOtaStatus();
+            }
+        }
+
+        let otaPollTimer = null;
+        function setOtaButtonsDisabled(disabled, runningLabel) {
+            const btn = document.getElementById('btn_ota');
+            const btnUp = document.getElementById('btn_ota_upload');
+            btn.disabled = disabled;
+            btnUp.disabled = disabled;
+            if (disabled) {
+                btn.textContent = runningLabel || 'Đang cập nhật...';
+                btnUp.textContent = runningLabel || 'Đang tải lên...';
+            } else {
+                btn.textContent = '⬇️ Cập nhật từ URL';
+                btnUp.textContent = '📤 Tải lên và cập nhật';
+            }
+        }
+        function setOtaUi(data) {
+            const bar = document.getElementById('ota_bar');
+            const msg = document.getElementById('ota_msg');
+            const st = document.getElementById('ota_status');
+            const pct = Math.max(0, Math.min(100, Number(data.progress) || 0));
+            bar.style.width = pct + '%';
+            bar.classList.remove('failed', 'success');
+            if (data.state === 'failed') bar.classList.add('failed');
+            if (data.state === 'success') bar.classList.add('success');
+            let line = (data.message || data.state || '') + (data.speed_kbps ? (' · ' + data.speed_kbps + ' KB/s') : '');
+            if (data.error) line += ' [' + data.error + ']';
+            msg.textContent = line || '—';
+            st.textContent = 'Trạng thái: ' + (data.state || 'idle') + ' · ' + pct + '%';
+            const running = data.state === 'running';
+            setOtaButtonsDisabled(running, running ? 'Đang cập nhật...' : null);
+            if (running) {
+                if (!otaPollTimer) otaPollTimer = setInterval(pollOtaStatus, 800);
+            } else if (otaPollTimer) {
+                clearInterval(otaPollTimer);
+                otaPollTimer = null;
+            }
+        }
+
+        async function pollOtaStatus() {
+            try {
+                const resp = await fetch('/api/ota');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                setOtaUi(await resp.json());
+            } catch (err) {
+                document.getElementById('ota_status').textContent = 'Không đọc được trạng thái (đang tải / reboot?): ' + err.message;
+            }
+        }
+
+        async function startOta() {
+            const url = document.getElementById('ota_url').value.trim();
+            if (!/^https?:\/\//i.test(url)) {
+                showToast('❌ URL phải bắt đầu http:// hoặc https://');
+                return;
+            }
+            setOtaButtonsDisabled(true, 'Đang cập nhật...');
+            try {
+                const resp = await fetch('/api/ota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'OTA thất bại');
+                showToast('✅ Đã bắt đầu OTA — theo dõi thanh tiến trình');
+                if (!otaPollTimer) otaPollTimer = setInterval(pollOtaStatus, 800);
+                pollOtaStatus();
+            } catch (err) {
+                showToast('❌ ' + err.message);
+                setOtaButtonsDisabled(false);
+            }
+        }
+
+        function startOtaUpload() {
+            const input = document.getElementById('ota_file');
+            const file = input.files && input.files[0];
+            if (!file) {
+                showToast('❌ Chọn file .bin trước');
+                return;
+            }
+            if (file.size < 64 * 1024) {
+                showToast('❌ File quá nhỏ — hãy chọn xiaozhi.bin');
+                return;
+            }
+            setOtaButtonsDisabled(true, 'Đang tải lên...');
+            document.getElementById('ota_msg').textContent = 'Đang tải lên ' + file.name + ' (' + Math.round(file.size/1024) + ' KB)...';
+            document.getElementById('ota_bar').style.width = '0%';
+            document.getElementById('ota_bar').classList.remove('failed', 'success');
+            if (!otaPollTimer) otaPollTimer = setInterval(pollOtaStatus, 800);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/ota/upload');
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.timeout = 600000;
+            xhr.upload.onprogress = function (e) {
+                if (!e.lengthComputable) return;
+                const pct = Math.round(e.loaded * 100 / e.total);
+                document.getElementById('ota_bar').style.width = pct + '%';
+                document.getElementById('ota_msg').textContent = 'Đang tải lên... ' + pct + '% (' + Math.round(e.loaded/1024) + '/' + Math.round(e.total/1024) + ' KB)';
+                document.getElementById('ota_status').textContent = 'Upload: ' + pct + '%';
+            };
+            xhr.onload = function () {
+                let data = {};
+                try { data = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+                if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                    showToast('✅ ' + (data.message || 'OK — robot đang reboot'));
+                    document.getElementById('ota_bar').classList.add('success');
+                    document.getElementById('ota_msg').textContent = data.message || 'Thành công — đang khởi động lại...';
+                    document.getElementById('ota_status').textContent = 'Trạng thái: success · 100%';
+                    document.getElementById('ota_bar').style.width = '100%';
+                } else {
+                    showToast('❌ ' + (data.error || ('HTTP ' + xhr.status)));
+                    document.getElementById('ota_bar').classList.add('failed');
+                    setOtaButtonsDisabled(false);
+                    pollOtaStatus();
+                }
+            };
+            xhr.onerror = function () {
+                showToast('❌ Lỗi mạng khi upload (hoặc robot đã reboot)');
+                // Reboot closes socket — treat as possible success; poll briefly
+                setTimeout(pollOtaStatus, 2000);
+                setOtaButtonsDisabled(false);
+            };
+            xhr.ontimeout = function () {
+                showToast('❌ Upload quá lâu / timeout');
+                setOtaButtonsDisabled(false);
+                pollOtaStatus();
+            };
+            xhr.send(file);
         }
 
         function onVolumeInput() {

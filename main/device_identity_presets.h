@@ -295,6 +295,32 @@ inline bool UsesCustomMacNvs(uint8_t idx) {
     return idx == 0 || idx == kManualCustomMacIndex || CourseUsesMacPool(idx);
 }
 
+/** True if mac belongs to any course pool (leftover after switching to Tự cấu hình). */
+inline bool IsMacInAnyCoursePool(const char* mac) {
+    if (mac == nullptr || mac[0] == '\0') {
+        return false;
+    }
+    auto in_pool = [mac](const char* const* pool, int n) {
+        for (int i = 0; i < n; ++i) {
+            if (strcasecmp(pool[i], mac) == 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return in_pool(kExplorersBilingualMacPool, kExplorersBilingualMacPoolCount) ||
+           in_pool(kExplorersEnglishMacPool, kExplorersEnglishMacPoolCount) ||
+           in_pool(kYiVietnameseMacPool, kYiVietnameseMacPoolCount) ||
+           in_pool(kYiEnglishMacPool, kYiEnglishMacPoolCount) ||
+           in_pool(kFlVietnameseMacPool, kFlVietnameseMacPoolCount) ||
+           in_pool(kFlEnglishMacPool, kFlEnglishMacPoolCount) ||
+           in_pool(kIeltsVietnameseMacPool, kIeltsVietnameseMacPoolCount) ||
+           in_pool(kIeltsEnglishMacPool, kIeltsEnglishMacPoolCount) ||
+           in_pool(kToeicVietnameseMacPool, kToeicVietnameseMacPoolCount) ||
+           in_pool(kToeicEnglishMacPool, kToeicEnglishMacPoolCount) ||
+           in_pool(kDailyChatMacPool, kDailyChatMacPoolCount);
+}
+
 /** Read preset_mac index from NVS (i32 preferred; migrates legacy u8/bool). */
 inline uint8_t ReadPresetMacIndexFromNvs() {
     nvs_handle_t nvs;

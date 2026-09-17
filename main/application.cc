@@ -538,6 +538,9 @@ void Application::InitializeProtocol(bool prefer_websocket) {
         if (audio_service_.IsLocalPlaybackActive()) {
             return;
         }
+        if (mute_url_tts_.load()) {
+            return;
+        }
         if (GetDeviceState() == kDeviceStateSpeaking) {
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
         }
@@ -580,11 +583,13 @@ void Application::InitializeProtocol(bool prefer_websocket) {
 #endif
             auto state = cJSON_GetObjectItem(root, "state");
             if (strcmp(state->valuestring, "start") == 0) {
+                mute_url_tts_.store(false);
                 Schedule([this]() {
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
+                mute_url_tts_.store(false);
                 Schedule([this]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
@@ -598,14 +603,24 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                 auto text = cJSON_GetObjectItem(root, "text");
                 if (cJSON_IsString(text)) {
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
+                    // Giống Android Mini: không đọc URL / IP / :8080 khi hiện QR Self-Control.
+                    const char* t = text->valuestring;
+                    const bool looks_like_url =
+                        strstr(t, "http://") != nullptr || strstr(t, "https://") != nullptr ||
+                        strstr(t, ":8080") != nullptr ||
+                        (strstr(t, "192.168.") != nullptr && strstr(t, "self.otto") == nullptr);
+                    mute_url_tts_.store(looks_like_url);
+                    if (looks_like_url) {
+                        ESP_LOGW(TAG, "Mute TTS (URL/IP leak): %s", t);
+                    }
                     const bool music_play =
                         strstr(text->valuestring, "self.otto.music.play") != nullptr;
-                    Schedule([this, display, message = std::string(text->valuestring), music_play]() {
+                    Schedule([this, display, message = std::string(text->valuestring), music_play, looks_like_url]() {
                         if (music_play) {
                             audio_service_.SetLocalPlaybackActive(true);
                             audio_service_.SetCaptureSuspended(true);
                             EnterMusicOnlyModeImpl();
-                        } else if (!audio_service_.IsLocalPlaybackActive()) {
+                        } else if (!audio_service_.IsLocalPlaybackActive() && !looks_like_url) {
                             display->SetChatMessage("assistant", message.c_str());
                         }
                     });
@@ -1151,6 +1166,9 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     std::string upgrade_url = url;
     std::string version_info = version.empty() ? "(Manual upgrade)" : version;
 
+    SetWebOtaState("running", "Đang tải firmware...", "");
+    SetWebOtaProgress(0, 0);
+
     // Close audio channel if it's open
     if (protocol_ && protocol_->IsAudioChannelOpened()) {
         ESP_LOGI(TAG, "Closing audio channel before firmware upgrade");
@@ -1167,33 +1185,155 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     display->SetChatMessage("system", message.c_str());
 
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    // Keep Self-Control HTTP :8080 running so the web UI can show progress.
     audio_service_.Stop();
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     bool upgrade_success = Ota::Upgrade(upgrade_url, [this, display](int progress, size_t speed) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
+        SetWebOtaProgress(progress, speed);
+        char buffer[48];
+        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, (unsigned)(speed / 1024));
+        SetWebOtaState("running", std::string(buffer), "");
         Schedule([display, message = std::string(buffer)]() {
             display->SetChatMessage("system", message.c_str());
         });
     });
 
     if (!upgrade_success) {
-        // Upgrade failed, restart audio service and continue running
         ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
-        audio_service_.Start(); // Restart audio service
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER); // Restore power save level
+        SetWebOtaState("failed", "Cập nhật thất bại — giữ firmware cũ", "download_or_validate_failed");
+        audio_service_.Start();
+        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
         Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
         vTaskDelay(pdMS_TO_TICKS(3000));
+        SetDeviceState(kDeviceStateIdle);
         return false;
     } else {
-        // Upgrade success, reboot immediately
         ESP_LOGI(TAG, "Firmware upgrade successful, rebooting...");
+        SetWebOtaState("success", "Thành công — đang khởi động lại...", "");
+        SetWebOtaProgress(100, 0);
         display->SetChatMessage("system", "Upgrade successful, rebooting...");
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Brief pause to show message
+        vTaskDelay(pdMS_TO_TICKS(1500));
         Reboot();
         return true;
     }
+}
+
+void Application::SetWebOtaState(const std::string& state, const std::string& message,
+                                const std::string& error) {
+    std::lock_guard<std::mutex> lock(web_ota_mutex_);
+    web_ota_state_ = state;
+    if (!message.empty()) {
+        web_ota_message_ = message;
+    }
+    web_ota_error_ = error;
+}
+
+void Application::SetWebOtaProgress(int progress, size_t speed) {
+    std::lock_guard<std::mutex> lock(web_ota_mutex_);
+    web_ota_progress_ = progress;
+    web_ota_speed_ = speed;
+}
+
+bool Application::IsWebOtaBusy() const {
+    std::lock_guard<std::mutex> lock(web_ota_mutex_);
+    return web_ota_state_ == "running";
+}
+
+std::string Application::GetWebOtaStatusJson() {
+    std::lock_guard<std::mutex> lock(web_ota_mutex_);
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "state", web_ota_state_.c_str());
+    cJSON_AddNumberToObject(root, "progress", web_ota_progress_);
+    cJSON_AddNumberToObject(root, "speed_kbps", static_cast<double>(web_ota_speed_ / 1024));
+    cJSON_AddStringToObject(root, "message", web_ota_message_.c_str());
+    cJSON_AddStringToObject(root, "error", web_ota_error_.c_str());
+    cJSON_AddStringToObject(root, "url", web_ota_url_.c_str());
+    char* printed = cJSON_PrintUnformatted(root);
+    std::string out = printed ? printed : "{}";
+    if (printed) {
+        cJSON_free(printed);
+    }
+    cJSON_Delete(root);
+    return out;
+}
+
+bool Application::StartWebOta(const std::string& url) {
+    if (url.size() < 12 || (url.find("http://") != 0 && url.find("https://") != 0)) {
+        SetWebOtaState("failed", "URL không hợp lệ", "invalid_url");
+        return false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(web_ota_mutex_);
+        if (web_ota_state_ == "running") {
+            return false;
+        }
+        web_ota_url_ = url;
+    }
+    SetWebOtaState("running", "Đang chuẩn bị cập nhật...", "");
+    SetWebOtaProgress(0, 0);
+    Schedule([this, url]() {
+        UpgradeFirmware(url);
+    });
+    return true;
+}
+
+bool Application::RunWebOtaUpload(size_t content_length,
+                                  std::function<int(char* buf, size_t max_len)> reader) {
+    {
+        std::lock_guard<std::mutex> lock(web_ota_mutex_);
+        if (web_ota_state_ == "running") {
+            return false;
+        }
+        web_ota_url_ = "(upload)";
+    }
+
+    auto& board = Board::GetInstance();
+    auto display = board.GetDisplay();
+
+    SetWebOtaState("running", "Đang nhận file firmware...", "");
+    SetWebOtaProgress(0, 0);
+
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        protocol_->CloseAudioChannel();
+    }
+
+    Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "download", Lang::Sounds::OGG_UPGRADE);
+
+    SetDeviceState(kDeviceStateUpgrading);
+    display->SetChatMessage("system", "OTA upload...");
+    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    audio_service_.Stop();
+    vTaskDelay(pdMS_TO_TICKS(300));
+
+    bool upgrade_success = Ota::UpgradeFromReader(content_length, reader,
+        [this, display](int progress, size_t speed) {
+            SetWebOtaProgress(progress, speed);
+            char buffer[48];
+            snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, (unsigned)(speed / 1024));
+            SetWebOtaState("running", std::string(buffer), "");
+            Schedule([display, message = std::string(buffer)]() {
+                display->SetChatMessage("system", message.c_str());
+            });
+        });
+
+    if (!upgrade_success) {
+        ESP_LOGE(TAG, "Upload firmware upgrade failed");
+        SetWebOtaState("failed", "Upload thất bại — giữ firmware cũ", "upload_or_validate_failed");
+        audio_service_.Start();
+        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+        Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        SetDeviceState(kDeviceStateIdle);
+        return false;
+    }
+
+    // Caller must send HTTP response, then Reboot().
+    ESP_LOGI(TAG, "Upload firmware upgrade successful (pending reboot)");
+    SetWebOtaState("success", "Thành công — đang khởi động lại...", "");
+    SetWebOtaProgress(100, 0);
+    display->SetChatMessage("system", "Upgrade successful, rebooting...");
+    return true;
 }
 
 void Application::WakeWordInvoke(const std::string& wake_word) {
