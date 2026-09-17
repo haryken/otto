@@ -871,13 +871,13 @@ config RECEIVE_CUSTOM_MESSAGE
         Enable custom message reception, allow the device to receive custom messages from the server (preferably through the MQTT protocol)
 
 config SILENCE_PROMPT_ENABLE
-    bool "Send uplink prompt audio after user silence"
+    bool "Send uplink prompt text after user silence"
     default y
     depends on USE_AUDIO_PROCESSOR
     help
         While listening, if the server sends no STT/TTS for the configured timeout,
-        inject the embedded silence_prompt.ogg clip. Repeats every timeout while the
-        channel stays open (not gated on local VAD / user speech).
+        send a short listen/detect text ("khơi gợi lại") to nudge the conversation.
+        Repeats every timeout while the channel stays open.
 
 config SILENCE_PROMPT_TIMEOUT_SEC
     int "User silence timeout before uplink prompt (seconds)"
@@ -885,7 +885,7 @@ config SILENCE_PROMPT_TIMEOUT_SEC
     default 15
     depends on SILENCE_PROMPT_ENABLE
     help
-        Seconds without server STT/TTS before sending (or re-sending) the prompt clip.
+        Seconds without server STT/TTS before sending (or re-sending) the prompt text.
 
 menu "Camera Configuration"
     depends on !IDF_TARGET_ESP32

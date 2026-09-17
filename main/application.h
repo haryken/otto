@@ -197,11 +197,10 @@ private:
     std::chrono::steady_clock::time_point last_server_speech_activity_time_;
     std::chrono::steady_clock::time_point last_silence_prompt_send_time_;
     bool last_silence_prompt_send_valid_ = false;
-    TaskHandle_t silence_prompt_task_handle_ = nullptr;
     void ResetSilencePromptTracking();
     void NotifyServerSpeechActivity();
     void CheckSilencePrompt();
-    void SendSilencePromptAudio();
+    void SendSilencePromptText();
 #endif
 
     // Event handlers

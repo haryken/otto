@@ -1568,9 +1568,6 @@ void Application::CheckSilencePrompt() {
     if (audio_service_.IsLocalPlaybackActive() || audio_service_.IsCaptureSuspended()) {
         return;
     }
-    if (silence_prompt_task_handle_ != nullptr) {
-        return;
-    }
 
     const auto now = std::chrono::steady_clock::now();
     const auto server_idle_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1589,53 +1586,18 @@ void Application::CheckSilencePrompt() {
         }
     }
 
-    SendSilencePromptAudio();
+    SendSilencePromptText();
 }
 
-void Application::SendSilencePromptAudio() {
-    if (silence_prompt_task_handle_ != nullptr) {
-        ESP_LOGW(TAG, "Silence prompt send already in progress");
-        return;
-    }
+void Application::SendSilencePromptText() {
+    // Short listen/detect text — server rejects long detect payloads / OGG uplink polluted STT.
+    static constexpr const char* kSilencePromptText = "khơi gợi lại";
 
     last_silence_prompt_send_time_ = std::chrono::steady_clock::now();
     last_silence_prompt_send_valid_ = true;
-    ESP_LOGI(TAG, "Sending silence prompt uplink audio (no server STT/TTS for %d s)",
-             CONFIG_SILENCE_PROMPT_TIMEOUT_SEC);
-
-    audio_service_.EnableVoiceProcessing(false);
-    audio_service_.ClearUplinkQueues();
-
-    BaseType_t created = xTaskCreate([](void* arg) {
-        auto* app = static_cast<Application*>(arg);
-        vTaskDelay(pdMS_TO_TICKS(100));
-        const auto [sent, total] = app->audio_service_.SendOggUplink(
-            Lang::Sounds::OGG_SILENCE_PROMPT,
-            [app](std::unique_ptr<AudioStreamPacket> packet) {
-                return app->protocol_ && app->protocol_->SendAudio(std::move(packet));
-            });
-        app->Schedule([app, sent, total]() {
-            app->silence_prompt_task_handle_ = nullptr;
-            if (sent == 0 || sent < total) {
-                ESP_LOGW(TAG, "Silence prompt incomplete (%u/%u), will retry after next idle",
-                         (unsigned)sent, (unsigned)total);
-                app->last_silence_prompt_send_valid_ = false;
-            }
-            if (app->GetDeviceState() == kDeviceStateListening &&
-                !app->audio_service_.IsCaptureSuspended()) {
-                app->audio_service_.EnableVoiceProcessing(true);
-            }
-        });
-        vTaskDelete(nullptr);
-    }, "silence_prompt", 4096, this, 2, &silence_prompt_task_handle_);
-    if (created != pdPASS) {
-        silence_prompt_task_handle_ = nullptr;
-        last_silence_prompt_send_valid_ = false;
-        ESP_LOGW(TAG, "Failed to start silence prompt send task");
-        if (GetDeviceState() == kDeviceStateListening) {
-            audio_service_.EnableVoiceProcessing(true);
-        }
-    }
+    protocol_->SendWakeWordDetected(kSilencePromptText);
+    ESP_LOGI(TAG, "Silence prompt detect text: \"%s\" (idle >= %d s)",
+             kSilencePromptText, CONFIG_SILENCE_PROMPT_TIMEOUT_SEC);
 }
 #endif
 
