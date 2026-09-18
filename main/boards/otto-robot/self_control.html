@@ -1143,6 +1143,7 @@
             const ae = document.activeElement;
             if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
             loadConfig(true);
+        }, 4000);
 
         document.addEventListener('DOMContentLoaded', loadConfig);
     </script>
