@@ -17,6 +17,7 @@
 #include "mcp_server.h"
 #include "otto_emoji_display.h"
 #include "otto_music_player.h"
+#include "otto_web_control.h"
 #include "power_manager.h"
 #include "system_reset.h"
 #include "websocket_control_server.h"
@@ -25,6 +26,9 @@
 #define TAG "OttoRobot"
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
+
+class OttoRobot;
+static OttoRobot* g_otto_robot = nullptr;
 
 class OttoRobot : public WifiBoard {
 private:
@@ -230,19 +234,48 @@ public:
 
     OttoCameraType GetCameraType() const { return camera_type_; }
 
+    bool StartSelfControlWeb() {
+        InitializeWebSocketControlServer();
+        return ws_control_server_ != nullptr && ws_control_server_->IsRunning();
+    }
+
+    void StopSelfControlWeb() {
+        if (ws_control_server_ != nullptr) {
+            ws_control_server_->Stop();
+            delete ws_control_server_;
+            ws_control_server_ = nullptr;
+            ESP_LOGI(TAG, "Self-Control :8080 stopped");
+        }
+        auto* display = GetDisplay();
+        if (display != nullptr) {
+            display->HideQrCode();
+        }
+    }
+
+    bool IsSelfControlWebRunning() const {
+        return ws_control_server_ != nullptr && ws_control_server_->IsRunning();
+    }
+
 private:
     void InitializeWebSocketControlServer() {
+        if (ws_control_server_ != nullptr && ws_control_server_->IsRunning()) {
+            return;
+        }
+        if (ws_control_server_ != nullptr) {
+            delete ws_control_server_;
+            ws_control_server_ = nullptr;
+        }
         ws_control_server_ = new WebSocketControlServer();
         if (!ws_control_server_->Start(8080)) {
             delete ws_control_server_;
             ws_control_server_ = nullptr;
+            return;
         }
     }
 
     void StartNetwork() override {
         WifiBoard::StartNetwork();
         vTaskDelay(pdMS_TO_TICKS(1000));
-
         InitializeWebSocketControlServer();
     }
 
@@ -335,6 +368,7 @@ public:
           camera_(nullptr),
           has_camera_(false),
           camera_type_(OTTO_CAMERA_NONE) {
+        g_otto_robot = this;
 #if OTTO_HARDWARE_VERSION == OTTO_VERSION_AUTO
         // 自动检测硬件版本（同时检测摄像头类型）
         has_camera_ = DetectHardwareVersion();
@@ -421,3 +455,20 @@ public:
 };
 
 DECLARE_BOARD(OttoRobot);
+
+bool OttoSelfControlWebStart() {
+    if (g_otto_robot == nullptr) {
+        return false;
+    }
+    return g_otto_robot->StartSelfControlWeb();
+}
+
+void OttoSelfControlWebStop() {
+    if (g_otto_robot != nullptr) {
+        g_otto_robot->StopSelfControlWeb();
+    }
+}
+
+bool OttoSelfControlWebIsRunning() {
+    return g_otto_robot != nullptr && g_otto_robot->IsSelfControlWebRunning();
+}

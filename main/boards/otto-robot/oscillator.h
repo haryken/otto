@@ -31,8 +31,10 @@ class Oscillator {
 public:
     Oscillator(int trim = 0);
     ~Oscillator();
-    void Attach(int pin, bool rev = false);
+    // channel: servo index 0..5 (mapped internally to LEDC 1..6; LEDC 0 reserved).
+    void Attach(int pin, bool rev = false, int channel = -1);
     void Detach();
+    bool IsAttached() const { return is_attached_; }
 
     void SetA(unsigned int amplitude) { amplitude_ = amplitude; };
     void SetO(int offset) { offset_ = offset; };

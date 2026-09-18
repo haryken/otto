@@ -1,6 +1,7 @@
 #include "otto_movements.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "freertos/idf_additions.h"
 #include "oscillator.h"
@@ -9,9 +10,17 @@ static const char* TAG = "OttoMovements";
 
 #define HAND_HOME_POSITION 45
 
+namespace {
+float EaseOutCubic(float t) {
+    float inv = 1.0f - t;
+    return 1.0f - inv * inv * inv;
+}
+}  // namespace
+
 Otto::Otto() {
     is_otto_resting_ = false;
     has_hands_ = false;
+    walk_foot_tip_ = 0;
     // 初始化所有舵机管脚为-1（未连接）
     for (int i = 0; i < SERVO_COUNT; i++) {
         servo_pins_[i] = -1;
@@ -49,7 +58,7 @@ void Otto::Init(int left_leg, int right_leg, int left_foot, int right_foot, int 
 void Otto::AttachServos() {
     for (int i = 0; i < SERVO_COUNT; i++) {
         if (servo_pins_[i] != -1) {
-            servo_[i].Attach(servo_pins_[i]);
+            servo_[i].Attach(servo_pins_[i], false, i);
         }
     }
 }
@@ -59,6 +68,33 @@ void Otto::DetachServos() {
         if (servo_pins_[i] != -1) {
             servo_[i].Detach();
         }
+    }
+}
+
+void Otto::DetachServo(int servo_number) {
+    if (servo_number >= 0 && servo_number < SERVO_COUNT && servo_pins_[servo_number] != -1) {
+        servo_[servo_number].Detach();
+    }
+}
+
+void Otto::AttachServo(int servo_number) {
+    if (servo_number >= 0 && servo_number < SERVO_COUNT && servo_pins_[servo_number] != -1) {
+        servo_[servo_number].Attach(servo_pins_[servo_number], false, servo_number);
+        // Hold last commanded angle so attach does not leave the horn free.
+        servo_[servo_number].SetPosition(servo_[servo_number].GetPosition());
+    }
+}
+
+int Otto::GetServoPosition(int servo_number) {
+    if (servo_number >= 0 && servo_number < SERVO_COUNT && servo_pins_[servo_number] != -1) {
+        return servo_[servo_number].GetPosition();
+    }
+    return 90;
+}
+
+void Otto::GetServoPositions(int positions[SERVO_COUNT]) {
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        positions[i] = GetServoPosition(i);
     }
 }
 
@@ -84,6 +120,20 @@ void Otto::SetTrims(int left_leg, int right_leg, int left_foot, int right_foot, 
     }
 }
 
+void Otto::SetWalkFootTip(int tip) {
+    if (tip < 0) {
+        tip = 0;
+    }
+    if (tip > 20) {
+        tip = 20;
+    }
+    walk_foot_tip_ = tip;
+}
+
+int Otto::GetWalkFootTip() const {
+    return walk_foot_tip_;
+}
+
 ///////////////////////////////////////////////////////////////////
 //-- BASIC MOTION FUNCTIONS -------------------------------------//
 ///////////////////////////////////////////////////////////////////
@@ -92,53 +142,40 @@ void Otto::MoveServos(int time, int servo_target[]) {
         SetRestState(false);
     }
 
-    final_time_ = millis() + time;
-    if (time > 10) {
-        for (int i = 0; i < SERVO_COUNT; i++) {
-            if (servo_pins_[i] != -1) {
-                increment_[i] = (servo_target[i] - servo_[i].GetPosition()) / (time / 10.0);
-            }
-        }
-
-        for (int iteration = 1; millis() < final_time_; iteration++) {
-            partial_time_ = millis() + 10;
-            for (int i = 0; i < SERVO_COUNT; i++) {
-                if (servo_pins_[i] != -1) {
-                    servo_[i].SetPosition(servo_[i].GetPosition() + increment_[i]);
-                }
-            }
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-    } else {
+    // Match upstream: ease-out so Walk→Home does not hard-brake and tip over.
+    if (time <= 10) {
         for (int i = 0; i < SERVO_COUNT; i++) {
             if (servo_pins_[i] != -1) {
                 servo_[i].SetPosition(servo_target[i]);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(time));
+        return;
     }
 
-    // final adjustment to the target.
-    bool f = true;
-    int adjustment_count = 0;
-    while (f && adjustment_count < 10) {
-        f = false;
+    int start[SERVO_COUNT];
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        start[i] = servo_[i].GetPosition();
+    }
+
+    int steps = std::max(1, time / 10);
+    for (int step = 1; step <= steps; step++) {
+        float t = static_cast<float>(step) / static_cast<float>(steps);
+        float eased_t = EaseOutCubic(t);
         for (int i = 0; i < SERVO_COUNT; i++) {
-            if (servo_pins_[i] != -1 && servo_target[i] != servo_[i].GetPosition()) {
-                f = true;
-                break;
+            if (servo_pins_[i] != -1) {
+                float interpolated = start[i] + (servo_target[i] - start[i]) * eased_t;
+                servo_[i].SetPosition(static_cast<int>(std::round(interpolated)));
             }
         }
-        if (f) {
-            for (int i = 0; i < SERVO_COUNT; i++) {
-                if (servo_pins_[i] != -1) {
-                    servo_[i].SetPosition(servo_target[i]);
-                }
-            }
-            vTaskDelay(pdMS_TO_TICKS(10));
-            adjustment_count++;
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        if (servo_pins_[i] != -1) {
+            servo_[i].SetPosition(servo_target[i]);
         }
-    };
+    }
 }
 
 void Otto::MoveSingle(int position, int servo_number) {
@@ -239,6 +276,7 @@ void Otto::Home(bool hands_down) {
     if (is_otto_resting_ == false) {  // Go to rest position only if necessary
         // 为所有舵机准备初始位置值
         int homes[SERVO_COUNT];
+        int max_delta = 0;
         for (int i = 0; i < SERVO_COUNT; i++) {
             if (i == LEFT_HAND || i == RIGHT_HAND) {
                 if (hands_down) {
@@ -256,9 +294,15 @@ void Otto::Home(bool hands_down) {
                 // 腿部和脚部舵机始终复位
                 homes[i] = 90;
             }
+
+            if (servo_pins_[i] != -1) {
+                max_delta = std::max(max_delta, std::abs(homes[i] - servo_[i].GetPosition()));
+            }
         }
 
-        MoveServos(700, homes);
+        // Larger travel → longer settle (avoids Walk-end tip-over). Matches new upstream.
+        int home_time = std::clamp(500 + max_delta * 9, 500, 1700);
+        MoveServos(home_time, homes);
         is_otto_resting_ = true;
     }
 

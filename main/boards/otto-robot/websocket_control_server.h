@@ -15,6 +15,8 @@ public:
     
     void Stop();
 
+    bool IsRunning() const { return server_handle_ != nullptr; }
+
     size_t GetClientCount() const;
 
     // Self-control: read student info from NVS
@@ -43,6 +45,7 @@ private:
 
     static esp_err_t ws_handler(httpd_req_t *req);
     static esp_err_t self_control_page_handler(httpd_req_t *req);
+    static esp_err_t trim_guide_handler(httpd_req_t *req);
     static esp_err_t api_config_get_handler(httpd_req_t *req);
     static esp_err_t api_config_post_handler(httpd_req_t *req);
     static esp_err_t api_robot_get_handler(httpd_req_t *req);
@@ -52,6 +55,10 @@ private:
     static esp_err_t api_ota_upload_handler(httpd_req_t *req);
     static esp_err_t api_action_post_handler(httpd_req_t *req);
     static esp_err_t api_unit_post_handler(httpd_req_t *req);
+    static esp_err_t api_pose_get_handler(httpd_req_t *req);
+    static esp_err_t api_pose_post_handler(httpd_req_t *req);
+    static esp_err_t api_trim_get_handler(httpd_req_t *req);
+    static esp_err_t api_trim_post_handler(httpd_req_t *req);
     
     void HandleMessage(httpd_req_t *req, const char* data, size_t len);
     void AddClient(httpd_req_t *req);

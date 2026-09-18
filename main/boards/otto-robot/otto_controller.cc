@@ -69,6 +69,14 @@ static bool LoadMotorTestForwardFromNvs() {
 class OttoController {
     friend void OttoWifiConfigMotorTestForward(bool enable);
     friend std::string OttoWebControlAction(const std::string& action);
+    friend std::string OttoWebControlGetPoseJson();
+    friend std::string OttoWebControlDetachJoint(const std::string& joint);
+    friend std::string OttoWebControlSetJoint(const std::string& joint, int angle);
+    friend std::string OttoWebControlGetTrimsJson();
+    friend std::string OttoWebControlApplyTrimsJson(const std::string& body_json);
+    friend void OttoWebAbortMotion();
+    friend bool OttoWebGetMotorsOnDemand();
+    friend void OttoWebSetMotorsOnDemand(bool on_demand);
 
 private:
     Otto otto_;
@@ -79,6 +87,7 @@ private:
     bool has_hands_ = false;
     bool is_action_in_progress_ = false;
     bool is_explore_mode_active_ = false;
+    bool motors_on_demand_ = false;  // true = rest until walk/stand command
     int last_explore_action_ = -1;
     std::atomic<bool> motor_test_forward_active_{false};
 
@@ -125,13 +134,20 @@ private:
     static void ActionTask(void* arg) {
         OttoController* controller = static_cast<OttoController*>(arg);
         OttoActionParams params;
-        controller->otto_.AttachServos();
+        controller->LoadTrimsFromNVS();
+        // Do not force Attach here — on-demand mode stays soft until a command arrives.
 
         while (true) {
             if (xQueueReceive(controller->action_queue_, &params, pdMS_TO_TICKS(1000)) == pdTRUE) {
                 ESP_LOGI(TAG, "执行动作: %d", params.action_type);
                 PowerManager::PauseBatteryUpdate();  // 动作开始时暂停电量更新
                 controller->is_action_in_progress_ = true;
+                controller->EnsureMotorsReady();
+                // Re-apply trims before motion so reboot-saved values always take effect.
+                if (params.action_type == ACTION_WALK || params.action_type == ACTION_TURN ||
+                    params.action_type == ACTION_HOME) {
+                    controller->LoadTrimsFromNVS();
+                }
                 if (params.action_type == ACTION_SERVO_SEQUENCE) {
                     // 执行舵机序列（自编程）- 仅支持短键名格式
                     cJSON* json = cJSON_Parse(params.servo_sequence_json);
@@ -458,9 +474,15 @@ private:
                             controller->otto_.Home(true);
                             break;
                     }
-                    if(params.action_type != ACTION_SIT){
-                        if (params.action_type != ACTION_HOME && params.action_type != ACTION_SERVO_SEQUENCE) {
-                            controller->otto_.Home(params.action_type != ACTION_HANDS_UP);
+                    if (params.action_type != ACTION_SIT) {
+                        if (params.action_type != ACTION_HOME &&
+                            params.action_type != ACTION_SERVO_SEQUENCE) {
+                            UBaseType_t pending_actions =
+                                uxQueueMessagesWaiting(controller->action_queue_);
+                            // Skip Home if another move is queued (same as upstream).
+                            if (pending_actions == 0) {
+                                controller->otto_.Home(params.action_type != ACTION_HANDS_UP);
+                            }
                         }
                     }
                 }
@@ -474,7 +496,7 @@ private:
     void StartActionTaskIfNeeded() {
         if (action_task_handle_ == nullptr) {
             // Priority 3: same as before our experiments; max priority starves WiFi/audio on ESP32.
-            xTaskCreate(ActionTask, "otto_action", 1024 * 3, this, 3, &action_task_handle_);
+            xTaskCreate(ActionTask, "otto_action", 1024 * 5, this, 3, &action_task_handle_);
         }
     }
 
@@ -746,11 +768,30 @@ private:
         int right_foot = settings.GetInt("right_foot", 0);
         int left_hand = settings.GetInt("left_hand", 0);
         int right_hand = settings.GetInt("right_hand", 0);
+        int walk_tip = settings.GetInt("walk_tip", settings.GetInt("wtip", 0));
 
-        ESP_LOGI(TAG, "从NVS加载微调设置: 左腿=%d, 右腿=%d, 左脚=%d, 右脚=%d, 左手=%d, 右手=%d",
-                 left_leg, right_leg, left_foot, right_foot, left_hand, right_hand);
+        ESP_LOGI(TAG, "从NVS加载微调设置: 左腿=%d, 右腿=%d, 左脚=%d, 右脚=%d, 左手=%d, 右手=%d, tip=%d",
+                 left_leg, right_leg, left_foot, right_foot, left_hand, right_hand, walk_tip);
 
         otto_.SetTrims(left_leg, right_leg, left_foot, right_foot, left_hand, right_hand);
+        otto_.SetWalkFootTip(walk_tip);
+    }
+
+    void LoadMotorModeFromNVS() {
+        Settings settings("otto", false);
+        motors_on_demand_ = settings.GetBool("motor_demand", false);
+        ESP_LOGI(TAG, "Motor mode: %s", motors_on_demand_ ? "on-demand (rest until move)" : "always on");
+    }
+
+    void EnsureMotorsReady() {
+        otto_.AttachServos();
+    }
+
+    void RestMotorsIfOnDemand() {
+        if (motors_on_demand_) {
+            otto_.DetachServos();
+            ESP_LOGD(TAG, "Motors resting (on-demand mode)");
+        }
     }
 
 public:
@@ -772,10 +813,17 @@ public:
                  hw_config.left_hand_pin, hw_config.right_hand_pin);
 
         LoadTrimsFromNVS();
+        LoadMotorModeFromNVS();
 
         action_queue_ = xQueueCreate(10, sizeof(OttoActionParams));
 
-        QueueAction(ACTION_HOME, 1, 1000, 1, 0);  // direction=1表示复位手部
+        if (motors_on_demand_) {
+            // Boot soft: no holding torque until user asks to walk/stand.
+            otto_.DetachServos();
+            ESP_LOGI(TAG, "Boot: motors resting (on-demand)");
+        } else {
+            QueueAction(ACTION_HOME, 1, 1000, 1, 0);  // direction=1表示复位手部
+        }
 
         RegisterMcpTools();
     }
@@ -1173,11 +1221,11 @@ public:
                 return WebSocketControlServer::ShiftActiveUnit(-1);
             });
 
-        // Tool: Hiện QR code trang Self-Control trên LCD
+        // Tool: Hiện QR trang Self-Control (web :8080 đã mở lúc WiFi xong)
         mcp_server.AddTool(
             "self.otto.show_config_page",
-            "Hiện mã QR trang cấu hình Self-Control trên màn hình (60 giây). "
-            "Dùng khi người dùng nói 'mở cài đặt', 'mở trang cấu hình', 'hiện QR'. "
+            "Hiện mã QR trang cấu hình Self-Control trên màn hình (20 giây). "
+            "Dùng khi người dùng nói 'mở cài đặt', 'mở trang cấu hình', 'hiện QR', 'mở mã QR'. "
             "Chỉ nói ngắn: 'Đã mở mã QR.' — tuyệt đối KHÔNG đọc URL, IP, đường dẫn, http, :8080.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
@@ -1186,13 +1234,29 @@ public:
                 if (ip.empty()) {
                     return "Lỗi: Robot chưa kết nối WiFi, không có IP.";
                 }
+                // Nếu đã tắt web thì mở lại rồi mới hiện QR.
+                if (!OttoSelfControlWebIsRunning() && !OttoSelfControlWebStart()) {
+                    return "Lỗi: Không mở được trang cấu hình :8080.";
+                }
                 std::string url = "http://" + ip + ":8080";
                 auto* display = Board::GetInstance().GetDisplay();
                 if (display != nullptr) {
                     display->ShowQrCode(url.c_str());
                 }
-                // Không trả URL trong tool result — tránh TTS đọc đường link (giống Android Mini).
                 return "Đã mở mã QR.";
+            });
+
+        // Tool: Tắt web Self-Control :8080
+        mcp_server.AddTool(
+            "self.otto.hide_config_page",
+            "TẮT web cấu hình Self-Control (:8080) và ẩn mã QR nếu còn hiện. "
+            "Dùng khi người dùng nói 'tắt web', 'tắt trang cấu hình', 'đóng cài đặt', 'tắt mã QR'. "
+            "Chỉ nói ngắn: 'Đã tắt trang cấu hình.'",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                OttoSelfControlWebStop();
+                return "Đã tắt trang cấu hình.";
             });
 
         // Tool: Đổi cấp độ học bằng giọng nói
@@ -1355,6 +1419,28 @@ std::string OttoWebControlAction(const std::string& action) {
         g_otto_controller->QueueAction(OttoController::ACTION_HOME, 1, 1000, 1, 0);
         return "";
     }
+    if (action == "detach") {
+        g_otto_controller->SetMotorTestForwardEnabled(false);
+        g_otto_controller->StopExploreMode();
+        if (g_otto_controller->action_task_handle_ != nullptr) {
+            vTaskDelete(g_otto_controller->action_task_handle_);
+            g_otto_controller->action_task_handle_ = nullptr;
+        }
+        g_otto_controller->is_action_in_progress_ = false;
+        PowerManager::ResumeBatteryUpdate();
+        xQueueReset(g_otto_controller->action_queue_);
+        g_otto_controller->otto_.DetachServos();
+        ESP_LOGI(TAG, "Web pose: all servos detached");
+        return "";
+    }
+    if (action == "attach") {
+        g_otto_controller->otto_.AttachServos();
+        int pos[SERVO_COUNT];
+        g_otto_controller->otto_.GetServoPositions(pos);
+        g_otto_controller->otto_.MoveServos(300, pos);
+        ESP_LOGI(TAG, "Web pose: all servos attached/held");
+        return "";
+    }
     if (action == "forward") {
         g_otto_controller->QueueAction(OttoController::ACTION_WALK, kSteps, kSpeed, 1, kArmSwing);
         return "";
@@ -1371,12 +1457,68 @@ std::string OttoWebControlAction(const std::string& action) {
         g_otto_controller->QueueAction(OttoController::ACTION_TURN, kSteps, kSpeed, -1, kArmSwing);
         return "";
     }
-    if (action == "jump") {
-        g_otto_controller->QueueAction(OttoController::ACTION_JUMP, 1, kSpeed, 0, 0);
-        return "";
-    }
     if (action == "swing") {
         g_otto_controller->QueueAction(OttoController::ACTION_SWING, kSteps, kSpeed, 0, kSwingAmount);
+        return "";
+    }
+    if (action == "jump") {
+        g_otto_controller->QueueAction(OttoController::ACTION_JUMP, 1, 2000, 0, 0);
+        return "";
+    }
+    if (action == "moonwalk_l") {
+        g_otto_controller->QueueAction(OttoController::ACTION_MOONWALK, kSteps, 900, 1, 20);
+        return "";
+    }
+    if (action == "moonwalk_r") {
+        g_otto_controller->QueueAction(OttoController::ACTION_MOONWALK, kSteps, 900, -1, 20);
+        return "";
+    }
+    if (action == "bend_l") {
+        g_otto_controller->QueueAction(OttoController::ACTION_BEND, 1, 1400, 1, 0);
+        return "";
+    }
+    if (action == "bend_r") {
+        g_otto_controller->QueueAction(OttoController::ACTION_BEND, 1, 1400, -1, 0);
+        return "";
+    }
+    if (action == "shake_l") {
+        g_otto_controller->QueueAction(OttoController::ACTION_SHAKE_LEG, 1, 2000, 1, 0);
+        return "";
+    }
+    if (action == "shake_r") {
+        g_otto_controller->QueueAction(OttoController::ACTION_SHAKE_LEG, 1, 2000, -1, 0);
+        return "";
+    }
+    if (action == "updown") {
+        g_otto_controller->QueueAction(OttoController::ACTION_UPDOWN, kSteps, 1000, 0, 20);
+        return "";
+    }
+    if (action == "tiptoe") {
+        g_otto_controller->QueueAction(OttoController::ACTION_TIPTOE_SWING, kSteps, 900, 0, 20);
+        return "";
+    }
+    if (action == "jitter") {
+        g_otto_controller->QueueAction(OttoController::ACTION_JITTER, 5, 500, 0, 20);
+        return "";
+    }
+    if (action == "ascending") {
+        g_otto_controller->QueueAction(OttoController::ACTION_ASCENDING_TURN, kSteps, 900, 0, 20);
+        return "";
+    }
+    if (action == "crusaito") {
+        g_otto_controller->QueueAction(OttoController::ACTION_CRUSAITO, kSteps, 900, 1, 20);
+        return "";
+    }
+    if (action == "flapping") {
+        g_otto_controller->QueueAction(OttoController::ACTION_FLAPPING, kSteps, 1000, 1, 20);
+        return "";
+    }
+    if (action == "whirlwind") {
+        g_otto_controller->QueueAction(OttoController::ACTION_WHIRLWIND_LEG, 5, 300, 0, 30);
+        return "";
+    }
+    if (action == "showcase") {
+        g_otto_controller->QueueAction(OttoController::ACTION_SHOWCASE, 1, 0, 0, 0);
         return "";
     }
     if (action == "sit") {
@@ -1387,5 +1529,386 @@ std::string OttoWebControlAction(const std::string& action) {
         g_otto_controller->QueueAction(OttoController::ACTION_HOME, 1, 1000, 1, 0);
         return "";
     }
+    if (action == "explore_on") {
+        g_otto_controller->StartExploreMode(kSpeed);
+        return "";
+    }
+    if (action == "explore_off") {
+        g_otto_controller->StopExploreMode();
+        return "";
+    }
+    if (action == "hide_qr") {
+        auto* display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) {
+            display->HideQrCode();
+        }
+        ESP_LOGI(TAG, "Web: hide QR");
+        return "";
+    }
+    if (action == "stop_web") {
+        // Defer stop so HTTP response can finish first.
+        xTaskCreate(
+            [](void*) {
+                vTaskDelay(pdMS_TO_TICKS(200));
+                OttoSelfControlWebStop();
+                vTaskDelete(nullptr);
+            },
+            "otto_web_off", 2048, nullptr, 5, nullptr);
+        ESP_LOGI(TAG, "Web: stop :8080 requested");
+        return "";
+    }
     return "Action không hỗ trợ";
+}
+
+static int OttoJointNameToIndex(const std::string& joint) {
+    if (joint == "ll" || joint == "left_leg") return LEFT_LEG;
+    if (joint == "rl" || joint == "right_leg") return RIGHT_LEG;
+    if (joint == "lf" || joint == "left_foot") return LEFT_FOOT;
+    if (joint == "rf" || joint == "right_foot") return RIGHT_FOOT;
+    if (joint == "lh" || joint == "left_hand") return LEFT_HAND;
+    if (joint == "rh" || joint == "right_hand") return RIGHT_HAND;
+    return -1;
+}
+
+static const char* OttoJointShortName(int index) {
+    static const char* names[] = {"ll", "rl", "lf", "rf", "lh", "rh"};
+    if (index >= 0 && index < SERVO_COUNT) {
+        return names[index];
+    }
+    return "?";
+}
+
+static const char* OttoJointLongName(int index) {
+    static const char* names[] = {
+        "left_leg", "right_leg", "left_foot", "right_foot", "left_hand", "right_hand"};
+    if (index >= 0 && index < SERVO_COUNT) {
+        return names[index];
+    }
+    return "?";
+}
+
+std::string OttoWebControlGetPoseJson() {
+    if (g_otto_controller == nullptr) {
+        return "{\"success\":false,\"error\":\"Otto controller chưa sẵn sàng\"}";
+    }
+    int pos[SERVO_COUNT];
+    g_otto_controller->otto_.GetServoPositions(pos);
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "success", true);
+    cJSON_AddStringToObject(root, "note",
+                            "Goc phan mem (lenh cuoi). Servo khong doc goc khi xoay tay.");
+    cJSON* angles = cJSON_CreateObject();
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        cJSON_AddNumberToObject(angles, OttoJointShortName(i), pos[i]);
+    }
+    cJSON_AddItemToObject(root, "angles", angles);
+    cJSON* detail = cJSON_CreateArray();
+    for (int i = 0; i < SERVO_COUNT; i++) {
+        cJSON* item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "joint", OttoJointShortName(i));
+        cJSON_AddStringToObject(item, "name", OttoJointLongName(i));
+        cJSON_AddNumberToObject(item, "angle", pos[i]);
+        cJSON_AddItemToArray(detail, item);
+    }
+    cJSON_AddItemToObject(root, "joints", detail);
+    char* printed = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    std::string out = printed ? printed : "{\"success\":false}";
+    if (printed) {
+        cJSON_free(printed);
+    }
+    return out;
+}
+
+std::string OttoWebControlDetachJoint(const std::string& joint) {
+    if (g_otto_controller == nullptr) {
+        return "Otto controller chưa sẵn sàng";
+    }
+    int idx = OttoJointNameToIndex(joint);
+    if (idx < 0) {
+        return "Khớp không hợp lệ (ll/rl/lf/rf/lh/rh)";
+    }
+    g_otto_controller->SetMotorTestForwardEnabled(false);
+    g_otto_controller->StopExploreMode();
+    if (g_otto_controller->action_task_handle_ != nullptr) {
+        vTaskDelete(g_otto_controller->action_task_handle_);
+        g_otto_controller->action_task_handle_ = nullptr;
+    }
+    g_otto_controller->is_action_in_progress_ = false;
+    PowerManager::ResumeBatteryUpdate();
+    xQueueReset(g_otto_controller->action_queue_);
+    g_otto_controller->otto_.DetachServo(idx);
+    ESP_LOGI(TAG, "Web pose: detached joint %s", OttoJointShortName(idx));
+    return "";
+}
+
+std::string OttoWebControlSetJoint(const std::string& joint, int angle) {
+    if (g_otto_controller == nullptr) {
+        return "Otto controller chưa sẵn sàng";
+    }
+    int idx = OttoJointNameToIndex(joint);
+    if (idx < 0) {
+        return "Khớp không hợp lệ (ll/rl/lf/rf/lh/rh)";
+    }
+    if (angle < 0) {
+        angle = 0;
+    }
+    if (angle > 180) {
+        angle = 180;
+    }
+    g_otto_controller->SetMotorTestForwardEnabled(false);
+    g_otto_controller->StopExploreMode();
+    if (g_otto_controller->action_task_handle_ != nullptr) {
+        vTaskDelete(g_otto_controller->action_task_handle_);
+        g_otto_controller->action_task_handle_ = nullptr;
+    }
+    g_otto_controller->is_action_in_progress_ = false;
+    PowerManager::ResumeBatteryUpdate();
+    xQueueReset(g_otto_controller->action_queue_);
+    g_otto_controller->otto_.AttachServo(idx);
+    g_otto_controller->otto_.MoveSingle(angle, idx);
+    ESP_LOGI(TAG, "Web pose: set %s=%d", OttoJointShortName(idx), angle);
+    return "";
+}
+
+static int ClampTrim(int v) {
+    if (v < -50) {
+        return -50;
+    }
+    if (v > 50) {
+        return 50;
+    }
+    return v;
+}
+
+void OttoWebAbortMotion() {
+    if (g_otto_controller == nullptr) {
+        return;
+    }
+    g_otto_controller->SetMotorTestForwardEnabled(false);
+    g_otto_controller->StopExploreMode();
+    if (g_otto_controller->action_task_handle_ != nullptr) {
+        vTaskDelete(g_otto_controller->action_task_handle_);
+        g_otto_controller->action_task_handle_ = nullptr;
+    }
+    g_otto_controller->is_action_in_progress_ = false;
+    PowerManager::ResumeBatteryUpdate();
+    xQueueReset(g_otto_controller->action_queue_);
+}
+
+bool OttoWebGetMotorsOnDemand() {
+    if (g_otto_controller == nullptr) {
+        return false;
+    }
+    return g_otto_controller->motors_on_demand_;
+}
+
+void OttoWebSetMotorsOnDemand(bool on_demand) {
+    if (g_otto_controller == nullptr) {
+        return;
+    }
+    {
+        Settings settings("otto", true);
+        settings.SetBool("motor_demand", on_demand);
+    }
+    g_otto_controller->motors_on_demand_ = on_demand;
+    ESP_LOGI(TAG, "Motor mode set: %s (applies soft-boot next power-on)",
+             on_demand ? "on-demand" : "always on");
+    // Never DetachServos() while the robot is already standing — collapsing all
+    // joints at once browns out the rail and blacks the display.
+    if (!on_demand) {
+        g_otto_controller->EnsureMotorsReady();
+        if (!g_otto_controller->is_action_in_progress_) {
+            g_otto_controller->QueueAction(OttoController::ACTION_HOME, 1, 1000, 1, 0);
+        }
+    }
+}
+
+static void OttoReadTrimsFromSettings(Settings& settings, int out[SERVO_COUNT]) {
+    out[LEFT_LEG] = settings.GetInt("left_leg", 0);
+    out[RIGHT_LEG] = settings.GetInt("right_leg", 0);
+    out[LEFT_FOOT] = settings.GetInt("left_foot", 0);
+    out[RIGHT_FOOT] = settings.GetInt("right_foot", 0);
+    out[LEFT_HAND] = settings.GetInt("left_hand", 0);
+    out[RIGHT_HAND] = settings.GetInt("right_hand", 0);
+}
+
+static std::string OttoTrimsToJson(bool success, const int trims[SERVO_COUNT], int walk_tip,
+                                   const char* msg) {
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "success", success);
+    if (msg && msg[0]) {
+        cJSON_AddStringToObject(root, "message", msg);
+    }
+    cJSON* t = cJSON_CreateObject();
+    cJSON_AddNumberToObject(t, "left_leg", trims[LEFT_LEG]);
+    cJSON_AddNumberToObject(t, "right_leg", trims[RIGHT_LEG]);
+    cJSON_AddNumberToObject(t, "left_foot", trims[LEFT_FOOT]);
+    cJSON_AddNumberToObject(t, "right_foot", trims[RIGHT_FOOT]);
+    cJSON_AddNumberToObject(t, "left_hand", trims[LEFT_HAND]);
+    cJSON_AddNumberToObject(t, "right_hand", trims[RIGHT_HAND]);
+    cJSON_AddItemToObject(root, "trims", t);
+    cJSON_AddNumberToObject(root, "walk_tip", walk_tip);
+    cJSON_AddStringToObject(root, "note",
+                            "Trim = lech horn. walk_tip = non chan khi di (0=it co rut).");
+    char* printed = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    std::string out = printed ? printed : "{\"success\":false}";
+    if (printed) {
+        cJSON_free(printed);
+    }
+    return out;
+}
+
+std::string OttoWebControlGetTrimsJson() {
+    if (g_otto_controller == nullptr) {
+        return "{\"success\":false,\"error\":\"Otto controller chưa sẵn sàng\"}";
+    }
+    Settings settings("otto_trims", false);
+    int trims[SERVO_COUNT];
+    OttoReadTrimsFromSettings(settings, trims);
+    int walk_tip = settings.GetInt("walk_tip", settings.GetInt("wtip", 0));
+    return OttoTrimsToJson(true, trims, walk_tip, nullptr);
+}
+
+std::string OttoWebControlApplyTrimsJson(const std::string& body_json) {
+    if (g_otto_controller == nullptr) {
+        return "{\"success\":false,\"error\":\"Otto controller chưa sẵn sàng\"}";
+    }
+
+    cJSON* root = cJSON_Parse(body_json.c_str());
+    if (!root) {
+        return "{\"success\":false,\"error\":\"Invalid JSON\"}";
+    }
+
+    cJSON* action = cJSON_GetObjectItem(root, "action");
+    const char* act = (action && cJSON_IsString(action) && action->valuestring) ? action->valuestring
+                                                                                : "preview";
+
+    int trims[SERVO_COUNT];
+    int walk_tip = 0;
+    const bool do_save = (strcmp(act, "save") == 0 || strcmp(act, "reset") == 0);
+    const bool do_live = (strcmp(act, "live") == 0);
+    const bool do_preview =
+        (strcmp(act, "preview") == 0 || strcmp(act, "save") == 0 || strcmp(act, "reset") == 0);
+
+    // Scope Settings so NVS commits BEFORE any motor move / possible power-cut.
+    {
+        Settings settings("otto_trims", true);
+        OttoReadTrimsFromSettings(settings, trims);
+        walk_tip = settings.GetInt("walk_tip", settings.GetInt("wtip", 0));
+
+        if (strcmp(act, "reset") == 0) {
+            for (int i = 0; i < SERVO_COUNT; i++) {
+                trims[i] = 0;
+            }
+            walk_tip = 0;
+        } else {
+            auto take = [&](const char* key, int idx) {
+                cJSON* v = cJSON_GetObjectItem(root, key);
+                if (v && cJSON_IsNumber(v)) {
+                    trims[idx] = ClampTrim(v->valueint);
+                }
+            };
+            take("left_leg", LEFT_LEG);
+            take("right_leg", RIGHT_LEG);
+            take("left_foot", LEFT_FOOT);
+            take("right_foot", RIGHT_FOOT);
+            take("left_hand", LEFT_HAND);
+            take("right_hand", RIGHT_HAND);
+            take("ll", LEFT_LEG);
+            take("rl", RIGHT_LEG);
+            take("lf", LEFT_FOOT);
+            take("rf", RIGHT_FOOT);
+            take("lh", LEFT_HAND);
+            take("rh", RIGHT_HAND);
+
+            cJSON* tip = cJSON_GetObjectItem(root, "walk_tip");
+            if (tip && cJSON_IsNumber(tip)) {
+                walk_tip = tip->valueint;
+                if (walk_tip < 0) {
+                    walk_tip = 0;
+                }
+                if (walk_tip > 20) {
+                    walk_tip = 20;
+                }
+            }
+        }
+
+        if (do_save) {
+            settings.SetInt("left_leg", trims[LEFT_LEG]);
+            settings.SetInt("right_leg", trims[RIGHT_LEG]);
+            settings.SetInt("left_foot", trims[LEFT_FOOT]);
+            settings.SetInt("right_foot", trims[RIGHT_FOOT]);
+            settings.SetInt("left_hand", trims[LEFT_HAND]);
+            settings.SetInt("right_hand", trims[RIGHT_HAND]);
+            settings.SetInt("walk_tip", walk_tip);
+            settings.SetInt("wtip", walk_tip);  // short alias
+            ESP_LOGI(TAG, "Trim NVS write tip=%d ll=%d rl=%d lf=%d rf=%d", walk_tip, trims[LEFT_LEG],
+                     trims[RIGHT_LEG], trims[LEFT_FOOT], trims[RIGHT_FOOT]);
+        }
+    }  // nvs_commit here
+
+    // Verify round-trip after commit
+    if (do_save) {
+        Settings verify("otto_trims", false);
+        int vtip = verify.GetInt("walk_tip", verify.GetInt("wtip", -1));
+        ESP_LOGI(TAG, "Trim NVS verify walk_tip=%d left_foot=%d", vtip,
+                 verify.GetInt("left_foot", -999));
+        if (vtip != walk_tip) {
+            cJSON_Delete(root);
+            return "{\"success\":false,\"error\":\"Lưu NVS thất bại (verify tip)\"}";
+        }
+    }
+
+    if (do_live) {
+        // Apply all trim values in RAM, but only PWM-write the focused joint.
+        // Stable LEDC channels + no timer retune → sibling hips stay still.
+        g_otto_controller->otto_.SetTrims(trims[LEFT_LEG], trims[RIGHT_LEG], trims[LEFT_FOOT],
+                                          trims[RIGHT_FOOT], trims[LEFT_HAND], trims[RIGHT_HAND]);
+        g_otto_controller->otto_.SetWalkFootTip(walk_tip);
+
+        int focus_idx = -1;
+        cJSON* focus = cJSON_GetObjectItem(root, "focus");
+        if (focus && cJSON_IsString(focus) && focus->valuestring) {
+            const char* f = focus->valuestring;
+            if (strcmp(f, "left_leg") == 0 || strcmp(f, "ll") == 0) focus_idx = LEFT_LEG;
+            else if (strcmp(f, "right_leg") == 0 || strcmp(f, "rl") == 0) focus_idx = RIGHT_LEG;
+            else if (strcmp(f, "left_foot") == 0 || strcmp(f, "lf") == 0) focus_idx = LEFT_FOOT;
+            else if (strcmp(f, "right_foot") == 0 || strcmp(f, "rf") == 0) focus_idx = RIGHT_FOOT;
+            else if (strcmp(f, "left_hand") == 0 || strcmp(f, "lh") == 0) focus_idx = LEFT_HAND;
+            else if (strcmp(f, "right_hand") == 0 || strcmp(f, "rh") == 0) focus_idx = RIGHT_HAND;
+        }
+
+        int nest[SERVO_COUNT] = {90, 90, 90, 90, 45, 135};
+        if (focus_idx >= 0) {
+            g_otto_controller->otto_.AttachServo(focus_idx);
+            g_otto_controller->otto_.MoveSingle(nest[focus_idx], focus_idx);
+        } else {
+            g_otto_controller->otto_.AttachServos();
+            g_otto_controller->otto_.MoveServos(250, nest);
+        }
+        cJSON_Delete(root);
+        return OttoTrimsToJson(true, trims, walk_tip, "Da xoay dung 1 khop (chua luu NVS)");
+    }
+
+    OttoWebAbortMotion();
+    g_otto_controller->otto_.SetTrims(trims[LEFT_LEG], trims[RIGHT_LEG], trims[LEFT_FOOT],
+                                      trims[RIGHT_FOOT], trims[LEFT_HAND], trims[RIGHT_HAND]);
+    g_otto_controller->otto_.SetWalkFootTip(walk_tip);
+
+    if (do_preview) {
+        g_otto_controller->otto_.AttachServos();
+        int stand[SERVO_COUNT] = {90, 90, 90, 90, 45, 135};
+        g_otto_controller->otto_.MoveServos(800, stand);
+    }
+
+    cJSON_Delete(root);
+    const char* msg = do_save ? "Da luu goc trim + walk_tip vao NVS" : "Da ap trim (chua luu NVS)";
+    if (strcmp(act, "reset") == 0) {
+        msg = "Da reset trim/tip ve 0 va luu NVS";
+    }
+    ESP_LOGI(TAG, "Web trim action=%s tip=%d ll=%d rl=%d lf=%d rf=%d", act, walk_tip, trims[LEFT_LEG],
+             trims[RIGHT_LEG], trims[LEFT_FOOT], trims[RIGHT_FOOT]);
+    return OttoTrimsToJson(true, trims, walk_tip, msg);
 }

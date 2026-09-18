@@ -1,13 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Otto Self Control</title>
+    <title>Cài đặt robot Emun</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #f4f6f8; color: #333; padding: 16px; }
-        h1 { font-size: 1.4em; text-align: center; margin-bottom: 16px; color: #2c3e50; }
+        .brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .brand-logo {
+            width: 52px;
+            height: auto;
+            display: block;
+            filter: drop-shadow(0 2px 6px rgba(40,60,90,0.2));
+        }
+        .brand h1 {
+            font-size: 1.35em;
+            margin: 0;
+            color: #2c3e50;
+            line-height: 1.2;
+            text-align: left;
+        }
         .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
         .card h2 { font-size: 1.1em; margin-bottom: 10px; color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 6px; }
         label { display: block; margin: 6px 0; cursor: pointer; }
@@ -56,10 +75,119 @@
         .btn-action.home { background: #27ae60; }
         .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
         .btn-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .pose-joint { display: grid; grid-template-columns: 72px 1fr auto auto auto auto; gap: 6px; align-items: center; margin: 8px 0; }
+        .pose-joint label { margin: 0; font-weight: bold; font-size: 0.9em; }
+        .pose-joint input[type="number"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        .pose-joint button { padding: 8px 10px; border: none; border-radius: 6px; background: #3498db; color: #fff; font-weight: bold; cursor: pointer; }
+        .pose-joint button.sec { background: #7f8c8d; }
+        .pose-joint button.warn { background: #e67e22; }
+        .trim-map {
+            position: relative;
+            display: grid;
+            grid-template-columns: minmax(108px, 1fr) minmax(140px, 1.15fr) minmax(108px, 1fr);
+            gap: 6px;
+            align-items: stretch;
+            margin: 12px 0 8px;
+            padding: 8px 4px;
+            background: linear-gradient(180deg, #eef3f8 0%, #f7f9fb 55%, #e8eef5 100%);
+            border-radius: 12px;
+            border: 1px solid #d9e2ec;
+            overflow: hidden;
+        }
+        .trim-side {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 10px 0;
+            z-index: 3;
+        }
+        .trim-ctrl {
+            background: #fff;
+            border-radius: 10px;
+            padding: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            border: 2px solid #dfe6ee;
+            position: relative;
+        }
+        .trim-ctrl[data-joint="rl"] { border-color: #f1c40f; }
+        .trim-ctrl[data-joint="rf"] { border-color: #e74c3c; }
+        .trim-ctrl[data-joint="ll"] { border-color: #1abc9c; }
+        .trim-ctrl[data-joint="lf"] { border-color: #3498db; }
+        .trim-ctrl h3 {
+            font-size: 0.78em;
+            margin: 0 0 6px;
+            color: #2c3e50;
+            line-height: 1.25;
+            border: none;
+            padding: 0;
+        }
+        .trim-ctrl h3 span { color: #888; font-weight: normal; }
+        .trim-ctrl input[type="number"] {
+            width: 100%;
+            padding: 7px 6px;
+            border: 1px solid #ccd6e0;
+            border-radius: 6px;
+            font-size: 0.95em;
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .trim-btns { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; }
+        .trim-btns button {
+            padding: 7px 0;
+            border: none;
+            border-radius: 6px;
+            background: #7f8c8d;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+        .trim-btns button:active { opacity: 0.85; }
+        .trim-hero {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 240px;
+            z-index: 2;
+        }
+        .trim-hero img {
+            max-width: 100%;
+            width: 200px;
+            height: auto;
+            display: block;
+            filter: drop-shadow(0 8px 14px rgba(40,60,90,0.18));
+            pointer-events: none;
+            user-select: none;
+        }
+        .trim-arrows {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            overflow: visible;
+        }
+        @media (max-width: 420px) {
+            .trim-map { gap: 4px; padding: 6px 2px; }
+            .trim-ctrl { padding: 6px; }
+            .trim-ctrl h3 { font-size: 0.72em; }
+            .trim-btns button { padding: 6px 0; font-size: 0.8em; }
+            .trim-hero img { width: 150px; }
+            .trim-hero { min-height: 200px; }
+        }
+        .pose-seq { list-style: none; margin-top: 10px; max-height: 180px; overflow-y: auto; }
+        .pose-seq li { padding: 8px 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 6px; font-family: monospace; font-size: 0.9em; display: flex; justify-content: space-between; gap: 8px; }
+        .pose-seq li button { border: none; background: #e74c3c; color: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+        pre.pose-json { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 8px; font-size: 0.75em; overflow-x: auto; max-height: 160px; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <h1>🤖 Otto Self Control</h1>
+    <header class="brand">
+        <h1>Cài đặt robot Emun</h1>
+    </header>
     <div id="toast" class="toast"></div>
 
     <div class="tabs">
@@ -142,13 +270,14 @@
 
     <!-- Nút lưu -->
     <button class="btn btn-save" id="btn_save" onclick="saveConfig()">💾 Lưu cấu hình</button>
+    <button class="btn" id="btn_stop_web" onclick="stopWebServer()" style="background:#6c757d;color:#fff;margin-top:8px">⏻ Tắt web :8080</button>
     <div class="status" id="status"></div>
     </div>
 
     <div id="tab_control" class="tab-panel">
         <div class="card">
             <h2>🎮 Di chuyển</h2>
-            <p class="hint">Home = đứng nghỉ (reset tư thế). Dừng = hủy hàng đợi rồi về Home.</p>
+            <p class="hint">Đi/quay xong tự Home (ease-out, thời gian theo góc lệch).</p>
             <div class="dpad">
                 <div class="spacer"></div>
                 <button type="button" class="btn-action" onclick="sendAction('forward')">⬆️ Tiến</button>
@@ -162,15 +291,54 @@
             </div>
         </div>
         <div class="card">
-            <h2>🤸 Động tác</h2>
-            <div class="btn-row-3">
-                <button type="button" class="btn-action" onclick="sendAction('jump')">🦘 Nhảy</button>
+            <h2>🦵 Động tác chân</h2>
+            <p class="hint">Các động tác dùng chân/hông/bàn. Xong tự về Home (trừ Ngồi).</p>
+            <div class="btn-row">
                 <button type="button" class="btn-action" onclick="sendAction('swing')">〰️ Lắc</button>
+                <button type="button" class="btn-action" onclick="sendAction('jump')">⬆️ Nhảy</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('updown')">↕️ Lên xuống</button>
+                <button type="button" class="btn-action" onclick="sendAction('tiptoe')">🩰 Nhón chân</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('jitter')">⚡ Rung</button>
+                <button type="button" class="btn-action" onclick="sendAction('ascending')">🌀 Quay nghiêng</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('moonwalk_l')">🕺 Moonwalk L</button>
+                <button type="button" class="btn-action" onclick="sendAction('moonwalk_r')">🕺 Moonwalk R</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('bend_l')">↩️ Cúi L</button>
+                <button type="button" class="btn-action" onclick="sendAction('bend_r')">↪️ Cúi R</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('shake_l')">🦵 Lắc chân L</button>
+                <button type="button" class="btn-action" onclick="sendAction('shake_r')">🦵 Lắc chân R</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('crusaito')">💃 Crusaito</button>
+                <button type="button" class="btn-action" onclick="sendAction('flapping')">🪽 Flapping</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action" onclick="sendAction('whirlwind')">🌪️ Xoáy chân</button>
                 <button type="button" class="btn-action" onclick="sendAction('sit')">🪑 Ngồi</button>
             </div>
             <div class="btn-row">
-                <button type="button" class="btn-action home" onclick="sendAction('home')">🏠 Home (đứng nghỉ)</button>
+                <button type="button" class="btn-action" onclick="sendAction('showcase')">✨ Showcase</button>
+                <button type="button" class="btn-action home" onclick="sendAction('home')">🏠 Home</button>
+            </div>
+            <div class="btn-row">
                 <button type="button" class="btn-action stop" onclick="sendAction('stop')">⏹ Dừng</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🧭 Chế độ khám phá</h2>
+            <p class="hint">Bật: robot tự đi / quay ngẫu nhiên. Tắt: dừng và về Home.</p>
+            <div class="btn-row">
+                <button type="button" class="btn-action home" onclick="sendAction('explore_on')">▶️ Bật khám phá</button>
+                <button type="button" class="btn-action stop" onclick="sendAction('explore_off')">⏹ Tắt khám phá</button>
             </div>
             <div class="status" id="control_status">Chạm nút để điều khiển</div>
         </div>
@@ -191,6 +359,103 @@
                 <label><span>Backlight</span><span id="brightness_val">50</span></label>
                 <input type="range" id="brightness" min="0" max="100" value="50" oninput="onBrightnessInput()">
             </div>
+        </div>
+        <div class="card">
+            <h2>⚙️ Chế độ động cơ</h2>
+            <p class="hint">Chọn cách servo lúc <b>khởi động</b>. Lưu xong nên tắt/bật lại máy để áp dụng. Đang đứng sẽ không nhả servo (tránh đổ / tắt ngang).</p>
+            <label class="course-label" style="margin-top:8px">
+                <input type="radio" name="motor_mode" id="motor_always" value="0" checked>
+                <span><b>Luôn bật</b> — giữ cứng như hiện tại (Home lúc khởi động)</span>
+            </label>
+            <label class="course-label">
+                <input type="radio" name="motor_mode" id="motor_demand" value="1">
+                <span><b>Nghỉ khi bật</b> — lần bật máy sau không cấp lực; khi bấm Đi/Home mới gắn động cơ</span>
+            </label>
+        </div>
+        <div class="card">
+            <h2>🎯 Hiệu chỉnh gốc động cơ</h2>
+            <p class="hint"><b>±</b> xoay khớp liền (mũi tên chỉ đúng khớp). Đứng thẳng ổn → <b>Lưu gốc</b>.</p>
+            <div class="trim-map" id="trim_map">
+                <div class="trim-side">
+                    <div class="trim-ctrl" data-joint="rl" data-key="right_leg">
+                        <h3>Hông phải <span>RL</span></h3>
+                        <input type="number" id="trim_right_leg" min="-50" max="50" value="0" step="1">
+                        <div class="trim-btns">
+                            <button type="button" onclick="trimNudge('right_leg',-5)">−5</button>
+                            <button type="button" onclick="trimNudge('right_leg',-1)">−1</button>
+                            <button type="button" onclick="trimNudge('right_leg',1)">+1</button>
+                            <button type="button" onclick="trimNudge('right_leg',5)">+5</button>
+                        </div>
+                    </div>
+                    <div class="trim-ctrl" data-joint="rf" data-key="right_foot">
+                        <h3>Bàn phải <span>RF</span></h3>
+                        <input type="number" id="trim_right_foot" min="-50" max="50" value="0" step="1">
+                        <div class="trim-btns">
+                            <button type="button" onclick="trimNudge('right_foot',-5)">−5</button>
+                            <button type="button" onclick="trimNudge('right_foot',-1)">−1</button>
+                            <button type="button" onclick="trimNudge('right_foot',1)">+1</button>
+                            <button type="button" onclick="trimNudge('right_foot',5)">+5</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="trim-hero">
+                    <img id="trim_guide_img" width="211" height="260" alt="Otto — nhìn mặt robot" decoding="async">
+                </div>
+                <div class="trim-side">
+                    <div class="trim-ctrl" data-joint="ll" data-key="left_leg">
+                        <h3>Hông trái <span>LL</span></h3>
+                        <input type="number" id="trim_left_leg" min="-50" max="50" value="0" step="1">
+                        <div class="trim-btns">
+                            <button type="button" onclick="trimNudge('left_leg',-5)">−5</button>
+                            <button type="button" onclick="trimNudge('left_leg',-1)">−1</button>
+                            <button type="button" onclick="trimNudge('left_leg',1)">+1</button>
+                            <button type="button" onclick="trimNudge('left_leg',5)">+5</button>
+                        </div>
+                    </div>
+                    <div class="trim-ctrl" data-joint="lf" data-key="left_foot">
+                        <h3>Bàn trái <span>LF</span></h3>
+                        <input type="number" id="trim_left_foot" min="-50" max="50" value="0" step="1">
+                        <div class="trim-btns">
+                            <button type="button" onclick="trimNudge('left_foot',-5)">−5</button>
+                            <button type="button" onclick="trimNudge('left_foot',-1)">−1</button>
+                            <button type="button" onclick="trimNudge('left_foot',1)">+1</button>
+                            <button type="button" onclick="trimNudge('left_foot',5)">+5</button>
+                        </div>
+                    </div>
+                </div>
+                <svg class="trim-arrows" id="trim_arrows_svg" aria-hidden="true">
+                    <defs>
+                        <marker id="arrY" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+                            <path d="M0,0 L5,2.5 L0,5 Z" fill="#f1c40f"/>
+                        </marker>
+                        <marker id="arrR" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+                            <path d="M0,0 L5,2.5 L0,5 Z" fill="#e74c3c"/>
+                        </marker>
+                        <marker id="arrT" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+                            <path d="M0,0 L5,2.5 L0,5 Z" fill="#1abc9c"/>
+                        </marker>
+                        <marker id="arrB" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+                            <path d="M0,0 L5,2.5 L0,5 Z" fill="#3498db"/>
+                        </marker>
+                    </defs>
+                    <g id="trim_arrow_lines" fill="none" stroke-linecap="round"></g>
+                </svg>
+            </div>
+            <p class="hint" style="text-align:center">Nhìn mặt robot: trái robot = bên phải ảnh</p>
+            <div class="pose-joint" style="grid-template-columns: 90px 1fr auto auto auto auto">
+                <label title="walk_tip">TIP</label>
+                <input type="number" id="trim_walk_tip" min="0" max="20" value="0" step="1">
+                <button type="button" class="sec" onclick="trimTipNudge(-2)">−2</button>
+                <button type="button" class="sec" onclick="trimTipNudge(-1)">−1</button>
+                <button type="button" class="sec" onclick="trimTipNudge(1)">+1</button>
+                <button type="button" class="sec" onclick="trimTipNudge(2)">+2</button>
+            </div>
+            <p class="hint">TIP = nhón chân khi đi (thấy khi bấm Tiến)</p>
+            <div class="btn-row">
+                <button type="button" class="btn-action home" onclick="trimSave()">💾 Lưu gốc</button>
+                <button type="button" class="btn-action stop" onclick="trimReset()">↺ Reset 0</button>
+            </div>
+            <div class="status" id="trim_status">Đang tải trim...</div>
         </div>
         <button class="btn btn-save" id="btn_save_robot" onclick="saveRobotSettings()">💾 Lưu cài đặt robot</button>
         <div class="status" id="robot_status"></div>
@@ -364,6 +629,9 @@
         let savedFlVoice = 0;
         let savedIeltsVoice = 0;
         let savedToeicVoice = 0;
+        // Prevent silent poll from overwriting course/voice before user presses Lưu
+        let configDirty = false;
+        function markConfigDirty() { configDirty = true; }
 
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -454,6 +722,7 @@
                         currentConfig.custom_mac = normalizeMacInput(document.getElementById('custom_mac').value);
                     }
                     currentConfig.preset_mac_idx = parseInt(e.target.value);
+                    markConfigDirty();
                     // Tự cấu hình: để trống = MAC chip — không mang MAC pool khóa cũ.
                     if (currentConfig.preset_mac_idx === 0) {
                         currentConfig.custom_mac = '';
@@ -498,6 +767,7 @@
                     `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     currentConfig.ex_voice = v.id;
+                    markConfigDirty();
                     renderExVoice();
                 });
                 el.appendChild(div);
@@ -527,6 +797,7 @@
                     `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     currentConfig.yi_voice = v.id;
+                    markConfigDirty();
                     renderYiVoice();
                 });
                 el.appendChild(div);
@@ -556,6 +827,7 @@
                     `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     currentConfig.fl_voice = v.id;
+                    markConfigDirty();
                     renderFlVoice();
                 });
                 el.appendChild(div);
@@ -585,6 +857,7 @@
                     `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     currentConfig.ielts_voice = v.id;
+                    markConfigDirty();
                     renderIeltsVoice();
                 });
                 el.appendChild(div);
@@ -614,6 +887,7 @@
                     `<span class="course-name">${v.name} <span class="course-mac">(${v.hint})</span></span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     currentConfig.toeic_voice = v.id;
+                    markConfigDirty();
                     renderToeicVoice();
                 });
                 el.appendChild(div);
@@ -652,6 +926,7 @@
                     `<span class="course-name">${sub.name}</span>`;
                 div.querySelector('input').addEventListener('change', () => {
                     setSubIdx(idx, i);
+                    markConfigDirty();
                     renderSubs();
                     renderUnits();
                 });
@@ -707,6 +982,7 @@
                     grid.querySelectorAll('label').forEach((item) => item.classList.remove('checked'));
                     lbl.classList.add('checked');
                     updateUnitsInConfig();
+                    markConfigDirty();
                 });
                 grid.appendChild(lbl);
             });
@@ -726,6 +1002,8 @@
 
         async function loadConfig(silent) {
             try {
+                // Don't wipe unsaved course/voice selection with server state
+                if (silent && configDirty) return;
                 if (!silent) {
                     document.getElementById('status').textContent = 'Đang tải cấu hình...';
                 }
@@ -822,6 +1100,7 @@
                 renderToeicVoice();
                 renderSubs();
                 renderUnits();
+                configDirty = false;
                 document.getElementById('status').textContent = '';
             } catch (err) {
                 document.getElementById('status').textContent = 'Lỗi tải cấu hình: ' + err.message;
@@ -880,6 +1159,7 @@
                 savedFlVoice = currentConfig.fl_voice;
                 savedIeltsVoice = currentConfig.ielts_voice;
                 savedToeicVoice = currentConfig.toeic_voice;
+                configDirty = false;
                 if (courseChanged || macChanged || voiceChanged) {
                     showToast('✅ Đã lưu — đang đổi Device-Id (~vài giây), rồi nói tiếp');
                     setTimeout(loadConfig, 3000);
@@ -903,7 +1183,14 @@
             document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
             document.getElementById('tab_btn_ota').classList.toggle('active', name === 'ota');
             if (name === 'robot') {
+                const guide = document.getElementById('trim_guide_img');
+                if (guide && !guide.getAttribute('src')) {
+                    guide.setAttribute('src', '/trim_guide.png');
+                }
                 loadRobotSettings();
+                trimInitUi();
+                trimLoad();
+                requestAnimationFrame(function() { setTimeout(trimDrawArrows, 40); });
             }
             if (name === 'ota') {
                 pollOtaStatus();
@@ -927,6 +1214,179 @@
                 st.textContent = 'Lỗi: ' + err.message;
                 showToast('❌ ' + err.message);
             }
+        }
+
+        async function stopWebServer() {
+            showToast('Đang tắt web...');
+            try {
+                await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stop_web' })
+                });
+            } catch (_) { /* server closes — expected */ }
+            showToast('✅ Đã tắt web :8080');
+        }
+
+        const TRIM_JOINTS = [
+            { id: 'll', key: 'left_leg', label: 'Hông trái' },
+            { id: 'rl', key: 'right_leg', label: 'Hông phải' },
+            { id: 'lf', key: 'left_foot', label: 'Bàn trái' },
+            { id: 'rf', key: 'right_foot', label: 'Bàn phải' }
+        ];
+
+        const TRIM_ARROW_META = {
+            // Chỉ mép ngoài khớp — không đâm vào thân robot
+            rl: { color: '#f1c40f', marker: 'arrY', tx: 0.12, ty: 0.55 },
+            rf: { color: '#e74c3c', marker: 'arrR', tx: 0.10, ty: 0.90 },
+            ll: { color: '#1abc9c', marker: 'arrT', tx: 0.88, ty: 0.55 },
+            lf: { color: '#3498db', marker: 'arrB', tx: 0.90, ty: 0.90 }
+        };
+
+        function trimDrawArrows() {
+            const map = document.getElementById('trim_map');
+            const svg = document.getElementById('trim_arrows_svg');
+            const g = document.getElementById('trim_arrow_lines');
+            const img = map && map.querySelector('.trim-hero img');
+            if (!map || !svg || !g || !img) return;
+            const mr = map.getBoundingClientRect();
+            if (mr.width < 8 || mr.height < 8) return;
+            // Pixel viewBox — tránh preserveAspectRatio=none làm nét bị phình to
+            svg.setAttribute('viewBox', '0 0 ' + mr.width + ' ' + mr.height);
+            svg.setAttribute('width', String(mr.width));
+            svg.setAttribute('height', String(mr.height));
+            const ir = img.getBoundingClientRect();
+            const toLocal = (x, y) => [x - mr.left, y - mr.top];
+            let html = '';
+            map.querySelectorAll('.trim-ctrl[data-joint]').forEach(ctrl => {
+                const joint = ctrl.getAttribute('data-joint');
+                const meta = TRIM_ARROW_META[joint];
+                if (!meta) return;
+                const cr = ctrl.getBoundingClientRect();
+                const fromRight = joint === 'll' || joint === 'lf';
+                const sx = fromRight ? cr.left : cr.right;
+                const sy = cr.top + cr.height * 0.45;
+                let ex = ir.left + ir.width * meta.tx;
+                let ey = ir.top + ir.height * meta.ty;
+                // Rút ngắn ~12% — đầu mũi tên dừng sát mép, không đè thân
+                ex = sx + (ex - sx) * 0.88;
+                ey = sy + (ey - sy) * 0.88;
+                const [x1, y1] = toLocal(sx, sy);
+                const [x2, y2] = toLocal(ex, ey);
+                html += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${meta.color}" stroke-width="1.25" marker-end="url(#${meta.marker})"/>`;
+            });
+            g.innerHTML = html;
+        }
+
+        function trimInitUi() {
+            const img = document.querySelector('#trim_map .trim-hero img');
+            if (img) {
+                if (img.complete) trimDrawArrows();
+                else img.addEventListener('load', trimDrawArrows, { once: true });
+            }
+            if (!window.__trimArrowResize) {
+                window.__trimArrowResize = true;
+                window.addEventListener('resize', trimDrawArrows);
+            }
+            setTimeout(trimDrawArrows, 80);
+        }
+
+        let trimBusy = false;
+
+        function trimNudge(key, delta) {
+            const el = document.getElementById('trim_' + key);
+            let v = parseInt(el.value, 10);
+            if (isNaN(v)) v = 0;
+            v = Math.max(-50, Math.min(50, v + delta));
+            el.value = v;
+            trimLive(key);
+        }
+
+        function trimTipNudge(delta) {
+            const el = document.getElementById('trim_walk_tip');
+            let v = parseInt(el.value, 10);
+            if (isNaN(v)) v = 0;
+            v = Math.max(0, Math.min(20, v + delta));
+            el.value = v;
+            document.getElementById('trim_status').textContent =
+                'TIP=' + v + ' (thấy khi đi; chưa Lưu thì mất sau reboot)';
+        }
+
+        function trimCollectBody(action, focus) {
+            const body = { action };
+            if (focus) body.focus = focus;
+            TRIM_JOINTS.forEach(j => {
+                let v = parseInt(document.getElementById('trim_' + j.key).value, 10);
+                if (isNaN(v)) v = 0;
+                body[j.key] = Math.max(-50, Math.min(50, v));
+            });
+            let tip = parseInt(document.getElementById('trim_walk_tip').value, 10);
+            if (isNaN(tip)) tip = 0;
+            body.walk_tip = Math.max(0, Math.min(20, tip));
+            return body;
+        }
+
+        function trimFill(trims, walkTip) {
+            if (trims) {
+                TRIM_JOINTS.forEach(j => {
+                    if (typeof trims[j.key] === 'number') {
+                        document.getElementById('trim_' + j.key).value = trims[j.key];
+                    }
+                });
+            }
+            if (typeof walkTip === 'number') {
+                document.getElementById('trim_walk_tip').value = walkTip;
+            }
+        }
+
+        async function trimLoad() {
+            trimInitUi();
+            const st = document.getElementById('trim_status');
+            try {
+                const resp = await fetch('/api/trim');
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Thất bại');
+                trimFill(data.trims, data.walk_tip);
+                st.textContent = 'Đã tải trim từ NVS (tip=' + (data.walk_tip ?? 0) + ')';
+            } catch (err) {
+                st.textContent = 'Lỗi: ' + err.message;
+            }
+        }
+
+        async function trimPost(action, toastOk, focus) {
+            const st = document.getElementById('trim_status');
+            if (trimBusy && action === 'live') return;
+            trimBusy = true;
+            st.textContent = 'Đang gửi...';
+            try {
+                const resp = await fetch('/api/trim', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(trimCollectBody(action, focus))
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || data.message || 'Thất bại');
+                trimFill(data.trims, data.walk_tip);
+                st.textContent = data.message || 'OK';
+                if (toastOk) showToast(toastOk);
+            } catch (err) {
+                st.textContent = 'Lỗi: ' + err.message;
+                showToast('❌ ' + err.message);
+            } finally {
+                trimBusy = false;
+            }
+        }
+
+        function trimLive(focusKey) {
+            return trimPost('live', null, focusKey);
+        }
+        function trimSave() { return trimPost('save', '💾 Đã lưu gốc NVS'); }
+        function trimReset() { return trimPost('reset', '↺ Reset = 0'); }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { trimInitUi(); });
+        } else {
+            trimInitUi();
         }
 
         let otaPollTimer = null;
@@ -1088,6 +1548,9 @@
                 } else {
                     briCard.style.display = 'none';
                 }
+                const demand = !!data.motors_on_demand;
+                document.getElementById('motor_demand').checked = demand;
+                document.getElementById('motor_always').checked = !demand;
                 document.getElementById('robot_status').textContent = '';
             } catch (err) {
                 document.getElementById('robot_status').textContent = 'Lỗi tải: ' + err.message;
@@ -1100,7 +1563,8 @@
             btn.textContent = 'Đang lưu...';
             try {
                 const body = {
-                    volume: parseInt(document.getElementById('volume').value, 10)
+                    volume: parseInt(document.getElementById('volume').value, 10),
+                    motors_on_demand: document.getElementById('motor_demand').checked
                 };
                 const briCard = document.getElementById('brightness_card');
                 if (briCard.style.display !== 'none') {
@@ -1114,6 +1578,10 @@
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error || 'Lưu thất bại');
                 showToast('✅ Đã lưu cài đặt robot');
+                document.getElementById('robot_status').textContent =
+                    document.getElementById('motor_demand').checked
+                        ? 'Động cơ: nghỉ khi bật (tắt/bật máy để áp dụng)'
+                        : 'Động cơ: luôn bật';
             } catch (err) {
                 showToast('❌ ' + err.message);
             }
@@ -1137,13 +1605,18 @@
             }
         }
 
-        // Sync unit when voice MCP changes NVS while web stays open
+        // Soft sync only — avoid hammering :8080 (was 4s → often “không vào được”).
         setInterval(function () {
+            if (document.visibilityState === 'hidden') return;
             if (!document.getElementById('tab_course').classList.contains('active')) return;
+            if (configDirty) return;
             const ae = document.activeElement;
             if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
             loadConfig(true);
-        }, 4000);
+        }, 20000);
+
+        document.getElementById('student_name').addEventListener('input', markConfigDirty);
+        document.getElementById('custom_mac').addEventListener('input', markConfigDirty);
 
         document.addEventListener('DOMContentLoaded', loadConfig);
     </script>

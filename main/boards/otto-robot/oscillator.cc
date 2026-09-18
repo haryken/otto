@@ -18,8 +18,6 @@ static const char* TAG = "Oscillator";
 
 extern unsigned long IRAM_ATTR millis();
 
-static ledc_channel_t next_free_channel = LEDC_CHANNEL_0;
-
 Oscillator::Oscillator(int trim) {
     trim_ = trim;
     diff_limit_ = 0;
@@ -62,7 +60,14 @@ bool Oscillator::NextSample() {
     return false;
 }
 
-void Oscillator::Attach(int pin, bool rev) {
+void Oscillator::Attach(int pin, bool rev, int channel) {
+    // Same pin already driving — do not steal another LEDC channel / retune timer
+    // (that made sibling hips twitch during live trim).
+    if (is_attached_ && pin_ == pin) {
+        rev_ = rev;
+        return;
+    }
+
     if (is_attached_) {
         Detach();
     }
@@ -70,16 +75,33 @@ void Oscillator::Attach(int pin, bool rev) {
     pin_ = pin;
     rev_ = rev;
 
-    ledc_timer_config_t ledc_timer = {.speed_mode = LEDC_LOW_SPEED_MODE,
-                                      .duty_resolution = LEDC_TIMER_13_BIT,
-                                      .timer_num = LEDC_TIMER_1,
-                                      .freq_hz = 50,
-                                      .clk_cfg = LEDC_AUTO_CLK};
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    static bool timer_ready = false;
+    if (!timer_ready) {
+        ledc_timer_config_t ledc_timer = {.speed_mode = LEDC_LOW_SPEED_MODE,
+                                          .duty_resolution = LEDC_TIMER_13_BIT,
+                                          .timer_num = LEDC_TIMER_1,
+                                          .freq_hz = 50,
+                                          .clk_cfg = LEDC_AUTO_CLK};
+        esp_err_t terr = ledc_timer_config(&ledc_timer);
+        if (terr != ESP_OK) {
+            ESP_LOGE(TAG, "ledc_timer_config failed: %s", esp_err_to_name(terr));
+            return;
+        }
+        timer_ready = true;
+    }
 
-    static int last_channel = 0;
-    last_channel = (last_channel + 1) % 7 + 1;
-    ledc_channel_ = (ledc_channel_t)last_channel;
+    // Stable channel per servo, but NEVER use LEDC_CHANNEL_0 — backlight / camera
+    // XCLK on this board own channel 0; fighting it makes LEFT_LEG buzz forever.
+    // Old pool used channels 1..7; map servo index 0..5 → LEDC 1..6.
+    int ledc_ch = channel;
+    if (ledc_ch < 0 || ledc_ch > 6) {
+        static int last_channel = 0;
+        last_channel = last_channel % 6 + 1;  // 1..6
+        ledc_ch = last_channel;
+    } else {
+        ledc_ch = channel + 1;  // 0→1 … 5→6
+    }
+    ledc_channel_ = (ledc_channel_t)ledc_ch;
 
     ledc_channel_config_t ledc_channel = {.gpio_num = pin_,
                                           .speed_mode = LEDC_LOW_SPEED_MODE,
@@ -88,12 +110,15 @@ void Oscillator::Attach(int pin, bool rev) {
                                           .timer_sel = LEDC_TIMER_1,
                                           .duty = 0,
                                           .hpoint = 0};
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+    esp_err_t cerr = ledc_channel_config(&ledc_channel);
+    if (cerr != ESP_OK) {
+        ESP_LOGE(TAG, "ledc_channel_config pin=%d ch=%d failed: %s", pin_, ledc_ch,
+                 esp_err_to_name(cerr));
+        return;
+    }
 
     ledc_speed_mode_ = LEDC_LOW_SPEED_MODE;
 
-    // pos_ = 90;
-    // Write(pos_);
     previous_servo_command_millis_ = millis();
 
     is_attached_ = true;
@@ -103,7 +128,11 @@ void Oscillator::Detach() {
     if (!is_attached_)
         return;
 
-    ESP_ERROR_CHECK(ledc_stop(ledc_speed_mode_, ledc_channel_, 0));
+    // Do not abort the whole chip if LEDC stop fails (brownout / bad channel).
+    esp_err_t err = ledc_stop(ledc_speed_mode_, ledc_channel_, 0);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ledc_stop ch=%d failed: %s", (int)ledc_channel_, esp_err_to_name(err));
+    }
 
     is_attached_ = false;
 }
@@ -156,6 +185,14 @@ void Oscillator::Write(int position) {
 
     uint32_t duty = (uint32_t)(((angle / 180.0) * 2.0 + 0.5) * 8191 / 20.0);
 
-    ESP_ERROR_CHECK(ledc_set_duty(ledc_speed_mode_, ledc_channel_, duty));
-    ESP_ERROR_CHECK(ledc_update_duty(ledc_speed_mode_, ledc_channel_));
+    // Never abort here: a brief 5V sag while walking used to reboot via ESP_ERROR_CHECK.
+    esp_err_t err = ledc_set_duty(ledc_speed_mode_, ledc_channel_, duty);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ledc_set_duty ch=%d failed: %s", (int)ledc_channel_, esp_err_to_name(err));
+        return;
+    }
+    err = ledc_update_duty(ledc_speed_mode_, ledc_channel_);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ledc_update_duty ch=%d failed: %s", (int)ledc_channel_, esp_err_to_name(err));
+    }
 }

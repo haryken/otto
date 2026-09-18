@@ -744,7 +744,10 @@ elseif(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BUILTIN_TEXT_FONT font_puhui_16_4)
     set(BUILTIN_ICON_FONT font_awesome_16_4)
     set(DEFAULT_EMOJI_COLLECTION otto-gif)
-    list(APPEND OTTO_EMBED_FILES ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/self_control.html)
+    list(APPEND OTTO_EMBED_FILES
+        ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/self_control.html
+        ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/trim_guide.png
+    )
 elseif(CONFIG_BOARD_TYPE_ELECTRON_BOT)
     set(BOARD_TYPE "electron-bot")
     set(BUILTIN_TEXT_FONT font_puhui_20_4)

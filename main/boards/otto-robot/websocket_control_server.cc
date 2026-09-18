@@ -9,6 +9,7 @@
 #include "system_info.h"
 #include <esp_log.h>
 #include <esp_http_server.h>
+#include <esp_idf_version.h>
 #include <esp_ota_ops.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -44,6 +45,8 @@ static const char* TAG = "WSControl";
 
 extern const char self_control_html_start[] asm("_binary_self_control_html_start");
 extern const char self_control_html_end[] asm("_binary_self_control_html_end");
+extern const uint8_t trim_guide_png_start[] asm("_binary_trim_guide_png_start");
+extern const uint8_t trim_guide_png_end[] asm("_binary_trim_guide_png_end");
 
 WebSocketControlServer* WebSocketControlServer::instance_ = nullptr;
 
@@ -468,17 +471,32 @@ static void SavePresetMacIdx(int idx) {
 
 // ========== HTTP Handlers ==========
 
+static void OttoHttpCommonHeaders(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "close");
+}
+
 esp_err_t WebSocketControlServer::self_control_page_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     const size_t html_len = self_control_html_end - self_control_html_start;
     httpd_resp_send(req, self_control_html_start, html_len);
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::trim_guide_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "image/png");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
+    const size_t len = trim_guide_png_end - trim_guide_png_start;
+    httpd_resp_send(req, reinterpret_cast<const char*>(trim_guide_png_start), len);
+    return ESP_OK;
+}
+
 esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    OttoHttpCommonHeaders(req);
 
     int idx = GetPresetMacIdx();
     std::string name = GetStudentName();
@@ -807,7 +825,7 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
 
 esp_err_t WebSocketControlServer::api_robot_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    OttoHttpCommonHeaders(req);
 
     auto& board = Board::GetInstance();
     cJSON* root = cJSON_CreateObject();
@@ -825,6 +843,7 @@ esp_err_t WebSocketControlServer::api_robot_get_handler(httpd_req_t *req) {
     } else {
         cJSON_AddBoolToObject(root, "has_brightness", false);
     }
+    cJSON_AddBoolToObject(root, "motors_on_demand", OttoWebGetMotorsOnDemand());
 
     char* json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -889,6 +908,11 @@ esp_err_t WebSocketControlServer::api_robot_post_handler(httpd_req_t *req) {
             backlight->SetBrightness(static_cast<uint8_t>(b), true);
             ESP_LOGI(TAG, "Robot brightness set to %d", b);
         }
+    }
+    cJSON* motor = cJSON_GetObjectItem(root, "motors_on_demand");
+    if (motor && (cJSON_IsBool(motor) || cJSON_IsNumber(motor))) {
+        bool on_demand = cJSON_IsTrue(motor) || (cJSON_IsNumber(motor) && motor->valueint != 0);
+        OttoWebSetMotorsOnDemand(on_demand);
     }
     cJSON_Delete(root);
 
@@ -1041,7 +1065,7 @@ esp_err_t WebSocketControlServer::api_ota_upload_handler(httpd_req_t *req) {
 
 esp_err_t WebSocketControlServer::api_action_post_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    OttoHttpCommonHeaders(req);
 
     int total_len = req->content_len;
     if (total_len <= 0 || total_len > 512) {
@@ -1145,18 +1169,156 @@ esp_err_t WebSocketControlServer::api_unit_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::api_pose_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    std::string json = OttoWebControlGetPoseJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_pose_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 512) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON* action = cJSON_GetObjectItem(root, "action");
+    if (!action || !cJSON_IsString(action) || !action->valuestring) {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu action\"}");
+        return ESP_OK;
+    }
+
+    std::string act = action->valuestring;
+    std::string err;
+    if (act == "detach") {
+        err = OttoWebControlAction("detach");
+    } else if (act == "attach") {
+        err = OttoWebControlAction("attach");
+    } else if (act == "detach_joint") {
+        cJSON* joint = cJSON_GetObjectItem(root, "joint");
+        if (!joint || !cJSON_IsString(joint) || !joint->valuestring) {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu joint\"}");
+            return ESP_OK;
+        }
+        err = OttoWebControlDetachJoint(joint->valuestring);
+    } else if (act == "set_joint") {
+        cJSON* joint = cJSON_GetObjectItem(root, "joint");
+        cJSON* angle = cJSON_GetObjectItem(root, "angle");
+        if (!joint || !cJSON_IsString(joint) || !joint->valuestring ||
+            !angle || !cJSON_IsNumber(angle)) {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu joint/angle\"}");
+            return ESP_OK;
+        }
+        err = OttoWebControlSetJoint(joint->valuestring, angle->valueint);
+    } else {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"action không hỗ trợ\"}");
+        return ESP_OK;
+    }
+    cJSON_Delete(root);
+
+    if (!err.empty()) {
+        cJSON* out = cJSON_CreateObject();
+        cJSON_AddBoolToObject(out, "success", false);
+        cJSON_AddStringToObject(out, "error", err.c_str());
+        char* printed = cJSON_PrintUnformatted(out);
+        cJSON_Delete(out);
+        httpd_resp_sendstr(req, printed ? printed : "{\"success\":false}");
+        if (printed) {
+            cJSON_free(printed);
+        }
+        return ESP_OK;
+    }
+
+    // Return fresh pose after mutate.
+    std::string json = OttoWebControlGetPoseJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_trim_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+    std::string json = OttoWebControlGetTrimsJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_trim_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 512) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+    std::string body(buf);
+    free(buf);
+
+    std::string json = OttoWebControlApplyTrimsJson(body);
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
+    if (server_handle_ != nullptr) {
+        ESP_LOGW(TAG, "Server already running on port %d", port);
+        return true;
+    }
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port;
     config.max_open_sockets = 7;
     config.ctrl_port = 32769;
-    config.max_uri_handlers = 24;
-    // Large firmware upload over Wi‑Fi can be slow
-    config.recv_wait_timeout = 60;
-    config.send_wait_timeout = 30;
-    config.stack_size = 8192;
+    config.max_uri_handlers = 32;
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",
@@ -1170,6 +1332,14 @@ bool WebSocketControlServer::Start(int port) {
         .uri = "/",
         .method = HTTP_GET,
         .handler = self_control_page_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t trim_guide_uri = {
+        .uri = "/trim_guide.png",
+        .method = HTTP_GET,
+        .handler = trim_guide_handler,
         .user_ctx = nullptr,
         .is_websocket = false
     };
@@ -1246,23 +1416,49 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_trim_get_uri = {
+        .uri = "/api/trim",
+        .method = HTTP_GET,
+        .handler = api_trim_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_trim_post_uri = {
+        .uri = "/api/trim",
+        .method = HTTP_POST,
+        .handler = api_trim_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
-        httpd_register_uri_handler(server_handle_, &ws_uri);
-        httpd_register_uri_handler(server_handle_, &page_uri);
-        httpd_register_uri_handler(server_handle_, &api_get_uri);
-        httpd_register_uri_handler(server_handle_, &api_post_uri);
-        httpd_register_uri_handler(server_handle_, &api_robot_get_uri);
-        httpd_register_uri_handler(server_handle_, &api_robot_post_uri);
-        httpd_register_uri_handler(server_handle_, &api_ota_get_uri);
-        httpd_register_uri_handler(server_handle_, &api_ota_post_uri);
-        httpd_register_uri_handler(server_handle_, &api_ota_upload_uri);
-        httpd_register_uri_handler(server_handle_, &api_action_post_uri);
-        httpd_register_uri_handler(server_handle_, &api_unit_post_uri);
-        ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d", port);
+        auto reg = [](httpd_handle_t handle, const httpd_uri_t* uri) {
+            esp_err_t err = httpd_register_uri_handler(handle, uri);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "register %s failed: %s", uri->uri, esp_err_to_name(err));
+            }
+        };
+        reg(server_handle_, &ws_uri);
+        reg(server_handle_, &page_uri);
+        reg(server_handle_, &trim_guide_uri);
+        reg(server_handle_, &api_get_uri);
+        reg(server_handle_, &api_post_uri);
+        reg(server_handle_, &api_robot_get_uri);
+        reg(server_handle_, &api_robot_post_uri);
+        reg(server_handle_, &api_ota_get_uri);
+        reg(server_handle_, &api_ota_post_uri);
+        reg(server_handle_, &api_ota_upload_uri);
+        reg(server_handle_, &api_action_post_uri);
+        reg(server_handle_, &api_unit_post_uri);
+        reg(server_handle_, &api_trim_get_uri);
+        reg(server_handle_, &api_trim_post_uri);
+        ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d (lru purge on)", port);
         return true;
     }
 
     ESP_LOGE(TAG, "Failed to start WebSocket server");
+    server_handle_ = nullptr;
     return false;
 }
 

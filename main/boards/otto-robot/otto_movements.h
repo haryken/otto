@@ -41,14 +41,22 @@ public:
     //-- Attach & detach functions
     void AttachServos();
     void DetachServos();
+    void DetachServo(int servo_number);
+    void AttachServo(int servo_number);
 
     //-- Oscillator Trims
     void SetTrims(int left_leg, int right_leg, int left_foot, int right_foot, int left_hand = 0,
                   int right_hand = 0);
 
+    /** Foot tip offset while walking (classic Otto used 5). 0 = flatter, less "co rút". */
+    void SetWalkFootTip(int tip);
+    int GetWalkFootTip() const;
+
     //-- Predetermined Motion Functions
     void MoveServos(int time, int servo_target[]);
     void MoveSingle(int position, int servo_number);
+    int GetServoPosition(int servo_number);
+    void GetServoPositions(int positions[SERVO_COUNT]);
     void OscillateServos(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], int period,
                          double phase_diff[SERVO_COUNT], float cycle);
     void Execute2(int amplitude[SERVO_COUNT], int center_angle[SERVO_COUNT], int period,
@@ -108,6 +116,7 @@ private:
 
     bool is_otto_resting_;
     bool has_hands_;  // 是否有手部舵机
+    int walk_foot_tip_;  // LF=+tip, RF=-tip during Walk/Turn
 
     void Execute(int amplitude[SERVO_COUNT], int offset[SERVO_COUNT], int period,
                  double phase_diff[SERVO_COUNT], float steps);
