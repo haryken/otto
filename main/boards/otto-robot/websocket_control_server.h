@@ -31,6 +31,11 @@ public:
     static int GetActiveSubIdx(int course_idx);
     /** Selected unit id string for the active course (+ sub if any). */
     static std::string GetActiveUnitSelection(int course_idx);
+    /**
+     * Move active course unit by delta (+1 next, -1 previous), save NVS.
+     * Returns JSON: success, unit_index, unit_name, message (or error).
+     */
+    static std::string ShiftActiveUnit(int delta);
 
 private:
     httpd_handle_t server_handle_;
@@ -45,6 +50,8 @@ private:
     static esp_err_t api_ota_get_handler(httpd_req_t *req);
     static esp_err_t api_ota_post_handler(httpd_req_t *req);
     static esp_err_t api_ota_upload_handler(httpd_req_t *req);
+    static esp_err_t api_action_post_handler(httpd_req_t *req);
+    static esp_err_t api_unit_post_handler(httpd_req_t *req);
     
     void HandleMessage(httpd_req_t *req, const char* data, size_t len);
     void AddClient(httpd_req_t *req);

@@ -20,6 +20,7 @@
 #include "otto_motor_test.h"
 #include "otto_movements.h"
 #include "otto_music_player.h"
+#include "otto_web_control.h"
 #include "power_manager.h"
 #include "sdkconfig.h"
 #include "settings.h"
@@ -67,6 +68,7 @@ static bool LoadMotorTestForwardFromNvs() {
 
 class OttoController {
     friend void OttoWifiConfigMotorTestForward(bool enable);
+    friend std::string OttoWebControlAction(const std::string& action);
 
 private:
     Otto otto_;
@@ -1135,15 +1137,40 @@ public:
                 int sub_idx = WebSocketControlServer::GetActiveSubIdx(idx);
                 std::string units = WebSocketControlServer::GetActiveUnitSelection(idx);
                 std::string unit_titles = ResolveOttoUnitNames(idx, sub_idx, units);
+                int unit_index = atoi(units.c_str());
 
                 cJSON* root = cJSON_CreateObject();
                 cJSON_AddStringToObject(root, "student_name", name.c_str());
+                cJSON_AddNumberToObject(root, "course_idx", idx);
+                cJSON_AddNumberToObject(root, "unit_index", unit_index);
                 cJSON_AddStringToObject(root, "unit_names", unit_titles.c_str());
                 char* json = cJSON_PrintUnformatted(root);
                 std::string result = json ? json : "{}";
                 free(json);
                 cJSON_Delete(root);
                 return result;
+            });
+
+        mcp_server.AddTool(
+            "self.otto.next_unit",
+            "Chuyển sang UNIT TIẾP THEO trong sách/khóa hiện tại và LƯU vào robot (Self-Control web cũng thấy). "
+            "Dùng khi người dùng nói: 'unit tiếp theo', 'học unit sau', 'next unit', 'chuyển unit kế'. "
+            "Trả về unit_name mới — hãy dạy tiếp unit đó.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return WebSocketControlServer::ShiftActiveUnit(+1);
+            });
+
+        mcp_server.AddTool(
+            "self.otto.prev_unit",
+            "Chuyển sang UNIT TRƯỚC ĐÓ trong sách/khóa hiện tại và LƯU vào robot (Self-Control web cũng thấy). "
+            "Dùng khi người dùng nói: 'unit trước', 'unit trước đó', 'previous unit', 'lui unit'. "
+            "Trả về unit_name mới — hãy dạy tiếp unit đó.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return WebSocketControlServer::ShiftActiveUnit(-1);
             });
 
         // Tool: Hiện QR code trang Self-Control trên LCD
@@ -1301,4 +1328,64 @@ void OttoWifiConfigMotorTestForward(bool enable) {
     }
     ESP_LOGI(TAG, "OttoWifiConfigMotorTestForward: enable=%d", enable ? 1 : 0);
     g_otto_controller->SetMotorTestForwardEnabled(enable);
+}
+
+std::string OttoWebControlAction(const std::string& action) {
+    if (g_otto_controller == nullptr) {
+        return "Otto controller chưa sẵn sàng";
+    }
+
+    constexpr int kSteps = 3;
+    constexpr int kSpeed = 700;
+    constexpr int kArmSwing = 50;
+    constexpr int kSwingAmount = 30;
+
+    ESP_LOGI(TAG, "OttoWebControlAction: %s", action.c_str());
+
+    if (action == "stop") {
+        g_otto_controller->SetMotorTestForwardEnabled(false);
+        g_otto_controller->StopExploreMode();
+        if (g_otto_controller->action_task_handle_ != nullptr) {
+            vTaskDelete(g_otto_controller->action_task_handle_);
+            g_otto_controller->action_task_handle_ = nullptr;
+        }
+        g_otto_controller->is_action_in_progress_ = false;
+        PowerManager::ResumeBatteryUpdate();
+        xQueueReset(g_otto_controller->action_queue_);
+        g_otto_controller->QueueAction(OttoController::ACTION_HOME, 1, 1000, 1, 0);
+        return "";
+    }
+    if (action == "forward") {
+        g_otto_controller->QueueAction(OttoController::ACTION_WALK, kSteps, kSpeed, 1, kArmSwing);
+        return "";
+    }
+    if (action == "backward") {
+        g_otto_controller->QueueAction(OttoController::ACTION_WALK, kSteps, kSpeed, -1, kArmSwing);
+        return "";
+    }
+    if (action == "left") {
+        g_otto_controller->QueueAction(OttoController::ACTION_TURN, kSteps, kSpeed, 1, kArmSwing);
+        return "";
+    }
+    if (action == "right") {
+        g_otto_controller->QueueAction(OttoController::ACTION_TURN, kSteps, kSpeed, -1, kArmSwing);
+        return "";
+    }
+    if (action == "jump") {
+        g_otto_controller->QueueAction(OttoController::ACTION_JUMP, 1, kSpeed, 0, 0);
+        return "";
+    }
+    if (action == "swing") {
+        g_otto_controller->QueueAction(OttoController::ACTION_SWING, kSteps, kSpeed, 0, kSwingAmount);
+        return "";
+    }
+    if (action == "sit") {
+        g_otto_controller->QueueAction(OttoController::ACTION_SIT, 1, 0, 0, 0);
+        return "";
+    }
+    if (action == "home") {
+        g_otto_controller->QueueAction(OttoController::ACTION_HOME, 1, 1000, 1, 0);
+        return "";
+    }
+    return "Action không hỗ trợ";
 }

@@ -46,6 +46,16 @@
         .progress-bar.failed { background: #e74c3c; }
         .progress-bar.success { background: #28a745; }
         .ota-msg { font-family: monospace; margin-top: 10px; font-size: 0.9em; word-break: break-all; }
+        .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 280px; margin: 12px auto; }
+        .dpad .spacer { visibility: hidden; }
+        .btn-action { display: block; width: 100%; padding: 16px 8px; border: none; border-radius: 10px; font-size: 1em; font-weight: bold; cursor: pointer; background: #3498db; color: #fff; }
+        .btn-action:active { background: #2980b9; }
+        .btn-action:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn-action.stop { background: #e74c3c; }
+        .btn-action.stop:active { background: #c0392b; }
+        .btn-action.home { background: #27ae60; }
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .btn-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -54,7 +64,8 @@
 
     <div class="tabs">
         <button type="button" class="tab-btn active" id="tab_btn_course" onclick="switchTab('course')">📚 Khóa học</button>
-        <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt robot</button>
+        <button type="button" class="tab-btn" id="tab_btn_control" onclick="switchTab('control')">🎮 Điều khiển</button>
+        <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt</button>
         <button type="button" class="tab-btn" id="tab_btn_ota" onclick="switchTab('ota')">🔄 Cập nhật</button>
     </div>
 
@@ -122,11 +133,47 @@
     <div class="card" id="unit_card">
         <h2>📖 Chọn Unit — <span id="current_course_name">...</span></h2>
         <div id="unit_list"></div>
+        <div class="btn-row" style="margin-top:12px">
+            <button type="button" class="btn-action" onclick="shiftUnit(-1)">⬅️ Unit trước</button>
+            <button type="button" class="btn-action" onclick="shiftUnit(1)">Unit tiếp ➡️</button>
+        </div>
+        <p class="hint">Nói “unit tiếp theo / unit trước” cũng đổi và lưu; web tự cập nhật.</p>
     </div>
 
     <!-- Nút lưu -->
     <button class="btn btn-save" id="btn_save" onclick="saveConfig()">💾 Lưu cấu hình</button>
     <div class="status" id="status"></div>
+    </div>
+
+    <div id="tab_control" class="tab-panel">
+        <div class="card">
+            <h2>🎮 Di chuyển</h2>
+            <p class="hint">Home = đứng nghỉ (reset tư thế). Dừng = hủy hàng đợi rồi về Home.</p>
+            <div class="dpad">
+                <div class="spacer"></div>
+                <button type="button" class="btn-action" onclick="sendAction('forward')">⬆️ Tiến</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn-action" onclick="sendAction('left')">⬅️ Trái</button>
+                <button type="button" class="btn-action stop" onclick="sendAction('stop')">⏹ Dừng</button>
+                <button type="button" class="btn-action" onclick="sendAction('right')">➡️ Phải</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn-action" onclick="sendAction('backward')">⬇️ Lùi</button>
+                <div class="spacer"></div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>🤸 Động tác</h2>
+            <div class="btn-row-3">
+                <button type="button" class="btn-action" onclick="sendAction('jump')">🦘 Nhảy</button>
+                <button type="button" class="btn-action" onclick="sendAction('swing')">〰️ Lắc</button>
+                <button type="button" class="btn-action" onclick="sendAction('sit')">🪑 Ngồi</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn-action home" onclick="sendAction('home')">🏠 Home (đứng nghỉ)</button>
+                <button type="button" class="btn-action stop" onclick="sendAction('stop')">⏹ Dừng</button>
+            </div>
+            <div class="status" id="control_status">Chạm nút để điều khiển</div>
+        </div>
     </div>
 
     <div id="tab_robot" class="tab-panel">
@@ -677,9 +724,11 @@
             }
         }
 
-        async function loadConfig() {
+        async function loadConfig(silent) {
             try {
-                document.getElementById('status').textContent = 'Đang tải cấu hình...';
+                if (!silent) {
+                    document.getElementById('status').textContent = 'Đang tải cấu hình...';
+                }
                 const resp = await fetch('/api/config');
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
@@ -846,9 +895,11 @@
 
         function switchTab(name) {
             document.getElementById('tab_course').classList.toggle('active', name === 'course');
+            document.getElementById('tab_control').classList.toggle('active', name === 'control');
             document.getElementById('tab_robot').classList.toggle('active', name === 'robot');
             document.getElementById('tab_ota').classList.toggle('active', name === 'ota');
             document.getElementById('tab_btn_course').classList.toggle('active', name === 'course');
+            document.getElementById('tab_btn_control').classList.toggle('active', name === 'control');
             document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
             document.getElementById('tab_btn_ota').classList.toggle('active', name === 'ota');
             if (name === 'robot') {
@@ -856,6 +907,25 @@
             }
             if (name === 'ota') {
                 pollOtaStatus();
+            }
+        }
+
+        async function sendAction(action) {
+            const st = document.getElementById('control_status');
+            st.textContent = 'Đang gửi: ' + action + '...';
+            try {
+                const resp = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Thất bại');
+                st.textContent = 'OK: ' + action;
+                showToast('✅ ' + action);
+            } catch (err) {
+                st.textContent = 'Lỗi: ' + err.message;
+                showToast('❌ ' + err.message);
             }
         }
 
@@ -1050,6 +1120,29 @@
             btn.disabled = false;
             btn.textContent = '💾 Lưu cài đặt robot';
         }
+
+        async function shiftUnit(delta) {
+            try {
+                const resp = await fetch('/api/unit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ delta: delta })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || data.error || 'Không đổi được unit');
+                showToast('✅ ' + (data.unit_name || data.message || 'Đã đổi unit'));
+                await loadConfig();
+            } catch (err) {
+                showToast('❌ ' + err.message);
+            }
+        }
+
+        // Sync unit when voice MCP changes NVS while web stays open
+        setInterval(function () {
+            if (!document.getElementById('tab_course').classList.contains('active')) return;
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+            loadConfig(true);
 
         document.addEventListener('DOMContentLoaded', loadConfig);
     </script>

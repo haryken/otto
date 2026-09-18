@@ -4,6 +4,8 @@
 #include "board.h"
 #include "audio_codec.h"
 #include "device_identity_presets.h"
+#include "otto_course_units.h"
+#include "otto_web_control.h"
 #include "system_info.h"
 #include <esp_log.h>
 #include <esp_http_server.h>
@@ -327,6 +329,17 @@ static void SaveFutureLeadersUnit(int sub_idx, const char* units) {
     nvs_close(nvs);
 }
 
+static void SaveUnitsForCourse(int course_idx, const char* units) {
+    if (course_idx < 1 || course_idx > 5) return;
+    nvs_handle_t nvs;
+    if (nvs_open(OTTO_NVS_NS, NVS_READWRITE, &nvs) != ESP_OK) return;
+    char key[16];
+    snprintf(key, sizeof(key), "%s%d", NVS_KEY_UNITS_PREFIX, course_idx);
+    nvs_set_str(nvs, key, units);
+    nvs_commit(nvs);
+    nvs_close(nvs);
+}
+
 int WebSocketControlServer::GetActiveSubIdx(int course_idx) {
     if (course_idx == EXPLORERS_IDX) return GetExplorersSubIdx();
     if (course_idx == YOUNG_INNOVATORS_IDX) return GetYoungInnovatorsSubIdx();
@@ -345,6 +358,77 @@ std::string WebSocketControlServer::GetActiveUnitSelection(int course_idx) {
         return GetFutureLeadersUnit(GetFutureLeadersSubIdx());
     }
     return GetUnitsForCourse(course_idx);
+}
+
+std::string WebSocketControlServer::ShiftActiveUnit(int delta) {
+    cJSON* root = cJSON_CreateObject();
+    auto finish = [&](bool ok) -> std::string {
+        cJSON_AddBoolToObject(root, "success", ok);
+        char* printed = cJSON_PrintUnformatted(root);
+        std::string out = printed ? printed : "{}";
+        if (printed) {
+            cJSON_free(printed);
+        }
+        cJSON_Delete(root);
+        return out;
+    };
+
+    int course_idx = GetPresetMacIdx();
+    if (course_idx < 1 || course_idx > 5) {
+        cJSON_AddStringToObject(root, "error",
+                                "Khóa hiện tại không có danh sách unit (chỉ Explorers/YI/FL/IELTS/TOEIC)");
+        return finish(false);
+    }
+
+    int sub_idx = GetActiveSubIdx(course_idx);
+    const OttoUnitList* list = GetOttoActiveUnitList(course_idx, sub_idx);
+    if (list == nullptr || list->unit_count <= 0) {
+        cJSON_AddStringToObject(root, "error", "Không có danh sách unit cho khóa này");
+        return finish(false);
+    }
+
+    std::string selected = GetActiveUnitSelection(course_idx);
+    int n = atoi(selected.c_str());
+    if (n < 1 || n > list->unit_count) {
+        n = 1;
+    }
+
+    int next = n + delta;
+    if (next < 1) {
+        cJSON_AddNumberToObject(root, "unit_index", n);
+        cJSON_AddStringToObject(root, "unit_name", list->units[n - 1]);
+        cJSON_AddStringToObject(root, "message", "Đã ở unit đầu tiên, không lùi thêm được");
+        return finish(false);
+    }
+    if (next > list->unit_count) {
+        cJSON_AddNumberToObject(root, "unit_index", n);
+        cJSON_AddStringToObject(root, "unit_name", list->units[n - 1]);
+        cJSON_AddStringToObject(root, "message", "Đã ở unit cuối, không tiến thêm được");
+        return finish(false);
+    }
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d", next);
+    if (course_idx == EXPLORERS_IDX) {
+        SaveExplorersUnit(sub_idx, buf);
+    } else if (course_idx == YOUNG_INNOVATORS_IDX) {
+        SaveYoungInnovatorsUnit(sub_idx, buf);
+    } else if (course_idx == FUTURE_LEADERS_IDX) {
+        SaveFutureLeadersUnit(sub_idx, buf);
+    } else {
+        SaveUnitsForCourse(course_idx, buf);
+    }
+
+    ESP_LOGI(TAG, "ShiftActiveUnit delta=%d course=%d sub=%d %d -> %d (%s)",
+             delta, course_idx, sub_idx, n, next, list->units[next - 1]);
+
+    cJSON_AddNumberToObject(root, "course_idx", course_idx);
+    cJSON_AddNumberToObject(root, "sub_idx", sub_idx);
+    cJSON_AddNumberToObject(root, "unit_index", next);
+    cJSON_AddStringToObject(root, "unit_name", list->units[next - 1]);
+    cJSON_AddStringToObject(root, "message",
+                            delta > 0 ? "Đã chuyển unit tiếp theo và lưu" : "Đã chuyển unit trước và lưu");
+    return finish(true);
 }
 
 std::string WebSocketControlServer::GetUnitsForCourse(int course_idx) {
@@ -378,17 +462,6 @@ static void SavePresetMacIdx(int idx) {
     nvs_handle_t nvs;
     if (nvs_open(WIFI_NVS_NS, NVS_READWRITE, &nvs) != ESP_OK) return;
     nvs_set_i32(nvs, NVS_KEY_PRESET_MAC, (int32_t)idx);
-    nvs_commit(nvs);
-    nvs_close(nvs);
-}
-
-static void SaveUnitsForCourse(int course_idx, const char* units) {
-    if (course_idx < 1 || course_idx > 5) return;
-    nvs_handle_t nvs;
-    if (nvs_open(OTTO_NVS_NS, NVS_READWRITE, &nvs) != ESP_OK) return;
-    char key[16];
-    snprintf(key, sizeof(key), "%s%d", NVS_KEY_UNITS_PREFIX, course_idx);
-    nvs_set_str(nvs, key, units);
     nvs_commit(nvs);
     nvs_close(nvs);
 }
@@ -966,6 +1039,112 @@ esp_err_t WebSocketControlServer::api_ota_upload_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::api_action_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 512) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    cJSON* action = cJSON_GetObjectItem(root, "action");
+    if (!action || !cJSON_IsString(action) || !action->valuestring || !action->valuestring[0]) {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Thiếu action\"}");
+        return ESP_OK;
+    }
+
+    std::string err = OttoWebControlAction(action->valuestring);
+    cJSON_Delete(root);
+    if (!err.empty()) {
+        cJSON* out = cJSON_CreateObject();
+        cJSON_AddBoolToObject(out, "success", false);
+        cJSON_AddStringToObject(out, "error", err.c_str());
+        char* printed = cJSON_PrintUnformatted(out);
+        cJSON_Delete(out);
+        httpd_resp_sendstr(req, printed ? printed : "{\"success\":false}");
+        if (printed) {
+            cJSON_free(printed);
+        }
+        return ESP_OK;
+    }
+
+    httpd_resp_sendstr(req, "{\"success\":true}");
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_unit_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 256) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    char* buf = (char*)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"OOM\"}");
+        return ESP_OK;
+    }
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, buf + received, total_len - received);
+        if (ret <= 0) {
+            free(buf);
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    buf[total_len] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    int delta = 0;
+    cJSON* d = cJSON_GetObjectItem(root, "delta");
+    if (d && cJSON_IsNumber(d)) {
+        delta = d->valueint;
+    }
+    cJSON_Delete(root);
+    if (delta != 1 && delta != -1) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"delta phải là 1 hoặc -1\"}");
+        return ESP_OK;
+    }
+
+    std::string json = WebSocketControlServer::ShiftActiveUnit(delta);
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
@@ -1051,6 +1230,22 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_action_post_uri = {
+        .uri = "/api/action",
+        .method = HTTP_POST,
+        .handler = api_action_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_unit_post_uri = {
+        .uri = "/api/unit",
+        .method = HTTP_POST,
+        .handler = api_unit_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
         httpd_register_uri_handler(server_handle_, &ws_uri);
         httpd_register_uri_handler(server_handle_, &page_uri);
@@ -1061,6 +1256,8 @@ bool WebSocketControlServer::Start(int port) {
         httpd_register_uri_handler(server_handle_, &api_ota_get_uri);
         httpd_register_uri_handler(server_handle_, &api_ota_post_uri);
         httpd_register_uri_handler(server_handle_, &api_ota_upload_uri);
+        httpd_register_uri_handler(server_handle_, &api_action_post_uri);
+        httpd_register_uri_handler(server_handle_, &api_unit_post_uri);
         ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d", port);
         return true;
     }
