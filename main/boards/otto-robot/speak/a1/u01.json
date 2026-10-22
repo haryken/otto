@@ -1,0 +1,238 @@
+{
+  "level": "a1",
+  "unit": "u01",
+  "theme": "animals",
+  "title_en": "Animals",
+  "title_vi": "Động vật",
+  "goal_vi": "Nhận biết 12 con vật và luyện nói 12 câu đơn giản với 6 con vật đã học.",
+  "cards": [
+    {
+      "id": "elephant",
+      "type": "word",
+      "en": "elephant",
+      "vi": "con voi",
+      "teacher": "Từ này là elephant, con voi. Con nhìn hình rồi nói elephant nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/elephant.jpg"
+    },
+    {
+      "id": "lion",
+      "type": "word",
+      "en": "lion",
+      "vi": "sư tử",
+      "teacher": "Từ này là lion, sư tử. Con nhìn hình rồi nói lion nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/lion.jpg"
+    },
+    {
+      "id": "tiger",
+      "type": "word",
+      "en": "tiger",
+      "vi": "hổ",
+      "teacher": "Từ này là tiger, hổ. Con nhìn hình rồi nói tiger nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/tiger.jpg"
+    },
+    {
+      "id": "monkey",
+      "type": "word",
+      "en": "monkey",
+      "vi": "khỉ",
+      "teacher": "Từ này là monkey, khỉ. Con nhìn hình rồi nói monkey nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/monkey.jpg"
+    },
+    {
+      "id": "giraffe",
+      "type": "word",
+      "en": "giraffe",
+      "vi": "hươu cao cổ",
+      "teacher": "Từ này là giraffe, hươu cao cổ. Con nhìn hình rồi nói giraffe nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/giraffe.jpg"
+    },
+    {
+      "id": "zebra",
+      "type": "word",
+      "en": "zebra",
+      "vi": "ngựa vằn",
+      "teacher": "Từ này là zebra, ngựa vằn. Con nhìn hình rồi nói zebra nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/zebra.jpg"
+    },
+    {
+      "id": "panda",
+      "type": "word",
+      "en": "panda",
+      "vi": "gấu trúc",
+      "teacher": "Từ này là panda, gấu trúc. Con nhìn hình rồi nói panda nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/panda.jpg"
+    },
+    {
+      "id": "penguin",
+      "type": "word",
+      "en": "penguin",
+      "vi": "chim cánh cụt",
+      "teacher": "Từ này là penguin, chim cánh cụt. Con nhìn hình rồi nói penguin nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/penguin.jpg"
+    },
+    {
+      "id": "dolphin",
+      "type": "word",
+      "en": "dolphin",
+      "vi": "cá heo",
+      "teacher": "Từ này là dolphin, cá heo. Con nhìn hình rồi nói dolphin nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/dolphin.jpg"
+    },
+    {
+      "id": "whale",
+      "type": "word",
+      "en": "whale",
+      "vi": "cá voi",
+      "teacher": "Từ này là whale, cá voi. Con nhìn hình rồi nói whale nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/whale.jpg"
+    },
+    {
+      "id": "shark",
+      "type": "word",
+      "en": "shark",
+      "vi": "cá mập",
+      "teacher": "Từ này là shark, cá mập. Con nhìn hình rồi nói shark nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/shark.jpg"
+    },
+    {
+      "id": "octopus",
+      "type": "word",
+      "en": "octopus",
+      "vi": "bạch tuộc",
+      "teacher": "Từ này là octopus, bạch tuộc. Con nhìn hình rồi nói octopus nhé.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/octopus.jpg"
+    },
+    {
+      "id": "this-is-an-elephant",
+      "type": "phrase",
+      "en": "This is an elephant.",
+      "vi": "Đây là con voi.",
+      "uses": [
+        "elephant"
+      ],
+      "teacher": "Giờ nói cả câu: This is an elephant.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-an-elephant.jpg"
+    },
+    {
+      "id": "i-like-elephants",
+      "type": "phrase",
+      "en": "I like elephants.",
+      "vi": "Con thích con voi.",
+      "uses": [
+        "elephant"
+      ],
+      "teacher": "Giờ nói cả câu: I like elephants.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-elephants.jpg"
+    },
+    {
+      "id": "this-is-a-lion",
+      "type": "phrase",
+      "en": "This is a lion.",
+      "vi": "Đây là sư tử.",
+      "uses": [
+        "lion"
+      ],
+      "teacher": "Giờ nói cả câu: This is a lion.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-a-lion.jpg"
+    },
+    {
+      "id": "i-like-lions",
+      "type": "phrase",
+      "en": "I like lions.",
+      "vi": "Con thích sư tử.",
+      "uses": [
+        "lion"
+      ],
+      "teacher": "Giờ nói cả câu: I like lions.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-lions.jpg"
+    },
+    {
+      "id": "this-is-a-tiger",
+      "type": "phrase",
+      "en": "This is a tiger.",
+      "vi": "Đây là hổ.",
+      "uses": [
+        "tiger"
+      ],
+      "teacher": "Giờ nói cả câu: This is a tiger.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-a-tiger.jpg"
+    },
+    {
+      "id": "i-like-tigers",
+      "type": "phrase",
+      "en": "I like tigers.",
+      "vi": "Con thích hổ.",
+      "uses": [
+        "tiger"
+      ],
+      "teacher": "Giờ nói cả câu: I like tigers.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-tigers.jpg"
+    },
+    {
+      "id": "this-is-a-monkey",
+      "type": "phrase",
+      "en": "This is a monkey.",
+      "vi": "Đây là khỉ.",
+      "uses": [
+        "monkey"
+      ],
+      "teacher": "Giờ nói cả câu: This is a monkey.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-a-monkey.jpg"
+    },
+    {
+      "id": "i-like-monkeys",
+      "type": "phrase",
+      "en": "I like monkeys.",
+      "vi": "Con thích khỉ.",
+      "uses": [
+        "monkey"
+      ],
+      "teacher": "Giờ nói cả câu: I like monkeys.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-monkeys.jpg"
+    },
+    {
+      "id": "this-is-a-giraffe",
+      "type": "phrase",
+      "en": "This is a giraffe.",
+      "vi": "Đây là hươu cao cổ.",
+      "uses": [
+        "giraffe"
+      ],
+      "teacher": "Giờ nói cả câu: This is a giraffe.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-a-giraffe.jpg"
+    },
+    {
+      "id": "i-like-giraffes",
+      "type": "phrase",
+      "en": "I like giraffes.",
+      "vi": "Con thích hươu cao cổ.",
+      "uses": [
+        "giraffe"
+      ],
+      "teacher": "Giờ nói cả câu: I like giraffes.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-giraffes.jpg"
+    },
+    {
+      "id": "this-is-a-zebra",
+      "type": "phrase",
+      "en": "This is a zebra.",
+      "vi": "Đây là ngựa vằn.",
+      "uses": [
+        "zebra"
+      ],
+      "teacher": "Giờ nói cả câu: This is a zebra.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/this-is-a-zebra.jpg"
+    },
+    {
+      "id": "i-like-zebras",
+      "type": "phrase",
+      "en": "I like zebras.",
+      "vi": "Con thích ngựa vằn.",
+      "uses": [
+        "zebra"
+      ],
+      "teacher": "Giờ nói cả câu: I like zebras.",
+      "image": "https://cdn.emun.vn/speak/a1/u01/i-like-zebras.jpg"
+    }
+  ]
+}

@@ -43,6 +43,8 @@ public:
     virtual void SetPowerSaveMode(bool on);
     virtual void ShowQrCode(const char* text) { (void)text; }
     virtual void HideQrCode() {}
+    /** Re-apply last chat/subtitle after web toggle. Default no-op. */
+    virtual void RefreshChatOverlay() {}
     virtual void SetupUI() { 
         setup_ui_called_ = true;
     }

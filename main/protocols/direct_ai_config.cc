@@ -1,5 +1,10 @@
 #include "direct_ai_config.h"
+#include "device_identity_presets.h"
 #include "settings.h"
+#include "sdkconfig.h"
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+#include "speak_lesson.h"
+#endif
 
 #include <atomic>
 #include <cctype>
@@ -133,6 +138,11 @@ DirectAiBackend DirectAiConfig::ParseBackend(const std::string& name) {
 }
 
 DirectAiBackend DirectAiConfig::LoadBackend() {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    if (SpeakLesson::Get().UsesNewIdentity()) {
+        return ParseBackend(SpeakLesson::Get().ActiveAiBackendName());
+    }
+#endif
     Settings settings(kNamespace, false);
     return ParseBackend(settings.GetString("backend"));
 }
@@ -140,10 +150,39 @@ DirectAiBackend DirectAiConfig::LoadBackend() {
 DirectAiConfig DirectAiConfig::Load() {
     Settings settings(kNamespace, false);
     DirectAiConfig cfg;
-    cfg.backend = ParseBackend(settings.GetString("backend"));
     cfg.language = settings.GetString("lang", "vi");
-    cfg.instructions = settings.GetString("instr");
     cfg.search = settings.GetBool("search", true);
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    if (SpeakLesson::Get().UsesNewIdentity()) {
+        auto& lesson = SpeakLesson::Get();
+        DirectAiBackend overlay = ParseBackend(lesson.ActiveAiBackendName());
+        if (overlay != DirectAiBackend::kOff) {
+            cfg.backend = overlay;
+            cfg.instructions = lesson.ActiveAiInstructions();
+            // Local teaching cards; googleSearch often 1011-quota-kills the first session.
+            cfg.search = false;
+            if (auto info = Info(cfg.backend)) {
+                cfg.key = lesson.ActiveAiKey();
+                std::string model = lesson.ActiveAiModel();
+                std::string voice = lesson.ActiveAiVoice();
+                cfg.model = model.empty() ? info->default_model : model;
+                cfg.voice = voice.empty() ? info->default_voice : voice;
+            }
+            return cfg;
+        }
+        // New-style Xiaozhi (teach / daily / custom) uses MQTT/WS, never World Edu Direct AI.
+        cfg.backend = DirectAiBackend::kOff;
+        return cfg;
+    }
+#endif
+    cfg.backend = ParseBackend(settings.GetString("backend"));
+    cfg.instructions = settings.GetString("instr");
+    if (ReadPresetMacIndexFromNvs() == kDailyChatPresetMacIndex) {
+        std::string daily = settings.GetString("instr_d");
+        if (!daily.empty()) {
+            cfg.instructions = std::move(daily);
+        }
+    }
     if (auto info = Info(cfg.backend)) {
         cfg.key = settings.GetString(NvsKey(*info, "key"));
         cfg.model = settings.GetString(NvsKey(*info, "model"), info->default_model);
@@ -164,6 +203,10 @@ uint32_t DirectAiConfig::Generation() {
     return g_generation.load();
 }
 
+void DirectAiConfig::BumpGeneration() {
+    g_generation.fetch_add(1);
+}
+
 std::string DirectAiConfig::ToWebJson() {
     Settings settings(kNamespace, false);
     cJSON* root = cJSON_CreateObject();
@@ -172,6 +215,7 @@ std::string DirectAiConfig::ToWebJson() {
     cJSON_AddStringToObject(root, "running", BackendName(RunningBackend()));
     cJSON_AddStringToObject(root, "language", settings.GetString("lang", "vi").c_str());
     cJSON_AddStringToObject(root, "instructions", settings.GetString("instr").c_str());
+    cJSON_AddStringToObject(root, "instructions_daily", settings.GetString("instr_d").c_str());
     cJSON_AddBoolToObject(root, "search", settings.GetBool("search", true));
     for (const auto& info : kBackends) {
         cJSON* item = cJSON_CreateObject();
@@ -205,7 +249,12 @@ bool DirectAiConfig::ApplyWebJson(const cJSON* root, bool* backend_changed, std:
     }
     auto instructions = cJSON_GetObjectItem(root, "instructions");
     if (cJSON_IsString(instructions) && strlen(instructions->valuestring) > kMaxInstructions) {
-        *error = "Lời dặn quá dài (tối đa khoảng 600 ký tự)";
+        *error = "Lời dặn World Edu quá dài (tối đa khoảng 600 ký tự)";
+        return false;
+    }
+    auto instructions_daily = cJSON_GetObjectItem(root, "instructions_daily");
+    if (cJSON_IsString(instructions_daily) && strlen(instructions_daily->valuestring) > kMaxInstructions) {
+        *error = "Lời dặn giao tiếp hằng ngày quá dài (tối đa khoảng 600 ký tự)";
         return false;
     }
 
@@ -223,6 +272,9 @@ bool DirectAiConfig::ApplyWebJson(const cJSON* root, bool* backend_changed, std:
         }
         if (cJSON_IsString(instructions)) {
             nvs.PutString("instr", Trim(instructions->valuestring));
+        }
+        if (cJSON_IsString(instructions_daily)) {
+            nvs.PutString("instr_d", Trim(instructions_daily->valuestring));
         }
         auto search = cJSON_GetObjectItem(root, "search");
         if (cJSON_IsBool(search)) {

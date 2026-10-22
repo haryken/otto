@@ -747,10 +747,19 @@ elseif(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BUILTIN_TEXT_FONT font_puhui_16_4)
     set(BUILTIN_ICON_FONT font_awesome_16_4)
     set(DEFAULT_EMOJI_COLLECTION otto-gif)
+    list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot)
     list(APPEND OTTO_EMBED_FILES
         ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/self_control.html
         ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/trim_guide.png
     )
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH= python ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/gen_speak_embed.py
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot
+    )
+    # JSON only — JPEGs stay on the LAN server (:8765). Embedding 24 jpgs overflowed ota_0 (0x3f0000).
+    file(GLOB_RECURSE SPEAK_EMBED_FILES
+        ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/speak/*.json)
+    list(APPEND OTTO_EMBED_FILES ${SPEAK_EMBED_FILES})
 elseif(CONFIG_BOARD_TYPE_ELECTRON_BOT)
     set(BOARD_TYPE "electron-bot")
     set(BUILTIN_TEXT_FONT font_puhui_20_4)

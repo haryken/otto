@@ -21,6 +21,7 @@
 #include "otto_movements.h"
 #include "otto_music_player.h"
 #include "otto_web_control.h"
+#include "speak_lesson.h"
 #include "power_manager.h"
 #include "sdkconfig.h"
 #include "settings.h"
@@ -1327,6 +1328,103 @@ public:
                            ". Đang đóng phiên cũ và kết nối lại (~vài giây), rồi nói chuyện tiếp.";
                 }
                 return std::string("Đang ở cấp độ ") + name + ", không cần đổi.";
+            });
+
+        mcp_server.AddTool(
+            "self.speak.status",
+            "Trang thai che do hoc noi. need_intro/phase=intro: CHI noi field say, chua day tu. "
+            "phase=done/finished: het chu de, CHI noi field say, hoi hoc lai, KHONG daily. "
+            "on=true va phase=card: goi card + show. on=false: tro chuyen binh thuong.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return SpeakLesson::Get().StatusJson();
+            });
+
+        mcp_server.AddTool(
+            "self.speak.start",
+            "Doi sang HOC TIENG ANH (the bai). Dung khi be noi 'hoc tieng Anh', 'bat dau hoc', "
+            "'hoc bang Gemini', 'hoc bang Xiaozhi'. Robot dong phien cu, ket noi tai khoan day hoc "
+            "va chao lai (giong doi cap do World Edu). Mac dinh A1 u01. Luot dau phase=intro: CHI noi field say. "
+            "backend: gemini | xiaozhi (trong = tai khoan day hoc da luu). Hoc lai: index=0.",
+            PropertyList({
+                Property("level", kPropertyTypeString, "a1"),
+                Property("unit", kPropertyTypeString, "u01"),
+                Property("index", kPropertyTypeInteger, -1),
+                Property("backend", kPropertyTypeString, "")
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                std::string level = properties["level"].value<std::string>();
+                std::string unit = properties["unit"].value<std::string>();
+                int index = properties["index"].value<int>();
+                std::string backend = properties["backend"].value<std::string>();
+                std::string out = SpeakLesson::Get().Start(level, unit, index, backend);
+                if (out.find("\"error\"") != std::string::npos) {
+                    return out;
+                }
+                return std::string("Đã sang học tiếng Anh. Đang đóng phiên cũ và kết nối lại (~vài giây), rồi chào như lúc đổi cấp độ. "
+                                   "Lượt sau gọi self.speak.status; phase=intro thì CHỈ nói field say.\n") + out;
+            });
+
+        mcp_server.AddTool(
+            "self.speak.card",
+            "Lay THE HOC HIEN TAI. phase=intro: CHI noi field say, dung, cho tre. "
+            "phase=card: roi self.speak.show, noi teacher. Khong bia tu ngoai the.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return SpeakLesson::Get().CurrentCardJson();
+            });
+
+        mcp_server.AddTool(
+            "self.speak.show",
+            "Hien anh the hien tai len mat robot. Goi sau card khi phase=card. Bo qua neu phase=intro.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return SpeakLesson::Get().ShowCurrent();
+            });
+
+        mcp_server.AddTool(
+            "self.speak.next",
+            "Tre da noi (bat ky gi cung tinh dung). Khen ngan, goi tool nay de sang the sau, roi show. "
+            "Neu phase=done: het chu de — CHI noi field say. Khong next/daily. "
+            "Hoc lai: start index=0 cung unit. Tiep: start index=0 unit=next_unit. Nghi: self.speak.off.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                return SpeakLesson::Get().Next();
+            });
+
+        mcp_server.AddTool(
+            "self.speak.off",
+            "Thoat hoc, DOI ve GIAO TIEP HANG NGAY. Dung khi be noi 've giao tiep', 'khong hoc nua', "
+            "'noi chuyen binh thuong'. Robot dong phien day hoc, ket noi tai khoan giao tiep da luu "
+            "va chao lai (giong doi cap do World Edu). Tien do the bai giu nguyen.",
+            PropertyList(),
+            [](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                std::string out = SpeakLesson::Get().Stop();
+                if (out.find("\"error\"") != std::string::npos) {
+                    return out;
+                }
+                return "Đã về giao tiếp hằng ngày. Đang đóng phiên cũ và kết nối lại (~vài giây), rồi chào như lúc đổi cấp độ.";
+            });
+
+        mcp_server.AddTool(
+            "self.speak.daily",
+            "Chuyen ngay sang GIAO TIEP HANG NGAY kieu moi. Dung khi be noi 'giao tiep hang ngay', "
+            "'doi sang Gemini giao tiep', 'doi sang Xiaozhi giao tiep'. Robot ket noi lai va chao. "
+            "backend: gemini | xiaozhi (trong = cau hinh giao tiep da luu).",
+            PropertyList({
+                Property("backend", kPropertyTypeString, "")
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                std::string out = SpeakLesson::Get().GoDaily(properties["backend"].value<std::string>());
+                if (out.find("\"error\"") != std::string::npos) {
+                    return out;
+                }
+                return "Đã về giao tiếp hằng ngày. Đang đóng phiên cũ và kết nối lại (~vài giây), rồi chào như lúc đổi cấp độ.";
             });
 
         mcp_server.AddTool(

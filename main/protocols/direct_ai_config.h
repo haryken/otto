@@ -21,7 +21,7 @@ struct DirectAiConfig {
     std::string model;
     std::string voice;
     std::string language;      // "vi", "en", ... or "auto"
-    std::string instructions;  // owner's extra instructions
+    std::string instructions;  // active extra instructions (daily vs World Edu, from NVS)
     bool search = true;        // web search tool (Grok / Gemini)
 
     /** Settings of the saved backend (key/model/voice of that backend). */
@@ -37,6 +37,7 @@ struct DirectAiConfig {
 
     /** Bumped on every save so an open session can pick up new settings. */
     static uint32_t Generation();
+    static void BumpGeneration();
 
     /** JSON for GET /api/ai. API keys are never returned, only masked hints. */
     static std::string ToWebJson();

@@ -1,0 +1,30 @@
+{
+  "track": "emun-speak",
+  "version": 1,
+  "levels": [
+    {
+      "id": "a1",
+      "cefr": "A1",
+      "title": "Beginner",
+      "units": 12
+    },
+    {
+      "id": "a2",
+      "cefr": "A2",
+      "title": "Elementary",
+      "units": 12
+    },
+    {
+      "id": "b1",
+      "cefr": "B1",
+      "title": "Intermediate",
+      "units": 12
+    },
+    {
+      "id": "b2",
+      "cefr": "B2",
+      "title": "Upper-intermediate",
+      "units": 12
+    }
+  ]
+}

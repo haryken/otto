@@ -7,6 +7,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #f4f6f8; color: #333; padding: 16px; }
+        body.robot-mode { padding: 16px; }
         .brand {
             display: flex;
             align-items: center;
@@ -51,8 +52,44 @@
         #custom_mac[readonly] { background: #f0f0f0; color: #555; }
         .mac-hint { color: #666; font-size: 0.85em; margin-top: 8px; line-height: 1.4; }
         .device-id { font-family: monospace; background: #eef6ff; padding: 8px 10px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-        .tab-btn { flex: 1; padding: 12px 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-weight: bold; cursor: pointer; color: #555; }
+        .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .tab-btn { flex: 1 1 calc(25% - 8px); padding: 10px 6px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-weight: bold; cursor: pointer; color: #555; font-size: 0.82em; }
+        body.english-new .tab-old,
+        body.english-new .tabs-learn-old { display: none !important; }
+        body.english-old .tab-new,
+        body.english-old .tabs-learn-new,
+        body.english-new .tabs-learn-new { display: none !important; }
+        body.english-old #app_parent,
+        body.english-old .app-nav { display: none !important; }
+        body.english-new.app-mode #app_robot { display: none !important; }
+        body.english-new.robot-mode #app_parent { display: none !important; }
+        .tabs-learn-new .tab-btn.active,
+        body.english-new .tabs-robot .tab-btn.active { background: #1aa7a1; border-color: #1aa7a1; color: #fff; }
+        .tabs-robot { margin-top: 4px; padding-top: 8px; border-top: 1px dashed #c5d0dc; }
+        body.app-mode .english-switch { margin: 0; }
+        .english-switch { position: sticky; top: 0; z-index: 70; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+        body.english-old .english-switch { background: linear-gradient(135deg,#d6eaf8,#eaf4fc); }
+        body.english-new .english-switch { background: linear-gradient(135deg,#c8f4ef,#e8fff8); }
+        body.robot-mode .english-switch { margin: -16px -16px 12px; }
+        .style-now { width: 100%; font-size: 0.82em; font-weight: 800; color: #234; }
+        body.english-old .style-now { color: #1f6fa8; }
+        body.english-new .style-now { color: #0a7; }
+        .style-tabs { display: flex; flex: 1; gap: 8px; }
+        .style-tab { flex: 1; padding: 12px 8px; border: 2px solid #ddd; border-radius: 10px; background: #fff; font-weight: 800; cursor: pointer; font-size: 0.92em; color: #445; }
+        .style-tab.old.active { border-color: #3498db; background: #3498db; color: #fff; }
+        .style-tab.new.active { border-color: #1aa7a1; background: #1aa7a1; color: #fff; }
+        .mode-spin { width: 54px; height: 54px; border: none; border-radius: 50%; background: conic-gradient(#3498db, #1aa7a1, #6d5efc, #3498db); box-shadow: 0 2px 10px rgba(0,0,0,0.16); cursor: pointer; flex-shrink: 0; position: relative; padding: 0; }
+        .mode-spin .disc { position: absolute; inset: 4px; border-radius: 50%; background: #fff; color: #1f2a37; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.72em; letter-spacing: 0.02em; transition: transform 0.55s ease; }
+        .mode-spin.spinning .disc { transform: rotate(360deg); }
+        .mode-spin.is-new .disc { background: #e8fff8; color: #0a7; }
+        .app-top-tools { display: flex; gap: 8px; align-items: center; }
+        body.english-old .robot-back { display: none !important; }
+        body.english-old { background: #e8eef5; }
+        body.english-new.app-mode { background: #eef7f6; }
+        body.english-new.app-mode .robot-back { display: none !important; }
+        body.english-new.robot-mode .robot-back { display: block !important; }
+        .mode-banner { padding: 10px 12px; border-radius: 8px; background: #eef2f6; margin-bottom: 12px; font-size: 0.92em; color: #445; line-height: 1.4; }
+        .mode-banner.on { background: #d4edda; color: #1e7e34; font-weight: bold; }
         .tab-btn.active { background: #3498db; color: #fff; border-color: #3498db; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
@@ -238,8 +275,8 @@
         .pose-seq li { padding: 8px 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 6px; font-family: monospace; font-size: 0.9em; display: flex; justify-content: space-between; gap: 8px; }
         .pose-seq li button { border: none; background: #e74c3c; color: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
         pre.pose-json { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 8px; font-size: 0.75em; overflow-x: auto; max-height: 160px; margin-top: 8px; }
-        input[type="password"], .ai-field select, .ai-field textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; font-family: inherit; background: #fff; }
-        .ai-field textarea { min-height: 90px; resize: vertical; }
+        input[type="password"], .ai-field select, .ai-field textarea, textarea.ai-field { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; font-family: inherit; background: #fff; }
+        .ai-field textarea, textarea.ai-field { min-height: 90px; resize: vertical; }
         .ai-field > label { font-weight: bold; margin-top: 12px; }
         .ai-key-row { display: flex; gap: 8px; align-items: center; }
         .ai-key-row input { flex: 1; }
@@ -274,13 +311,618 @@
         .modal-box.warn .modal-ok { background: #e67e22; box-shadow: 0 4px 12px rgba(230,126,34,0.35); }
         @keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
         @keyframes modal-pop { from { opacity: 0; transform: translateY(16px) scale(0.95); } to { opacity: 1; transform: none; } }
+        body.app-mode { padding: 0 0 108px; background: #f2f4f7; }
+        body.english-new.app-mode {
+            font-family: "Nunito", "Segoe UI Rounded", "Segoe UI", sans-serif;
+            background: #f3f5f8;
+        }
+        body.english-new.app-mode .english-switch {
+            position: sticky; top: 0; height: 0; overflow: visible; z-index: 55;
+            margin: 0 auto; padding: 0 76px 0 0; max-width: 430px; justify-content: flex-end;
+            background: transparent; box-shadow: none; pointer-events: none;
+        }
+        body.english-new.app-mode .mode-spin { pointer-events: auto; transform: translateY(10px); }
+        body.english-new.app-mode .style-now,
+        body.english-new.app-mode .style-tabs { display: none; }
+        body.english-new.app-mode .mode-spin { width: 36px; height: 36px; }
+        #app_parent { max-width: 430px; margin: 0 auto; min-height: 100vh; overflow-x: hidden; }
+        .app-top { padding: 10px 20px 4px; display: flex; justify-content: space-between; align-items: center; }
+        .hi-row { display: flex; align-items: center; gap: 12px; }
+        .hi-ava { width: 48px; height: 48px; border-radius: 50%; background: #e7f7f4; display: flex; align-items: center; justify-content: center; font-size: 1.55em; flex-shrink: 0; }
+        .emun-ico { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; display: block; }
+        .app-hi { font-size: 1.45em; font-weight: 800; color: #222831; letter-spacing: -0.02em; }
+        .app-hi small { display: block; font-size: 0.62em; font-weight: 700; color: #8b949e; margin-bottom: 1px; }
+        .app-gear { width: 44px; height: 44px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.06); font-size: 1.15em; cursor: pointer; }
+        .app-card { background: #fff; border-radius: 22px; padding: 16px 18px; margin: 0 16px 12px; box-shadow: 0 2px 12px rgba(31,42,55,0.05); }
+        .app-card h2 { font-size: 1.15em; margin: 0 0 10px; color: #222831; border: none; padding: 0; }
+        .sec-h { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 20px 8px; }
+        .sec-h h2 { margin: 0; font-size: 1.22em; color: #222831; border: none; padding: 0; }
+        .sec-h .link { border: none; background: none; color: #1aa7a1; font-weight: 800; font-size: 0.82em; cursor: pointer; }
+        .app-banner { display: flex; gap: 10px; align-items: center; border-radius: 24px; padding: 16px; margin: 10px 16px 12px; color: #fff; position: relative; overflow: hidden; }
+        .app-banner.ok { background: #3b9ea4; }
+        .app-banner.offline { background: #7d9a97; }
+        .app-banner h3 { margin: 0 0 4px; font-size: 1.12em; }
+        .app-banner p { margin: 0; font-size: 0.82em; opacity: 0.95; line-height: 1.35; }
+        .banner-bot { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .pill-btn { border: none; background: #fff; color: #1aa7a1; font-weight: 800; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: 0.85em; }
+        .pill-btn.pill-learn { background: #6a4dff; color: #fff; }
+        .banner-setup { position: absolute; top: 12px; right: 14px; background: transparent; border: none; color: #fff; font-weight: 800; cursor: pointer; font-size: 0.85em; }
+        .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 16px 8px; }
+        .stat-box { background: #fff; border-radius: 20px; padding: 16px; box-shadow: 0 2px 12px rgba(31,42,55,0.05); text-align: left; border: none; width: 100%; cursor: pointer; }
+        .stat-box b { display: block; font-size: 1.15em; color: #222831; }
+        .stat-box span { color: #8b949e; font-size: 0.82em; }
+        .app-nav { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(402px, calc(100% - 28px)); display: flex; background: #fff; border-radius: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); padding: 10px 4px 8px; z-index: 40; }
+        .app-nav button { flex: 1; border: none; background: none; padding: 4px 0; font-size: 0.62em; font-weight: 800; color: #c0c6ce; cursor: pointer; }
+        .app-card label { display: block; margin: 8px 0 4px; font-size: 0.85em; color: #556; font-weight: 700; }
+        .toggle-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-weight: 700; color: #1f2a37; font-size: 0.95em; }
+        .toggle-row input { width: 18px; height: 18px; flex-shrink: 0; }
+        .app-card .hint { margin-top: 8px; }
+        .app-card select, .app-card input[type="password"], .app-card input[type="text"] { width: 100%; padding: 10px; border: 1px solid #e4e8ee; border-radius: 12px; font-size: 1em; }
+        .ai-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 12px; }
+        .ai-pick.three { grid-template-columns: 1fr 1fr 1fr; }
+        .ai-pick label { margin: 0 !important; display: flex; flex-direction: column; gap: 4px; border: 2px solid #e4e8ee; border-radius: 16px; padding: 12px 10px; cursor: pointer; background: #fff; color: #222831; }
+        .ai-pick label.on { border-color: #6a4dff; background: #f4f0ff; }
+        .ai-pick label b { font-size: 1em; }
+        .ai-pick label small { color: #8b949e; font-weight: 600; font-size: 0.75em; line-height: 1.3; }
+        .ai-pick input { display: none; }
+        .ai-panel { display: none; }
+        .ai-panel.show { display: block; }
+        .speak-actions { display: flex; gap: 8px; margin: 0 16px 12px; }
+        .speak-actions .btn { margin: 0; flex: 1; width: auto; font-size: 0.95em; padding: 12px 8px; }
+        .app-nav button.active { color: #1aa7a1; }
+        .app-nav button span { display: block; font-size: 1.45em; margin-bottom: 2px; }
+        .app-panel { display: none; padding-bottom: 8px; }
+        .app-panel.active { display: block; }
+        .path-head { background: linear-gradient(180deg, #6b4dff 0%, #8a6bff 78%, #f3f5f8 78%); padding: 10px 0 20px; }
+        .path-chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 12px; scrollbar-width: none; -ms-overflow-style: none; }
+        .path-chips::-webkit-scrollbar { display: none; }
+        .path-chip { flex: 0 0 auto; border: none; border-radius: 16px; padding: 12px 14px; background: rgba(255,255,255,0.22); color: #fff; font-weight: 800; cursor: pointer; min-width: 108px; text-align: left; }
+        .path-chip small { display: block; font-size: 0.75em; opacity: 0.9; font-weight: 700; }
+        .path-chip.on { background: #fff; color: #3d2a8a; }
+        .now-learn { background: linear-gradient(135deg, #6a4dff, #8b6cff); color: #fff; border-radius: 22px; padding: 18px 16px; margin: 4px 16px 12px; display: flex; justify-content: space-between; align-items: center; border: none; width: calc(100% - 32px); text-align: left; cursor: pointer; }
+        .now-learn small { opacity: 0.9; font-size: 0.72em; font-weight: 800; letter-spacing: 0.02em; }
+        .now-learn strong { display: block; font-size: 1.45em; margin-top: 4px; }
+        .topic-row { display: flex; gap: 12px; align-items: center; background: #fff; border-radius: 22px; padding: 14px; margin: 0 16px 10px; border: none; width: calc(100% - 32px); text-align: left; cursor: pointer; box-shadow: 0 2px 10px rgba(31,42,55,0.04); }
+        .topic-row img { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; background: #f3f0ff; order: 2; }
+        .topic-row .t { flex: 1; order: 1; }
+        .topic-row .t b { display: block; color: #222831; font-size: 1.15em; }
+        .topic-row .t small { color: #8b949e; font-weight: 800; font-size: 0.72em; letter-spacing: 0.04em; }
+        .tag { font-size: 0.7em; font-weight: 800; color: #ff7a45; }
+        .tag.word { color: #1aa7a1; }
+        .tag.ask { color: #6d5efc; }
+        .menu-row { display: flex; gap: 12px; align-items: center; width: calc(100% - 32px); margin: 0 16px 10px; padding: 14px 16px; border: none; border-radius: 22px; background: #fff; text-align: left; cursor: pointer; box-shadow: 0 2px 10px rgba(31,42,55,0.04); }
+        .menu-ico { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25em; flex-shrink: 0; }
+        .menu-row b { display: block; color: #222831; font-size: 1.02em; }
+        .menu-row small { color: #8b949e; }
+        .chev { margin-left: auto; color: #c5cad1; font-size: 1.4em; font-weight: 400; }
+        .menu-row .chev { margin-left: auto; color: #c5cad1; font-size: 1.2em; }
+        .grp { padding: 6px 20px 4px; font-weight: 800; color: #222831; font-size: 1.05em; }
+        .page-title { text-align: center; font-size: 1.2em; font-weight: 800; padding: 8px 16px 12px; color: #222831; }
+        .tl { margin: 0 8px 0 16px; }
+        .tl-item { display: flex; gap: 12px; padding: 12px 16px 12px 0; align-items: flex-start; }
+        .tl-n { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #e6eaef; color: #222; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fff; position: relative; z-index: 1; }
+        .tl-item.done .tl-n { background: #e7fbf7; border-color: #1aa7a1; color: #0a7; }
+        .tl-item .tag { display: block; margin-bottom: 2px; }
+        .ach-row { display: flex; gap: 10px; padding: 0 16px 12px; }
+        .ach { flex: 1; text-align: center; }
+        .ach i { display: block; width: 72px; height: 72px; margin: 0 auto 6px; border-radius: 50%; background: #eceff3; font-style: normal; font-size: 2em; line-height: 72px; }
+        .ach span { font-size: 0.75em; color: #8b949e; font-weight: 700; }
+        .plus { width: 56px; height: 56px; border-radius: 50%; border: none; background: #fff; color: #1aa7a1; font-size: 1.6em; box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer; }
+        .ov { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 0 20px 12px; font-size: 0.92em; color: #444; }
+        .bank { margin: 0 16px 12px; border-radius: 24px; padding: 16px 18px; background: linear-gradient(180deg,#eef6ff,#ffffff); box-shadow: 0 2px 12px rgba(31,42,55,0.05); border: none; width: calc(100% - 32px); text-align: left; cursor: pointer; }
+        .bank b { font-size: 1.8em; color: #1aa7a1; }
+        .lesson { position: fixed; inset: 0; background: #111a; z-index: 80; display: none; align-items: flex-end; }
+        .lesson.show { display: flex; }
+        .lesson-box { background: #fff; width: 100%; max-height: 92vh; border-radius: 22px 22px 0 0; padding: 12px 16px 24px; overflow: auto; }
+        .lesson-box .btn { margin-top: 0; }
+        .lesson-box img { width: 100%; max-height: 52vh; object-fit: contain; border-radius: 16px; background: #f6f7fa; }
+        .lesson-en { font-size: 1.6em; font-weight: 800; text-align: center; margin: 10px 0 4px; }
+        .lesson-vi { text-align: center; color: #667; margin-bottom: 8px; }
+        .lesson-say { text-align: center; background: #f4fbfa; border-radius: 12px; padding: 10px; color: #1aa7a1; font-weight: 700; }
+        .lesson-nav { display: flex; gap: 8px; margin-top: 12px; }
+        .lesson-nav button { flex: 1; }
+        .robot-back { display: none; }
+        .done-dot { color: #1aa7a1; font-weight: 800; }
+        button.now-learn, button.topic-row, button.menu-row, button.stat-box, button.bank, button.prog-card {
+            font-family: inherit; appearance: none; -webkit-appearance: none;
+        }
+        .hi-meta { font-size: 0.72em; font-weight: 700; color: #8b949e; }
+        .prog-card { background: #eef3f8; border-radius: 18px; padding: 14px 16px; margin: 0 16px 8px; display: flex; justify-content: space-between; align-items: center; border: none; width: calc(100% - 32px); text-align: left; cursor: pointer; }
+        .prog-card b { display: block; color: #222831; }
+        .prog-card .hint { margin: 2px 0 0; }
+        .tl { position: relative; isolation: isolate; }
+        .tl::before { content: ""; position: absolute; left: 15px; top: 18px; bottom: 18px; width: 2px; background: #e8ecf1; z-index: 0; pointer-events: none; }
+        .tl-body { flex: 1; min-width: 0; }
+        .tl-min { color: #8b949e; font-size: 0.8em; font-weight: 700; white-space: nowrap; margin-left: 8px; }
+        .now-learn .illu { font-size: 2.6em; line-height: 1; }
+        .now-learn .illu img { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; background: #efe8ff; display: block; }
+        .path-chip .pct { display: block; font-size: 0.78em; opacity: 0.9; font-weight: 700; }
+        .unit-strip { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+        .unit-strip::-webkit-scrollbar { display: none; height: 0; }
+        .unit-pill { flex: 0 0 40px; height: 40px; border: none; border-radius: 12px; background: rgba(255,255,255,0.22); color: #fff; font-weight: 800; cursor: pointer; }
+        .unit-pill.on { background: #fff; color: #3d2a8a; }
+        .unit-nav { display: flex; gap: 8px; margin: 0 16px 12px; }
+        .unit-nav button { flex: 1; margin: 0; border: none; border-radius: 14px; padding: 10px 8px; font-weight: 800; cursor: pointer; background: #fff; color: #3d2a8a; box-shadow: 0 2px 8px rgba(31,42,55,0.05); }
+        .topic-row.current { outline: 2px solid #6a4dff; }
+        .ex-bar { margin: 0 16px 12px; }
+        .ex-bar-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+        .ex-bar-h small { display: block; font-weight: 800; font-size: 0.72em; color: #8b949e; letter-spacing: 0.03em; }
+        .ex-help { width: 26px; height: 26px; border: none; border-radius: 50%; background: #6a4dff; color: #fff; font-weight: 900; font-size: 15px; line-height: 1; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+        .ex-help:hover { background: #5438e0; }
+        .ex-btns { display: flex; gap: 6px; }
+        .ex-btns button { flex: 1; border: none; border-radius: 14px; padding: 10px 4px; font-weight: 800; font-size: 0.8em; background: #eef1f4; color: #445; cursor: pointer; font-family: inherit; }
+        .ex-btns button.on { background: #6a4dff; color: #fff; }
+        .ex-note { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: #f4f1ff; color: #3d2a8a; font-size: 0.82em; line-height: 1.45; font-weight: 600; }
+        .path-head .ex-bar { margin-bottom: 0; }
+        .path-head .ex-bar-h small { color: rgba(255,255,255,0.88); }
+        .path-head .ex-help { background: #fff; color: #3d2a8a; }
+        .path-head .ex-help:hover { background: #f3eeff; }
+        .path-head .ex-btns button { background: rgba(255,255,255,0.22); color: #fff; }
+        .path-head .ex-btns button.on { background: #fff; color: #3d2a8a; }
+        .path-head .ex-note { background: rgba(255,255,255,0.18); color: #fff; }
+        .ex-help-list { list-style: none; margin: 0; padding: 0; }
+        .ex-help-list li { background: #f6f8fa; border-radius: 12px; padding: 12px 14px; margin: 8px 0; border: 2px solid transparent; }
+        .ex-help-list li.on { background: #f4f1ff; border-color: #6a4dff; }
+        .ex-help-list b { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #2c3e50; margin-bottom: 4px; }
+        .ex-help-list .now { display: none; font-size: 0.7em; font-weight: 900; color: #6a4dff; letter-spacing: 0.04em; }
+        .ex-help-list li.on .now { display: inline; }
+        .ex-help-list span { display: block; color: #555; font-size: 0.92em; line-height: 1.45; }
+        .ex-help-list em { display: none; margin-top: 8px; color: #3d2a8a; font-style: normal; font-size: 0.88em; line-height: 1.45; font-weight: 600; }
+        .ex-help-list li.on em { display: block; }
+        .setup-help-link { border: none; background: none; color: #6a4dff; font-weight: 800; font-size: 0.85em; cursor: pointer; padding: 0; font-family: inherit; }
+        #explain_pick_note { margin-top: 10px; }
+        .bot-note { display: flex; gap: 10px; align-items: center; margin: 8px 16px 16px; }
+        .bot-note .bubble { background: #fff; border-radius: 16px; padding: 12px 14px; color: #445; font-size: 0.9em; box-shadow: 0 2px 10px rgba(31,42,55,0.05); }
+        .rank-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 0 16px 14px; }
+        .rank-3 .stat-box { text-align: center; }
+        .rank-3 .stat-box b { font-size: 1.45em; }
+        .kv { background: #fff; border-radius: 22px; margin: 0 16px 12px; padding: 4px 18px; box-shadow: 0 2px 12px rgba(31,42,55,0.05); }
+        .kv-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #eef1f4; font-weight: 700; color: #222; }
+        .kv-row:last-child { border-bottom: none; }
+        .kv-row span { color: #1aa7a1; }
+        .week { display: flex; align-items: flex-end; gap: 8px; height: 92px; margin: 8px 0 12px; }
+        .week i { flex: 1; display: block; background: #d7f3f0; border-radius: 10px 10px 4px 4px; min-height: 8px; }
+        .week i.on { background: #1aa7a1; }
+        .week-lbl { display: flex; gap: 8px; color: #8b949e; font-size: 0.75em; font-weight: 700; }
+        .week-lbl span { flex: 1; text-align: center; }
+        .share-btn { width: 100%; border: none; background: #1aa7a1; color: #fff; font-weight: 800; border-radius: 999px; padding: 14px; cursor: pointer; }
+        .mile { display: flex; gap: 12px; padding: 12px 16px 12px 20px; }
+        .mile-n { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #dce3ea; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #667; background: #fff; flex-shrink: 0; }
+        .mile.on .mile-n { border-color: #1aa7a1; color: #1aa7a1; background: #e7fbf7; }
+        .mile b { display: block; color: #222831; }
+        .mile p { margin: 4px 0 0; color: #667; font-size: 0.88em; }
+        .pill-tag { display: inline-block; margin-left: 6px; font-size: 0.72em; font-weight: 800; color: #1aa7a1; background: #e7fbf7; border-radius: 999px; padding: 2px 8px; }
+        .hobby { padding: 0 16px 14px; }
+        .hobby label { display: block; margin: 8px 0 4px; font-weight: 700; color: #556; font-size: 0.85em; }
+        .hobby h3 { font-size: 0.95em; margin: 10px 0 8px; }
+        .hobby .count { float: right; background: #e7fbf7; color: #1aa7a1; border-radius: 999px; padding: 2px 8px; font-size: 0.8em; }
+        .hobby input { width: 100%; padding: 10px; border: 1px solid #e4e8ee; border-radius: 12px; margin: 0 0 8px; box-sizing: border-box; font: inherit; }
+        .pf-row { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 10px; }
+        .setup-back { border: none; background: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 1.2em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .app-tools-host > .tab-panel { display: block !important; }
+        .app-tools-host .card {
+            background: #fff;
+            border-radius: 22px;
+            box-shadow: 0 2px 12px rgba(31,42,55,0.05);
+            margin: 0 16px 12px;
+        }
+        .app-tools-host .card h2 { border: none; padding: 0; color: #222831; }
     </style>
 </head>
-<body>
-    <header class="brand">
-        <h1>Cài đặt robot Emun</h1>
-    </header>
+<body class="robot-mode english-old">
     <div id="toast" class="toast"></div>
+    <div id="english_switch" class="english-switch">
+        <button type="button" class="mode-spin" id="mode_spin" onclick="toggleEnglishStyle()" title="Đổi tiếng Anh cũ / mới">
+            <span class="disc" id="mode_spin_disc">CŨ</span>
+        </button>
+        <div class="style-tabs">
+            <button type="button" class="style-tab old active" id="style_tab_old" onclick="setEnglishStyle('old')">Tiếng Anh cũ</button>
+            <button type="button" class="style-tab new" id="style_tab_new" onclick="setEnglishStyle('new')">Tiếng Anh mới</button>
+        </div>
+        <div class="style-now" id="style_now">Đang xem giao diện cũ: World Edu</div>
+    </div>
+    <!-- App tiếng Anh mới (sản phẩm chính). World Edu ở #app_robot, xóa được sau này. -->
+    <div id="app_parent" hidden>
+        <div id="app_home" class="app-panel active">
+            <div class="app-top">
+                <div class="hi-row">
+                    <div class="hi-ava">🧒</div>
+                    <div class="app-hi"><small>Xin chào</small><span id="app_hello_name">bạn nhỏ</span><div class="hi-meta" id="app_hello_age"></div></div>
+                </div>
+                <button type="button" class="app-gear" onclick="switchApp('tools')" title="Cài đặt robot">⚙️</button>
+            </div>
+            <div class="app-banner ok">
+                <button type="button" class="banner-setup" onclick="switchApp('setup')">Cài đặt ⚙</button>
+                <div style="flex:1;min-width:0">
+                    <h3 id="app_conn_title">Đã kết nối Emun</h3>
+                    <p id="app_conn_sub">Hi Jason để nói chuyện. Bấm học khi muốn dẫn thẻ.</p>
+                    <div class="banner-bot">
+                        <button type="button" class="pill-btn" onclick="goDailyChat()">Giao tiếp</button>
+                        <button type="button" class="pill-btn pill-learn" onclick="goLearnEnglish()">Bắt đầu học</button>
+                    </div>
+                </div>
+                <img class="emun-ico" src="/trim_guide.png" alt="Emun" width="40" height="40">
+            </div>
+            <button type="button" class="now-learn home-learn" onclick="goLearnEnglish()">
+                <div>
+                    <small id="home_level">CON ĐANG HỌC · A1</small>
+                    <strong id="home_theme">Animals</strong>
+                </div>
+                <div class="illu">🦒</div>
+            </button>
+            <div class="ex-bar">
+                <div class="ex-bar-h">
+                    <small>MỨC GIẢNG BÀI</small>
+                    <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
+                </div>
+                <div class="ex-btns">
+                    <button type="button" data-ex="off" onclick="saveExplainLevel('off')">Chỉ nói</button>
+                    <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
+                    <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
+                </div>
+                <p class="ex-note" data-ex-note></p>
+            </div>
+            <button type="button" class="bank" onclick="switchApp('rank')">
+                <small style="color:#8b949e;font-weight:800">NGÂN HÀNG PHẢN XẠ</small>
+                <div><b id="stat_minutes">0</b> <span style="color:#8b949e">thẻ đã nói</span></div>
+                <p class="hint" style="margin-top:6px">Xem tích luỹ hôm nay →</p>
+            </button>
+            <div class="sec-h"><h2>Báo cáo hôm nay</h2><button type="button" class="link" onclick="switchApp('rank')">CHI TIẾT</button></div>
+            <div class="stat-row">
+                <button type="button" class="stat-box" onclick="switchApp('path')"><b id="stat_words">0</b><span>từ đã nói</span></button>
+                <button type="button" class="stat-box" onclick="switchApp('path')"><b id="stat_phrases">0</b><span>câu hoàn chỉnh</span></button>
+            </div>
+            <div class="sec-h"><h2>Hoạt động hôm nay</h2><span class="link" id="today_count">0/0</span></div>
+            <button type="button" class="prog-card" onclick="goLearnEnglish()">
+                <div>
+                    <b id="now_unit_title">Chương trình học A1</b>
+                    <p class="hint" id="now_unit_goal">Thiết lập chương trình học mỗi ngày</p>
+                </div>
+                <span class="chev">›</span>
+            </button>
+            <div class="tl" id="today_list"></div>
+        </div>
+
+        <div id="app_path" class="app-panel">
+            <div class="path-head">
+                <div class="path-chips" id="a1_unit_chips">
+                    <button type="button" class="path-chip on" id="track_a1" onclick="selectPathTrack('a1')"><small>GIAO TIẾP</small>A1 Beginner<span class="pct" id="track_a1_pct">0%</span></button>
+                    <button type="button" class="path-chip" id="track_help" onclick="selectPathTrack('help')"><small>BỔ TRỢ</small>Hoạt động<span class="pct">Chọn dạng</span></button>
+                    <button type="button" class="path-chip" id="track_stem" onclick="selectPathTrack('stem')"><small>STEM</small>Sắp có<span class="pct">0%</span></button>
+                </div>
+                <div class="unit-strip" id="unit_strip"></div>
+                <button type="button" class="now-learn" onclick="startSpeak(0)">
+                    <div>
+                        <small id="path_level">CON ĐANG HỌC · A1</small>
+                        <strong id="path_theme">Animals</strong>
+                    </div>
+                    <div class="illu">🦒</div>
+                </button>
+                <div class="ex-bar">
+                    <div class="ex-bar-h">
+                        <small>MỨC GIẢNG BÀI</small>
+                        <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
+                    </div>
+                    <div class="ex-btns">
+                        <button type="button" data-ex="off" onclick="saveExplainLevel('off')">Chỉ nói</button>
+                        <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
+                        <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
+                    </div>
+                    <p class="ex-note" data-ex-note></p>
+                </div>
+            </div>
+            <div id="path_cards"></div>
+        </div>
+
+        <div id="app_buddy" class="app-panel">
+            <div class="app-top">
+                <div class="app-hi">Buddy<br><small style="font-weight:700;color:#8b949e">Người bạn cùng bé vui học mỗi ngày</small></div>
+                <img class="emun-ico" src="/trim_guide.png" alt="Emun" width="40" height="40">
+            </div>
+            <div class="grp">Trò chuyện</div>
+            <button type="button" class="menu-row" onclick="goDailyChat()"><span class="menu-ico" style="background:#e8f7ff">💬</span><span><b>Trò chuyện theo chủ đề</b><small>Giao tiếp hằng ngày với robot</small></span><span class="chev">›</span></button>
+            <button type="button" class="menu-row" onclick="startSpeak()"><span class="menu-ico" style="background:#fff4d6">🎭</span><span><b>Nhập vai tình huống</b><small>Học thẻ + hỏi đáp trên robot</small></span><span class="chev">›</span></button>
+            <button type="button" class="menu-row" onclick="openQuiz()"><span class="menu-ico" style="background:#e8f0ff">🏆</span><span><b>Thử thách đố vui</b><small>Nhìn hình, đoán từ</small></span><span class="chev">›</span></button>
+            <div class="grp">Giải trí</div>
+            <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#ffe8f2">🎵</span><span><b>Bài hát</b><small>Nhảy / nhạc trên robot</small></span><span class="chev">›</span></button>
+            <button type="button" class="menu-row" onclick="openLesson(0)"><span class="menu-ico" style="background:#e7fbf7">📖</span><span><b>Truyện thẻ</b><small>Lật thẻ bài trên điện thoại</small></span><span class="chev">›</span></button>
+        </div>
+
+        <div id="app_help" class="app-panel">
+            <div class="page-title">Các dạng hoạt động</div>
+            <button type="button" class="menu-row" onclick="openLesson(0)"><span class="menu-ico" style="background:#ffe8ee">📷</span><span><b>Xem thẻ bài học</b><small>Lật thẻ, không cần chờ robot</small></span></button>
+            <button type="button" class="menu-row" onclick="startSpeak()"><span class="menu-ico" style="background:#fff4d6">⭐</span><span><b>Học từ vựng A1</b><small>36 unit, ảnh từ máy :8765</small></span></button>
+            <button type="button" class="menu-row" onclick="switchApp('home')"><span class="menu-ico" style="background:#e8f0ff">⏰</span><span><b>Hoạt động hôm nay</b><small>Lịch trình nói mỗi ngày</small></span></button>
+            <button type="button" class="menu-row" onclick="switchApp('setup')"><span class="menu-ico" style="background:#efe8ff">🔊</span><span><b>Bổ trợ phát âm</b><small>Phụ đề robot / bé nói</small></span></button>
+            <button type="button" class="menu-row" onclick="openQuiz()"><span class="menu-ico" style="background:#e8fff4">🎮</span><span><b>Kho trò chơi</b><small>Đố vui nhìn hình đoán từ</small></span></button>
+            <button type="button" class="menu-row" onclick="switchApp('rank')"><span class="menu-ico" style="background:#fff8d6">🎁</span><span><b>Nhiệm vụ có thưởng</b><small>Mốc 5 / 15 / 30 giờ nói</small></span></button>
+            <div class="bot-note"><img class="emun-ico" src="/trim_guide.png" alt="Emun" width="40" height="40"><div class="bubble">Robot đang mở thêm hoạt động mới — bố mẹ đón chờ nhé!</div></div>
+        </div>
+
+        <div id="app_rank" class="app-panel">
+            <div class="app-top">
+                <button type="button" class="setup-back" onclick="switchApp('home')">‹</button>
+                <div class="app-hi" style="font-size:1.15em">Tích luỹ</div>
+                <button type="button" class="app-gear" onclick="switchApp('setup')">?</button>
+            </div>
+            <div class="rank-3">
+                <div class="stat-box"><b id="rank_turns">0</b><span>lượt mở miệng</span></div>
+                <div class="stat-box"><b id="rank_words">0</b><span>từ đã nói</span></div>
+                <div class="stat-box"><b id="rank_phrases">0</b><span>câu hoàn chỉnh</span></div>
+            </div>
+            <div class="app-card">
+                <h2>Tích luỹ tuần qua</h2>
+                <div style="font-size:1.4em;font-weight:800;color:#222" id="week_minutes">0 phút</div>
+                <div class="week" id="week_bars"></div>
+                <div class="week-lbl"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div>
+                <button type="button" class="share-btn" style="margin-top:12px" onclick="showToast('Đã chép thành tích hôm nay')">CHIA SẺ THÀNH TÍCH</button>
+            </div>
+            <div class="sec-h"><h2>Tích luỹ hôm nay</h2></div>
+            <div class="kv">
+                <div class="kv-row">Lượt mở miệng <span id="today_turns">+0 lượt</span></div>
+                <div class="kv-row">Từ đã nói <span id="today_words">+0 từ</span></div>
+                <div class="kv-row">Câu hoàn chỉnh <span id="today_phrases">+0 câu</span></div>
+            </div>
+            <div class="sec-h"><h2>Các mốc phản xạ</h2></div>
+            <div id="mile_list"></div>
+        </div>
+
+        <div id="app_profile" class="app-panel">
+            <div class="sec-h"><h2>Tổng quan</h2></div>
+            <div class="ov">
+                <div>🔥 <b id="ov_streak">1</b> ngày học liên tiếp</div>
+                <div>❤️ <b id="ov_buddy">0</b> ngày làm bạn</div>
+                <div>🌍 A1 Beginner</div>
+                <div>💎 <b id="ach_cards">0</b> thẻ đã học</div>
+            </div>
+            <div class="sec-h"><h2>Thành tựu</h2><span class="link" id="ach_level">Bạn mới</span></div>
+            <div class="ach-row">
+                <div class="ach"><i>🐣</i><span>Bạn mới</span></div>
+                <div class="ach"><i>🙂</i><span>Bạn quen</span></div>
+                <div class="ach"><i>🏅</i><span>Bạn thân</span></div>
+            </div>
+            <div class="sec-h"><h2>Hồ sơ học viên</h2><span class="link">Tuỳ chọn</span></div>
+            <div class="hobby">
+                <p class="hint">Để trống cũng được. Điền để robot gọi đúng tên và tuổi khi học / giao tiếp.</p>
+                <label>Tên học viên</label>
+                <input type="text" id="profile_student_name" placeholder="Ví dụ: Minh" maxlength="40" autocomplete="name">
+                <div class="pf-row">
+                    <div>
+                        <label>Ngày sinh</label>
+                        <input type="date" id="profile_dob" onchange="onProfileDobChange()">
+                    </div>
+                    <div>
+                        <label>Tuổi</label>
+                        <input type="number" id="profile_age" placeholder="Để trống" min="1" max="17" inputmode="numeric">
+                    </div>
+                </div>
+                <h3>Sở thích <span class="count" id="like_count">0/8</span></h3>
+                <div id="like_chips"></div>
+                <input type="text" id="profile_likes" placeholder="hoạt hình, bóng đá, lego">
+                <p id="profile_name" class="hint" hidden></p>
+                <button type="button" class="btn btn-save" onclick="saveSpeakProfile()">Lưu hồ sơ</button>
+            </div>
+        </div>
+
+        <div id="app_setup" class="app-panel">
+            <div class="app-top">
+                <button type="button" class="setup-back" onclick="switchApp('home')">‹</button>
+                <div class="app-hi" style="font-size:1.15em">Cài đặt học</div>
+                <button type="button" class="app-gear" onclick="switchApp('tools')">⚙️</button>
+            </div>
+            <div class="app-card">
+                <h2>Địa chỉ bài học</h2>
+                <input type="text" id="speak_base" placeholder="http://192.168.100.161:8765">
+                <button type="button" class="btn btn-save" onclick="saveSpeakBase()">Lưu địa chỉ</button>
+                <p class="hint">Máy chạy python :8765, thư mục có folder speak/.</p>
+            </div>
+            <div class="app-card">
+                <h2>Khi học bài</h2>
+                <p class="hint">Chọn <b>một</b> nhà cung cấp. Xiaozhi dùng MAC trên xiaozhi.me. Gemini dùng API key Google. Hai cái không dùng chung.</p>
+                <p><b id="speak_unit_line">A1 · Animals</b></p>
+                <p class="hint" id="speak_unit_goal"></p>
+                <div class="ai-pick" id="speak_ai_pick">
+                    <label data-for="xiaozhi">
+                        <input type="radio" name="speak_ai_backend" value="xiaozhi" checked onchange="toggleSpeakAiFields()">
+                        <b>Xiaozhi</b>
+                        <small>MAC + agent xiaozhi.me</small>
+                    </label>
+                    <label data-for="gemini">
+                        <input type="radio" name="speak_ai_backend" value="gemini" onchange="toggleSpeakAiFields()">
+                        <b>Gemini</b>
+                        <small>API key Google, nói thẳng</small>
+                    </label>
+                </div>
+                <div id="speak_xiaozhi_fields" class="ai-panel">
+                    <label>MAC ID dạy học</label>
+                    <input type="text" id="speak_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+                    <label>Client ID</label>
+                    <input type="text" id="speak_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
+                    <p class="hint">Không hiện ô Gemini khi chọn Xiaozhi.</p>
+                </div>
+                <div id="speak_gemini_fields" class="ai-panel">
+                    <label>Gemini API key dạy học</label>
+                    <input type="password" id="speak_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
+                    <p class="hint" id="speak_key_hint"></p>
+                    <label>Model</label>
+                    <input type="text" id="speak_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
+                    <label>Giọng</label>
+                    <select id="speak_ai_voice">
+                        <option value="Kore">Kore</option>
+                        <option value="Puck">Puck</option>
+                        <option value="Zephyr">Zephyr</option>
+                        <option value="Aoede">Aoede</option>
+                        <option value="Leda">Leda</option>
+                        <option value="Charon">Charon</option>
+                    </select>
+                    <p class="hint">Không cần MAC Xiaozhi khi học bằng Gemini.</p>
+                </div>
+                <button type="button" class="btn btn-save" id="btn_save_speak_ai" onclick="saveSpeakIdentity()">Lưu nhà cung cấp học</button>
+            </div>
+            <div class="app-card">
+                <h2>Mức giải thích khi học <button type="button" class="setup-help-link" onclick="showExplainHelp()">Tìm hiểu thêm</button></h2>
+                <p class="hint">Chọn mức này trước khi học. Robot chỉ gửi đúng phần giải thích đã chọn cho AI.</p>
+                <div class="ai-pick three" id="explain_pick">
+                    <label data-for="off">
+                        <input type="radio" name="explain_level" value="off" checked onchange="saveExplainLevel()">
+                        <b>Chỉ nói</b>
+                        <small>không giảng nghĩa</small>
+                    </label>
+                    <label data-for="basic">
+                        <input type="radio" name="explain_level" value="basic" onchange="saveExplainLevel()">
+                        <b>Cơ bản</b>
+                        <small>nghĩa ngắn VN + EN</small>
+                    </label>
+                    <label data-for="detailed">
+                        <input type="radio" name="explain_level" value="detailed" onchange="saveExplainLevel()">
+                        <b>Chi tiết</b>
+                        <small>nghĩa + ví dụ + cách dùng</small>
+                    </label>
+                </div>
+                <p class="ex-note" id="explain_pick_note" data-ex-note></p>
+            </div>
+            <div class="app-card">
+                <h2>Màn hình khi học</h2>
+                <label class="toggle-row"><input type="checkbox" id="sub_robot" onchange="saveSpeakSubtitles()"> Phụ đề robot</label>
+                <label class="toggle-row"><input type="checkbox" id="sub_stt" onchange="saveSpeakSubtitles()"> Phụ đề bé nói</label>
+            </div>
+            <div class="app-card">
+                <h2>Khi giao tiếp hằng ngày</h2>
+                <p class="hint">Tách riêng với bài học. Xiaozhi dùng đúng pool 20 MAC của giao tiếp cũ, random MAC + Client-Id mỗi lần mở (bật máy, hết bài, bấm Giao tiếp).</p>
+                <div class="ai-pick" id="daily_ai_pick">
+                    <label data-for="xiaozhi">
+                        <input type="radio" name="daily_ai_backend" value="xiaozhi" checked onchange="toggleDailyAiFields()">
+                        <b>Xiaozhi</b>
+                        <small>20 MAC sẵn, random mỗi lần mở</small>
+                    </label>
+                    <label data-for="gemini">
+                        <input type="radio" name="daily_ai_backend" value="gemini" onchange="toggleDailyAiFields()">
+                        <b>Gemini</b>
+                        <small>API key giao tiếp riêng</small>
+                    </label>
+                </div>
+                <div id="ndaily_xiaozhi_fields" class="ai-panel">
+                    <p class="hint">Không cần dán MAC. Robot tự lấy một Device-Id trong 20 MAC giao tiếp cũ và tạo Client-Id mới.</p>
+                    <input type="hidden" id="ndaily_mac" value="">
+                    <input type="hidden" id="ndaily_client_id_input" value="">
+                </div>
+                <div id="ndaily_gemini_fields" class="ai-panel">
+                    <label>Gemini API key giao tiếp</label>
+                    <input type="password" id="ndaily_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
+                    <p class="hint" id="ndaily_key_hint"></p>
+                    <label>Model</label>
+                    <input type="text" id="ndaily_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
+                    <label>Giọng</label>
+                    <select id="ndaily_ai_voice">
+                        <option value="Kore">Kore</option>
+                        <option value="Puck">Puck</option>
+                        <option value="Zephyr">Zephyr</option>
+                        <option value="Aoede">Aoede</option>
+                        <option value="Leda">Leda</option>
+                        <option value="Charon">Charon</option>
+                    </select>
+                </div>
+                <div class="device-id" id="ndaily_device_id">Device-Id: …</div>
+                <p class="mac-hint" id="ndaily_client_id">Client-Id: …</p>
+                <button type="button" class="btn btn-save" id="btn_activate_ndaily" onclick="saveDailyIdentity()">Lưu nhà cung cấp giao tiếp</button>
+            </div>
+            <div class="app-card">
+                <h2>Xiaozhi tự cấu hình</h2>
+                <label>MAC ID</label>
+                <input type="text" id="ncustom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+                <label>Client ID</label>
+                <input type="text" id="ncustom_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
+                <div class="device-id" id="ncustom_device_id">Device-Id đang dùng: …</div>
+                <button type="button" class="btn btn-save" onclick="saveNewCustom()">💾 Lưu và bật</button>
+            </div>
+            <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#e8f7ff">🎮</span><span><b>Điều khiển robot</b><small>Đi / nhạc / servo</small></span><span class="chev">›</span></button>
+            <button type="button" class="menu-row" onclick="switchApp('ota')"><span class="menu-ico" style="background:#fff4d6">🔄</span><span><b>Cập nhật firmware</b><small>OTA</small></span><span class="chev">›</span></button>
+        </div>
+
+        <div id="app_control" class="app-panel">
+            <div class="app-top">
+                <button type="button" class="setup-back" onclick="switchApp('setup')">‹</button>
+                <div class="app-hi" style="font-size:1.15em">Điều khiển robot</div>
+                <span style="width:40px"></span>
+            </div>
+            <p class="hint" style="padding:0 20px 8px">Đi, nhảy, nhạc — cùng giao diện app mới.</p>
+            <div id="app_control_host" class="app-tools-host"></div>
+        </div>
+        <div id="app_ota" class="app-panel">
+            <div class="app-top">
+                <button type="button" class="setup-back" onclick="switchApp('setup')">‹</button>
+                <div class="app-hi" style="font-size:1.15em">Cập nhật firmware</div>
+                <span style="width:40px"></span>
+            </div>
+            <p class="hint" style="padding:0 20px 8px">OTA trong app mới, không nhảy sang trang máy tính.</p>
+            <div id="app_ota_host" class="app-tools-host"></div>
+        </div>
+        <div id="app_tools" class="app-panel">
+            <div class="app-top">
+                <button type="button" class="setup-back" onclick="switchApp('home')">‹</button>
+                <div class="app-hi" style="font-size:1.15em">Cài đặt robot</div>
+                <span style="width:40px"></span>
+            </div>
+            <div id="app_tools_host" class="app-tools-host"></div>
+        </div>
+
+        <nav class="app-nav">
+            <button type="button" class="active" id="nav_home" onclick="switchApp('home')"><span>🏠</span>Trang chủ</button>
+            <button type="button" id="nav_path" onclick="switchApp('path')"><span>🎒</span>Lộ trình</button>
+            <button type="button" id="nav_buddy" onclick="switchApp('buddy')"><span>🧸</span>Buddy</button>
+            <button type="button" id="nav_help" onclick="switchApp('help')"><span>⏰</span>Bổ trợ</button>
+            <button type="button" id="nav_rank" onclick="switchApp('rank')"><span>📊</span>Xếp hạng</button>
+            <button type="button" id="nav_profile" onclick="switchApp('profile')"><span>👤</span>Hồ sơ</button>
+        </nav>
+    </div>
+
+    <div id="lesson" class="lesson" onclick="if(event.target.id==='lesson')closeLesson()">
+        <div class="lesson-box">
+            <button type="button" class="btn" onclick="closeLesson()" style="background:#eef1f4;color:#445;margin:0 0 8px">Đóng</button>
+            <img id="lesson_img" alt="">
+            <div class="lesson-en" id="lesson_en"></div>
+            <div class="lesson-vi" id="lesson_vi"></div>
+            <div class="lesson-say" id="lesson_say"></div>
+            <p class="hint" style="text-align:center;margin-top:8px">Nói vào mic robot = đúng. Hoặc bấm Đúng rồi trên điện thoại.</p>
+            <div class="lesson-nav">
+                <button type="button" class="btn" style="background:#eef1f4;color:#445" onclick="lessonDelta(-1)">⬅️ Trước</button>
+                <button type="button" class="btn btn-save" onclick="markSaidAndNext()">Đúng rồi →</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="explain_help_modal" class="modal-backdrop" hidden onclick="if(event.target===this)hideExplainHelp()">
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="explain_help_title">
+            <div class="modal-head">
+                <div class="modal-icon">📖</div>
+                <h3 class="modal-title" id="explain_help_title">Mức giảng bài</h3>
+                <div class="modal-sub" id="explain_help_sub">Chọn cách robot dạy khi bé học thẻ</div>
+            </div>
+            <div class="modal-body">
+                <ul class="ex-help-list">
+                    <li data-ex="off">
+                        <b>Chỉ nói <i class="now">ĐANG CHỌN</i></b>
+                        <span>Robot đọc từ / câu tiếng Anh trên thẻ rồi kêu bé nhắc lại. Không giảng nghĩa tiếng Việt, không đưa ví dụ.</span>
+                        <em>Đang chọn mức này: robot chỉ luyện nói, AI không nhận phần giải thích của bài học. Hợp khi bé đã biết từ, muốn phản xạ nhanh.</em>
+                    </li>
+                    <li data-ex="basic">
+                        <b>Cơ bản <i class="now">ĐANG CHỌN</i></b>
+                        <span>Robot giảng nghĩa ngắn (tiếng Việt + tiếng Anh) rồi mới kêu bé nói. Không đi sâu ví dụ hay lúc nào dùng câu đó.</span>
+                        <em>Đang chọn mức này: robot dạy nghĩa nhanh rồi luyện nói. Hợp lần đầu học từ mới, cần hiểu rồi nhắc lại.</em>
+                    </li>
+                    <li data-ex="detailed">
+                        <b>Chi tiết <i class="now">ĐANG CHỌN</i></b>
+                        <span>Robot giảng kỹ: nghĩa, ví dụ, lúc nào dùng câu đó, rồi mới luyện nói. Giống giáo viên giải thích trước khi kêu bé nói.</span>
+                        <em>Đang chọn mức này: robot nhận bản giải thích đầy đủ của bài học. Hợp khi bé cần hiểu sâu, hoặc phụ huynh muốn dạy kỹ.</em>
+                    </li>
+                </ul>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-ok" onclick="hideExplainHelp()">Đã hiểu</button>
+            </div>
+        </div>
+    </div>
+
     <div id="confirm_modal" class="modal-backdrop" hidden>
         <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirm_title">
             <div class="modal-head">
@@ -296,16 +938,34 @@
         </div>
     </div>
 
-    <div class="tabs">
-        <button type="button" class="tab-btn active" id="tab_btn_course" onclick="switchTab('course')">📚 Khóa học</button>
+    <div id="app_robot">
+    <button type="button" class="btn robot-back" onclick="closeRobot()" style="background:#1aa7a1;color:#fff;margin-bottom:10px">← Về app học</button>
+    <header class="brand">
+        <h1 id="robot_title">Tiếng Anh cũ · World Edu</h1>
+    </header>
+
+    <!-- LEGACY World Edu: tabs + tab_course/daily/custom/ai. Có thể xóa khi bỏ chế độ cũ. -->
+    <div class="tabs tabs-learn-old">
+        <button type="button" class="tab-btn tab-old active" id="tab_btn_course" onclick="switchTab('course')">🏫 World Edu</button>
+        <button type="button" class="tab-btn tab-old" id="tab_btn_daily" onclick="switchTab('daily')">💬 Giao tiếp</button>
+        <button type="button" class="tab-btn tab-old" id="tab_btn_custom" onclick="switchTab('custom')">🔧 Tự cấu hình</button>
+        <button type="button" class="tab-btn tab-old" id="tab_btn_ai" onclick="switchTab('ai')">🤖 AI</button>
+    </div>
+    <div class="tabs tabs-learn-new">
+        <button type="button" class="tab-btn tab-new" id="tab_btn_speak" onclick="switchTab('speak')">📚 Học nói</button>
+        <button type="button" class="tab-btn tab-new" id="tab_btn_ndaily" onclick="switchTab('ndaily')">💬 Giao tiếp hằng ngày</button>
+        <button type="button" class="tab-btn tab-new" id="tab_btn_ncustom" onclick="switchTab('ncustom')">🔧 Tự cấu hình</button>
+    </div>
+    <div class="tabs tabs-robot">
         <button type="button" class="tab-btn" id="tab_btn_control" onclick="switchTab('control')">🎮 Điều khiển</button>
         <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt</button>
         <button type="button" class="tab-btn" id="tab_btn_ota" onclick="switchTab('ota')">🔄 Cập nhật</button>
-        <button type="button" class="tab-btn" id="tab_btn_ai" onclick="switchTab('ai')">🤖 AI</button>
         <button type="button" class="tab-btn" id="tab_btn_log" onclick="switchTab('log')">📜 Log</button>
     </div>
 
     <div id="tab_course" class="tab-panel active">
+    <div class="mode-banner" data-mode="school">Đang dùng: …</div>
+        <p class="hint" style="margin-bottom:12px">Chỉ dùng khi đang <b>Tiếng Anh cũ</b>. Tách riêng với kiểu mới (học nói / giao tiếp mới / Xiaozhi mới).</p>
     <!-- Tên học viên -->
     <div class="card">
         <h2>👤 Tên học viên</h2>
@@ -314,16 +974,14 @@
 
     <!-- Chọn cấp độ -->
     <div class="card">
-        <h2>📚 Cấp độ học</h2>
+        <h2>📚 Khóa World Edu School</h2>
         <div id="course_list"></div>
     </div>
 
-    <!-- MAC / Device-Id (giống hotspot) -->
     <div class="card">
-        <h2>🔑 Địa chỉ MAC (Device-Id)</h2>
-        <input type="text" id="custom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
-        <p class="mac-hint" id="mac_hint">Explorers / Young Innovators / Future Leaders / IELTS / TOEIC / Giao tiếp hằng ngày: random MAC theo giọng hoặc pool. Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu.</p>
-        <div class="device-id" id="device_id_view">Device-Id đang dùng: ...</div>
+        <h2>🔑 Device-Id khóa học</h2>
+        <p class="mac-hint">Mỗi khóa / giọng dùng MAC pool riêng của World Edu. Không dùng chung với Giao tiếp hằng ngày hay Tự cấu hình.</p>
+        <div class="device-id device-id-view">Device-Id đang dùng: ...</div>
     </div>
 
     <!-- Giọng Explorers -->
@@ -377,11 +1035,44 @@
     </div>
 
     <!-- Nút lưu -->
-    <button class="btn btn-save" id="btn_save" onclick="saveConfig()">💾 Lưu cấu hình</button>
+    <button class="btn btn-save" data-save-config onclick="saveConfig()">💾 Lưu cấu hình World Edu</button>
     <button class="btn" id="btn_stop_web" onclick="stopWebServer()" style="background:#6c757d;color:#fff;margin-top:8px">⏻ Tắt web :8080</button>
     <div class="status" id="status"></div>
     </div>
 
+    <div id="tab_daily" class="tab-panel">
+        <div class="mode-banner" data-mode="daily">Đang dùng: …</div>
+        <div class="card">
+            <h2>💬 Giao tiếp hằng ngày</h2>
+            <p class="hint">Tính năng riêng: robot nói chuyện đời thường, không theo giáo trình World Edu. Xiaozhi dùng pool Device-Id riêng; Direct AI dùng lời dặn “AI Giao tiếp hằng ngày” ở tab AI.</p>
+            <div class="device-id device-id-view">Device-Id đang dùng: ...</div>
+            <button type="button" class="btn btn-save" id="btn_activate_daily" onclick="activateDaily()">💬 Bật giao tiếp hằng ngày</button>
+            <p class="hint">Bật xong robot đổi Device-Id (vài giây) rồi nói tiếp. Cấu hình khóa học World Edu vẫn giữ nguyên, không bị ghi đè.</p>
+        </div>
+    </div>
+
+    <div id="tab_custom" class="tab-panel">
+        <div class="mode-banner" data-mode="custom">Đang dùng: …</div>
+        <div class="card">
+            <h2>🔧 Tự cấu hình</h2>
+            <p class="hint">Tính năng riêng: dùng MAC chip của robot hoặc tự nhập MAC. Không phải khóa World Edu và không phải Giao tiếp hằng ngày.</p>
+            <div id="custom_course_list"></div>
+        </div>
+        <div class="card">
+            <h2>🔑 Địa chỉ MAC (Device-Id)</h2>
+            <input type="text" id="custom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+            <p class="mac-hint" id="mac_hint">Tự cấu hình: để trống = MAC chip. Tự nhập MAC: gõ rồi Lưu.</p>
+            <div class="device-id device-id-view">Device-Id đang dùng: ...</div>
+        </div>
+        <button class="btn btn-save" data-save-config onclick="saveConfig()">💾 Lưu tự cấu hình</button>
+        <div class="status"></div>
+    </div>
+
+    <div id="tab_speak" class="tab-panel"></div>
+    <div id="tab_ndaily" class="tab-panel"></div>
+    <div id="tab_ncustom" class="tab-panel"></div>
+
+    <div id="slot_control">
     <div id="tab_control" class="tab-panel">
         <div class="card">
             <h2>🎮 Di chuyển</h2>
@@ -451,7 +1142,9 @@
             <div class="status" id="control_status">Chạm nút để điều khiển</div>
         </div>
     </div>
+    </div>
 
+    <div id="slot_robot">
     <div id="tab_robot" class="tab-panel">
         <div class="card">
             <h2>🔊 Âm lượng</h2>
@@ -568,7 +1261,9 @@
         <button class="btn btn-save" id="btn_save_robot" onclick="saveRobotSettings()">💾 Lưu cài đặt robot</button>
         <div class="status" id="robot_status"></div>
     </div>
+    </div>
 
+    <div id="slot_ota">
     <div id="tab_ota" class="tab-panel">
         <div class="card ota-progress-card" id="ota_progress_card">
             <h2>📊 Tình trạng cập nhật</h2>
@@ -640,10 +1335,12 @@
             </div>
         </div>
     </div>
+    </div>
 
     <div id="tab_ai" class="tab-panel">
         <div class="card">
             <h2>🤖 Chế độ trò chuyện</h2>
+            <p class="hint">Tab này chỉ cho <b>Tiếng Anh cũ</b> (World Edu / giao tiếp cũ). Kiểu mới không dùng tab này — Gemini/Xiaozhi mới nằm tab Học nói và Giao tiếp hằng ngày.</p>
             <p class="hint"><b>Xiaozhi</b>: dùng máy chủ Xiaozhi như cũ. <b>OpenAI / Grok / Gemini</b>: robot nói chuyện thẳng với AI bằng API key của bạn, không qua máy chủ trung gian (phí tính vào tài khoản API của bạn).</p>
             <div class="unit-grid" id="ai_modes">
                 <label><input type="radio" name="ai_backend" value="xiaozhi" onchange="aiOnModeChange()"> Xiaozhi (mặc định)</label>
@@ -680,11 +1377,35 @@
                 <option value="en">English</option>
                 <option value="auto">Tự nhận diện</option>
             </select>
-            <label for="ai_instructions">Dặn thêm cho robot (tùy chọn)</label>
-            <textarea id="ai_instructions" maxlength="600" placeholder="Ví dụ: Tên bạn là Emun. Người nói chuyện với bạn là bé Na 7 tuổi, hãy nói thật dễ hiểu."></textarea>
-            <div class="hint"><span id="ai_instr_count">0</span>/600 ký tự</div>
             <label class="ai-check"><input type="checkbox" id="ai_search"> Cho phép tra cứu Internet (Grok / Gemini)</label>
             <div class="hint">Key không có quyền tra cứu thì robot tự bỏ phần này.</div>
+        </div>
+
+        <div class="card ai-field">
+            <h2>💬 AI Giao tiếp hằng ngày</h2>
+            <p class="hint">Lời dặn khi bật tab Giao tiếp. Xiaozhi: agent theo Device-Id pool giao tiếp. Direct AI: robot ghép đoạn này khi chế độ đang là Giao tiếp hằng ngày.</p>
+            <label for="ai_instructions_daily">Dặn thêm (tùy chọn)</label>
+            <textarea id="ai_instructions_daily" class="ai-field" maxlength="600" placeholder="Ví dụ: Tên bạn là Emun. Nói chuyện đời thường, vui, dễ hiểu với cả nhà."></textarea>
+            <div class="hint"><span id="ai_instr_daily_count">0</span>/600 ký tự</div>
+        </div>
+
+        <div class="card ai-field">
+            <h2>🏫 AI World Edu School</h2>
+            <p class="hint">Lời dặn khi dạy khóa Explorers → TOEIC. Xiaozhi: agent theo Device-Id từng khóa. Direct AI: robot ghép đoạn này khi đang ở khóa World Edu (hoặc Tự cấu hình).</p>
+            <label for="ai_instructions">Dặn thêm (tùy chọn)</label>
+            <textarea id="ai_instructions" class="ai-field" maxlength="600" placeholder="Ví dụ: Bạn là giáo viên tiếng Anh World Edu. Học viên là bé Na 7 tuổi, giảng đúng unit đang chọn."></textarea>
+            <div class="hint"><span id="ai_instr_count">0</span>/600 ký tự</div>
+        </div>
+
+        <div class="card">
+            <h2>📘 Prompt học nói (Xiaozhi.me)</h2>
+            <p class="hint">Direct AI tự ghép khi Bắt đầu học. Xiaozhi: copy đúng ngôn ngữ agent trên xiaozhi.me rồi dán vào lời dặn. Trang robot là HTTP nên nút copy dùng ô chọn + Copy, không cần HTTPS.</p>
+            <label>Tiếng Việt</label>
+            <textarea id="ai_xiaozhi_prompt" class="ai-field" readonly style="min-height:150px;font-size:0.85em"></textarea>
+            <button type="button" class="btn btn-save" onclick="copyXiaozhiPrompt('ai_xiaozhi_prompt', 'Đã copy prompt tiếng Việt')">📋 Copy tiếng Việt</button>
+            <label style="margin-top:14px">English</label>
+            <textarea id="ai_xiaozhi_prompt_en" class="ai-field" readonly style="min-height:150px;font-size:0.85em"></textarea>
+            <button type="button" class="btn btn-save" onclick="copyXiaozhiPrompt('ai_xiaozhi_prompt_en', 'Copied English prompt')">📋 Copy English</button>
         </div>
 
         <button class="btn btn-save" id="btn_save_ai" onclick="saveAiSettings()">💾 Lưu cài đặt AI</button>
@@ -874,9 +1595,36 @@
         function isValidMacString(mac) {
             return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(normalizeMacInput(mac));
         }
+        function isSchoolIdx(idx) { return idx >= 1 && idx <= 5; }
+        function isCustomIdx(idx) { return idx === 0 || idx === MANUAL_MAC_IDX; }
         function isMacFieldReadOnlyForIdx(idx) {
-            return idx === EX_IDX || idx === YI_IDX || idx === FL_IDX ||
-                idx === IELTS_IDX || idx === TOEIC_IDX || idx === DAILY_IDX;
+            return !isCustomIdx(idx);
+        }
+        function modeName(idx) {
+            if (idx === DAILY_IDX) return 'Giao tiếp hằng ngày';
+            if (idx === 0) return 'Tự cấu hình (MAC chip)';
+            if (idx === MANUAL_MAC_IDX) return 'Tự nhập MAC';
+            const c = COURSES[idx];
+            return c ? ('World Edu · ' + c.name) : '—';
+        }
+        function updateModeBanners() {
+            const idx = currentConfig.preset_mac_idx;
+            const text = 'Đang dùng: ' + modeName(idx);
+            document.querySelectorAll('.mode-banner').forEach(function (el) {
+                el.textContent = text;
+                const mode = el.dataset.mode;
+                el.classList.toggle('on',
+                    (mode === 'school' && isSchoolIdx(idx)) ||
+                    (mode === 'daily' && idx === DAILY_IDX) ||
+                    (mode === 'custom' && isCustomIdx(idx)));
+            });
+            const dailyBtn = document.getElementById('btn_activate_daily');
+            if (dailyBtn && !dailyBtn.dataset.saving) {
+                dailyBtn.disabled = idx === DAILY_IDX;
+                dailyBtn.textContent = idx === DAILY_IDX
+                    ? '✅ Đang dùng giao tiếp hằng ngày'
+                    : '💬 Bật giao tiếp hằng ngày';
+            }
         }
         function courseLabel(idx, course) {
             if (idx === EX_IDX) {
@@ -885,25 +1633,28 @@
             if (idx === YI_IDX || idx === FL_IDX || idx === IELTS_IDX || idx === TOEIC_IDX) {
                 return course.name + ' <span class="course-mac">(Việt/Anh · random MAC)</span>';
             }
-            if (idx === DAILY_IDX) {
-                return course.name + ' <span class="course-mac">(random MAC mỗi lần mở máy)</span>';
+            if (idx === 0) {
+                return course.name + ' <span class="course-mac">(MAC chip)</span>';
+            }
+            if (idx === MANUAL_MAC_IDX) {
+                return course.name + ' <span class="course-mac">(nhập tay)</span>';
             }
             return course.name;
         }
         function updateMacField() {
             const input = document.getElementById('custom_mac');
             const idx = currentConfig.preset_mac_idx;
-            input.readOnly = isMacFieldReadOnlyForIdx(idx);
-            if (idx === EX_IDX || idx === YI_IDX || idx === FL_IDX ||
-                idx === IELTS_IDX || idx === TOEIC_IDX || idx === DAILY_IDX) {
-                input.value = currentConfig.device_id || '(random mỗi lần mở máy)';
-            } else if (idx === 0) {
-                // keep typed / empty for chip MAC
-            } else if (idx === MANUAL_MAC_IDX) {
-                // keep typed custom mac
+            if (input) {
+                input.readOnly = isMacFieldReadOnlyForIdx(idx);
+                if (!isCustomIdx(idx)) {
+                    input.value = '';
+                }
             }
-            document.getElementById('device_id_view').textContent =
-                'Device-Id đang dùng: ' + (currentConfig.device_id || '...');
+            const text = 'Device-Id đang dùng: ' + (currentConfig.device_id || '...');
+            document.querySelectorAll('.device-id-view').forEach(function (el) {
+                el.textContent = text;
+            });
+            updateModeBanners();
         }
 
         function courseHasSubs(idx) {
@@ -936,17 +1687,23 @@
             if (map) map[sub] = value;
         }
 
-        function renderCourses() {
-            const el = document.getElementById('course_list');
+        function renderCourses(group) {
+            group = group || 'school';
+            const el = document.getElementById(group === 'custom' ? 'custom_course_list' : 'course_list');
+            if (!el) return;
             el.innerHTML = '';
-            for (const [idx, course] of Object.entries(COURSES)) {
+            const radioName = group === 'custom' ? 'course_custom' : 'course_school';
+            for (const [idxStr, course] of Object.entries(COURSES)) {
+                const idx = parseInt(idxStr);
+                if (group === 'school' && !isSchoolIdx(idx)) continue;
+                if (group === 'custom' && !isCustomIdx(idx)) continue;
                 const div = document.createElement('label');
-                div.className = 'course-label' + (parseInt(idx) === currentConfig.preset_mac_idx ? ' selected' : '');
-                div.innerHTML = `<input type="radio" name="course" value="${idx}" ${parseInt(idx) === currentConfig.preset_mac_idx ? 'checked' : ''}>` +
-                    `<span class="course-name">${courseLabel(parseInt(idx), course)}</span>`;
+                div.className = 'course-label' + (idx === currentConfig.preset_mac_idx ? ' selected' : '');
+                div.innerHTML = `<input type="radio" name="${radioName}" value="${idx}" ${idx === currentConfig.preset_mac_idx ? 'checked' : ''}>` +
+                    `<span class="course-name">${courseLabel(idx, course)}</span>`;
                 div.querySelector('input').addEventListener('change', (e) => {
                     const prev = currentConfig.preset_mac_idx;
-                    if (prev === 0 || prev === MANUAL_MAC_IDX) {
+                    if (isCustomIdx(prev)) {
                         currentConfig.custom_mac = normalizeMacInput(document.getElementById('custom_mac').value);
                     }
                     currentConfig.preset_mac_idx = parseInt(e.target.value);
@@ -958,7 +1715,7 @@
                     } else if (currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
                         document.getElementById('custom_mac').value = currentConfig.custom_mac || '';
                     }
-                    renderCourses();
+                    renderAllCourses();
                     updateMacField();
                     renderExVoice();
                     renderYiVoice();
@@ -969,6 +1726,24 @@
                     renderUnits();
                 });
                 el.appendChild(div);
+            }
+        }
+        function renderAllCourses() {
+            renderCourses('school');
+            renderCourses('custom');
+        }
+        async function activateDaily() {
+            currentConfig.preset_mac_idx = DAILY_IDX;
+            markConfigDirty();
+            updateMacField();
+            renderAllCourses();
+            const btn = document.getElementById('btn_activate_daily');
+            if (btn) btn.dataset.saving = '1';
+            try {
+                await saveConfig();
+            } finally {
+                if (btn) delete btn.dataset.saving;
+                updateModeBanners();
             }
         }
 
@@ -1319,7 +2094,7 @@
                 if (currentConfig.preset_mac_idx === 0 || currentConfig.preset_mac_idx === MANUAL_MAC_IDX) {
                     document.getElementById('custom_mac').value = currentConfig.custom_mac;
                 }
-                renderCourses();
+                renderAllCourses();
                 updateMacField();
                 renderExVoice();
                 renderYiVoice();
@@ -1328,6 +2103,7 @@
                 renderToeicVoice();
                 renderSubs();
                 renderUnits();
+                if (typeof renderSpeakHome === 'function') renderSpeakHome();
                 configDirty = false;
                 document.getElementById('status').textContent = '';
             } catch (err) {
@@ -1335,10 +2111,20 @@
             }
         }
 
+        function setConfigSaveBusy(busy) {
+            document.querySelectorAll('[data-save-config]').forEach(function (btn) {
+                btn.disabled = busy;
+                if (busy) {
+                    btn.textContent = 'Đang lưu...';
+                } else if (btn.closest('#tab_custom')) {
+                    btn.textContent = '💾 Lưu tự cấu hình';
+                } else {
+                    btn.textContent = '💾 Lưu cấu hình World Edu';
+                }
+            });
+        }
         async function saveConfig() {
-            const btn = document.getElementById('btn_save');
-            btn.disabled = true;
-            btn.textContent = 'Đang lưu...';
+            setConfigSaveBusy(true);
 
             currentConfig.student_name = document.getElementById('student_name').value.trim();
             updateUnitsInConfig();
@@ -1347,18 +2133,16 @@
             if (idx === MANUAL_MAC_IDX) {
                 if (!isValidMacString(mac)) {
                     showToast('❌ MAC không hợp lệ (aa:bb:cc:dd:ee:ff)');
-                    btn.disabled = false;
-                    btn.textContent = '💾 Lưu cấu hình';
+                    setConfigSaveBusy(false);
                     return;
                 }
             } else if (idx === 0) {
                 if (mac && !isValidMacString(mac)) {
                     showToast('❌ MAC không hợp lệ (aa:bb:cc:dd:ee:ff)');
-                    btn.disabled = false;
-                    btn.textContent = '💾 Lưu cấu hình';
+                    setConfigSaveBusy(false);
                     return;
                 }
-            } else if (idx === DAILY_IDX || (idx >= 1 && idx <= 5)) {
+            } else if (idx === DAILY_IDX || isSchoolIdx(idx)) {
                 mac = '';
             }
             currentConfig.custom_mac = mac;
@@ -1389,33 +2173,57 @@
                 savedToeicVoice = currentConfig.toeic_voice;
                 configDirty = false;
                 if (courseChanged || macChanged || voiceChanged) {
-                    showToast('✅ Đã lưu — đang đổi Device-Id (~vài giây), rồi nói tiếp');
+                    if (idx === DAILY_IDX) {
+                        showToast('✅ Đã bật giao tiếp hằng ngày — đang đổi Device-Id (~vài giây)');
+                    } else if (isCustomIdx(idx)) {
+                        showToast('✅ Đã lưu tự cấu hình — đang đổi Device-Id (~vài giây)');
+                    } else {
+                        showToast('✅ Đã lưu World Edu — đang đổi Device-Id (~vài giây), rồi nói tiếp');
+                    }
                     setTimeout(loadConfig, 3000);
                 } else {
-                    showToast('✅ Đã lưu tên / unit');
+                    showToast(isSchoolIdx(idx) ? '✅ Đã lưu tên / unit World Edu' : '✅ Đã lưu');
                 }
             } catch (err) {
                 showToast('❌ Lỗi: ' + err.message);
             }
-            btn.disabled = false;
-            btn.textContent = '💾 Lưu cấu hình';
+            setConfigSaveBusy(false);
         }
 
-        function switchTab(name) {
-            document.getElementById('tab_course').classList.toggle('active', name === 'course');
-            document.getElementById('tab_control').classList.toggle('active', name === 'control');
-            document.getElementById('tab_robot').classList.toggle('active', name === 'robot');
-            document.getElementById('tab_ota').classList.toggle('active', name === 'ota');
-            document.getElementById('tab_btn_course').classList.toggle('active', name === 'course');
-            document.getElementById('tab_btn_control').classList.toggle('active', name === 'control');
-            document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
-            document.getElementById('tab_btn_ota').classList.toggle('active', name === 'ota');
-            document.getElementById('tab_ai').classList.toggle('active', name === 'ai');
-            document.getElementById('tab_btn_ai').classList.toggle('active', name === 'ai');
-            document.getElementById('tab_log').classList.toggle('active', name === 'log');
-            document.getElementById('tab_btn_log').classList.toggle('active', name === 'log');
+        function parkToolTab(name, hostId) {
+            const panel = document.getElementById('tab_' + name);
+            const host = document.getElementById(hostId);
+            if (!panel || !host) return;
+            if (panel.parentElement !== host) host.appendChild(panel);
+            panel.classList.add('active');
+        }
+        function restoreToolTabs() {
+            ['control', 'ota', 'robot'].forEach(function (name) {
+                const panel = document.getElementById('tab_' + name);
+                const slot = document.getElementById('slot_' + name);
+                if (panel && slot && panel.parentElement !== slot) slot.appendChild(panel);
+            });
+        }
+        function switchTab(name, skipStyle) {
+            if (name === 'control' || name === 'ota' || name === 'robot') restoreToolTabs();
+            const tabs = ['course', 'daily', 'custom', 'speak', 'ndaily', 'ncustom', 'control', 'robot', 'ota', 'ai', 'log'];
+            tabs.forEach(function (n) {
+                const panel = document.getElementById('tab_' + n);
+                const btn = document.getElementById('tab_btn_' + n);
+                if (panel) panel.classList.toggle('active', name === n);
+                if (btn) btn.classList.toggle('active', name === n);
+            });
+            if (!skipStyle) {
+                if (name === 'speak') setEnglishStyle('new', 'teach', true);
+                if (name === 'ndaily') setEnglishStyle('new', 'daily', true);
+                if (name === 'ncustom') setEnglishStyle('new', 'custom', true);
+                if (name === 'course' || name === 'daily' || name === 'custom' || name === 'ai') {
+                    if (englishStyle !== 'old') setEnglishStyle('old', null, true);
+                }
+            }
             if (name === 'ai') {
                 loadAiSettings();
+                refreshSpeakStatus();
             }
             if (name === 'log') {
                 logOpen();
@@ -2028,11 +2836,19 @@
         // Soft sync only — avoid hammering :8080 (was 4s → often “không vào được”).
         setInterval(function () {
             if (document.visibilityState === 'hidden') return;
-            if (!document.getElementById('tab_course').classList.contains('active')) return;
+            const onConfigTab = ['tab_course', 'tab_daily', 'tab_custom'].some(function (id) {
+                return document.getElementById(id).classList.contains('active');
+            });
+            if (!onConfigTab) return;
             if (configDirty) return;
             const ae = document.activeElement;
             if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
             loadConfig(true);
+        }, 20000);
+
+        setInterval(function () {
+            if (document.visibilityState === 'hidden') return;
+            refreshSpeakStatus();
         }, 20000);
 
         document.getElementById('student_name').addEventListener('input', markConfigDirty);
@@ -2158,6 +2974,7 @@
 
         function aiUpdateCount() {
             document.getElementById('ai_instr_count').textContent = document.getElementById('ai_instructions').value.length;
+            document.getElementById('ai_instr_daily_count').textContent = document.getElementById('ai_instructions_daily').value.length;
         }
 
         async function loadAiSettings() {
@@ -2178,6 +2995,7 @@
             if (radio) radio.checked = true;
             document.getElementById('ai_language').value = aiData.language || 'vi';
             document.getElementById('ai_instructions').value = aiData.instructions || '';
+            document.getElementById('ai_instructions_daily').value = aiData.instructions_daily || '';
             document.getElementById('ai_search').checked = aiData.search !== false;
             aiUpdateCount();
             aiUpdateRunning();
@@ -2201,6 +3019,7 @@
                 backend: mode,
                 language: document.getElementById('ai_language').value,
                 instructions: document.getElementById('ai_instructions').value,
+                instructions_daily: document.getElementById('ai_instructions_daily').value,
                 search: document.getElementById('ai_search').checked
             };
             Object.keys(aiDrafts).forEach(function (name) {
@@ -2246,6 +3065,7 @@
         }
 
         document.getElementById('ai_instructions').addEventListener('input', aiUpdateCount);
+        document.getElementById('ai_instructions_daily').addEventListener('input', aiUpdateCount);
 
         // ===== Device log =====
         const LOG_VIEW_MAX = 300000;
@@ -2336,10 +3156,1010 @@
             setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         }
 
-        document.addEventListener('DOMContentLoaded', loadConfig);
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
+            renderA1Chips();
+            toggleSpeakAiFields();
+            toggleDailyAiFields();
+            refreshSpeakStatus();
+            loadConfig();
             setTimeout(function() { if (!otaCheckedOnce) checkOfficialUpdate(); }, 1500);
+            loadSpeakUnit();
         });
+
+        let speakUnit = null;
+        let browseUnit = 'u01';
+        let pathTrack = 'a1';
+        let speakStatus = { on: false, base: 'http://192.168.100.161:8765', level: 'a1', unit: 'u01', index: 0, total: 0, words_done: 0, phrases_done: 0, age: 6, likes: '', xiaozhi_prompt: '' };
+        let lessonIdx = 0;
+        let quizHide = false;
+        const A1_UNITS = [
+            ['u01','About Me','hello','👋'],['u02','Family','father','👨‍👩‍👧'],
+            ['u03','My Family & Likes','mother-u03','❤️'],['u04','Numbers','one','🔢'],
+            ['u05','Numbers & Quantities','one-u05','🐟'],['u06','Colors','red','🎨'],
+            ['u07','Shapes','circle','🔵'],['u08','Toys','ball','🧸'],
+            ['u09','In the House','bed','🏠'],['u10','Where Is It?','ball-u10','📍'],
+            ['u11','At School','book','📚'],['u12','Clothes','shirt','👗'],
+            ['u13','Food & Drinks','apple','🍎'],['u14','Fruits','apple-u22','🍓'],
+            ['u15','Snacks and Desserts','cookie','🍪'],['u16','Body Parts','head','🧍'],
+            ['u17','Feelings','happy','😊'],['u18','Daily Routines','wake-up','⏰'],
+            ['u19','Actions','run','🏃'],['u20','Hobbies & Activities','read-books','🎯'],
+            ['u21','Playground','slide','🛝'],['u22','Sports','soccer','⚽'],
+            ['u23','Health and Hygiene','soap','🧼'],['u24','Everyday Conversations','please','💬'],
+            ['u25','Animals','elephant','🦒'],['u26','Animals Around Us','dog','🐶'],
+            ['u27','Sea Animals','crab','🦀'],['u28','Nature and Insects','butterfly','🦋'],
+            ['u29','Nature','sun','🌳'],['u30','Weather & Seasons','sunny','🌤️'],
+            ['u31','Opposites','big','↕️'],['u32','Places Around Town','home','🏘️'],
+            ['u33','Transport','car','🚗'],['u34','Jobs','doctor','👩‍⚕️'],
+            ['u35','Musical Instruments','guitar','🎸'],['u36','Speaking Practice & Review','boy-u36','🗣️']
+        ];
+        function a1UnitInfo(id) {
+            return A1_UNITS.find(function (u) { return u[0] === id; }) || A1_UNITS[0];
+        }
+        function unitNum(id) {
+            return parseInt(String(id || 'u01').replace(/\D/g, ''), 10) || 1;
+        }
+        function shiftUnitId(id, delta) {
+            const n = unitNum(id) + delta;
+            if (n < 1 || n > A1_UNITS.length) return '';
+            return 'u' + String(n).padStart(2, '0');
+        }
+        function renderUnitStrip() {
+            const strip = document.getElementById('unit_strip');
+            if (!strip) return;
+            const cur = speakUnitId();
+            strip.innerHTML = '';
+            A1_UNITS.forEach(function (u, i) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'unit-pill' + (u[0] === cur ? ' on' : '');
+                b.textContent = String(i + 1);
+                b.title = u[1];
+                b.onclick = function () { selectA1Unit(u[0]); };
+                strip.appendChild(b);
+            });
+            const on = strip.querySelector('.unit-pill.on');
+            if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+        }
+        async function startA1Unit(id) {
+            if (id) browseUnit = id;
+            await startSpeak(0);
+        }
+        function unitCoverUrl(uid, cover) {
+            const base = ((speakStatus && speakStatus.base) || '').replace(/\/$/, '');
+            const path = '/speak/a1/' + uid + '/' + cover + '.jpg';
+            return base ? base + path : path;
+        }
+        function renderA1Chips() {
+            const cards = (speakUnit && speakUnit.cards) || [];
+            const total = cards.length || 36;
+            const pct = Math.min(100, Math.round(100 * speakDoneIndex() / total));
+            const el = document.getElementById('track_a1_pct');
+            if (el) el.textContent = pct + '%';
+            const a1 = document.getElementById('track_a1');
+            const help = document.getElementById('track_help');
+            const stem = document.getElementById('track_stem');
+            if (a1) a1.classList.toggle('on', pathTrack === 'a1');
+            if (help) help.classList.toggle('on', pathTrack === 'help');
+            if (stem) stem.classList.toggle('on', pathTrack === 'stem');
+        }
+        function selectPathTrack(name) {
+            if (name === 'help') {
+                switchApp('help');
+                return;
+            }
+            pathTrack = name;
+            renderA1Chips();
+            renderSpeakPath();
+        }
+        async function selectA1Unit(id) {
+            browseUnit = id;
+            pathTrack = 'a1';
+            renderA1Chips();
+            renderUnitStrip();
+            await loadSpeakUnit();
+        }
+
+        function speakDoneIndex() {
+            return Number(speakStatus && speakStatus.index) || 0;
+        }
+        function speakCardDone(i) {
+            return i < speakDoneIndex();
+        }
+        function speakLevel() {
+            const lv = (speakStatus && speakStatus.level) || (speakUnit && speakUnit.level) || 'a1';
+            return String(lv).toLowerCase();
+        }
+        function speakTypeLabel(type) {
+            if (type === 'word') return 'TỪ VỰNG';
+            if (type === 'ask') return 'HỎI ĐÁP';
+            return 'CỤM CÂU';
+        }
+        function speakUnitId() {
+            return browseUnit || (speakStatus && speakStatus.unit) || 'u01';
+        }
+        function speakImg(card) {
+            const lv = speakLevel();
+            const u = speakUnitId();
+            const base = ((speakStatus && speakStatus.base) || (document.getElementById('speak_base') && document.getElementById('speak_base').value) || '').replace(/\/$/, '');
+            if (base) return base + '/speak/' + lv + '/' + u + '/' + card.id + '.jpg';
+            return '/speak/' + lv + '/' + u + '/' + card.id + '.jpg';
+        }
+        function speakImgFallback(card) {
+            return '/speak/' + speakLevel() + '/' + speakUnitId() + '/' + card.id + '.jpg';
+        }
+        async function postSpeak(body) {
+            const resp = await fetch('/api/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            if (data && data.base) applySpeakStatus(data);
+            return data;
+        }
+        function applySpeakStatus(st) {
+            if (!st || st.error) return;
+            speakStatus = Object.assign(speakStatus, st);
+            const baseEl = document.getElementById('speak_base');
+            if (baseEl && document.activeElement !== baseEl && st.base) baseEl.value = st.base;
+            const ageEl = document.getElementById('profile_age');
+            if (ageEl && document.activeElement !== ageEl && st.age != null) ageEl.value = st.age > 0 ? st.age : '';
+            const dobEl = document.getElementById('profile_dob');
+            if (dobEl && document.activeElement !== dobEl && st.dob != null) dobEl.value = st.dob || '';
+            const pname = document.getElementById('profile_student_name');
+            if (pname && document.activeElement !== pname && st.student_name != null) pname.value = st.student_name;
+            const likesEl = document.getElementById('profile_likes');
+            if (likesEl && document.activeElement !== likesEl && st.likes != null) likesEl.value = st.likes;
+            const promptEl = document.getElementById('ai_xiaozhi_prompt');
+            if (promptEl && st.xiaozhi_prompt) promptEl.value = st.xiaozhi_prompt;
+            const promptEn = document.getElementById('ai_xiaozhi_prompt_en');
+            if (promptEn && st.xiaozhi_prompt_en) promptEn.value = st.xiaozhi_prompt_en;
+            fillSpeakIdentity(st);
+            fillDailyIdentity(st);
+            const subR = document.getElementById('sub_robot');
+            if (subR && document.activeElement !== subR && st.sub_robot != null) subR.checked = !!st.sub_robot;
+            const subU = document.getElementById('sub_stt');
+            if (subU && document.activeElement !== subU && st.sub_stt != null) subU.checked = !!st.sub_stt;
+            paintExplainLevel(st.explain_level || 'off');
+            const nameEl = document.getElementById('profile_name');
+            if (nameEl) {
+                const name = (document.getElementById('student_name') && document.getElementById('student_name').value.trim())
+                    || st.student_name || (currentConfig && currentConfig.student_name) || 'bạn nhỏ';
+                nameEl.textContent = name;
+            }
+            const on = !!st.on;
+            applyEnglishStyleUi(st);
+            document.getElementById('app_conn_title').textContent = on ? 'Đang học cùng Emun' : 'Đã kết nối Emun';
+            const isNew = (st.style || 'old') === 'new';
+            const slot = st.slot || 'teach';
+            if (st.on && st.unit) browseUnit = st.unit;
+            if (on) {
+                document.getElementById('app_conn_sub').textContent = 'Robot đang học — hãy nói với Emun. Ảnh thẻ hiện trên mặt robot.';
+            } else if (isNew && slot === 'daily') {
+                document.getElementById('app_conn_sub').textContent = 'Hi Jason để nói chuyện. Bấm Bắt đầu học để robot vào bài.';
+            } else if (isNew && slot === 'custom') {
+                document.getElementById('app_conn_sub').textContent = 'Hi Jason dùng MAC vừa lưu. Vào Cài đặt nếu cần đổi.';
+            } else if (isNew) {
+                document.getElementById('app_conn_sub').textContent = 'Hi Jason dùng tài khoản dạy học. Bấm Cài đặt nếu cần đổi MAC / Gemini.';
+            } else {
+                document.getElementById('app_conn_sub').textContent = 'Tiếng Anh cũ. Hi Jason vào World Edu / giao tiếp / tự cấu hình vừa lưu.';
+            }
+            const ndId = document.getElementById('ndaily_device_id');
+            if (ndId) ndId.textContent = 'Device-Id: ' + (st.daily_mac || st.active_mac || '…');
+            const ndCid = document.getElementById('ndaily_client_id');
+            if (ndCid) ndCid.textContent = 'Client-Id: ' + (st.daily_client_id || '…');
+            const ncId = document.getElementById('ncustom_device_id');
+            if (ncId) ncId.textContent = 'Device-Id đang dùng: ' + (st.new_custom_mac || st.active_mac || '…');
+            const ncMac = document.getElementById('ncustom_mac');
+            if (ncMac && document.activeElement !== ncMac && st.new_custom_mac != null) ncMac.value = st.new_custom_mac;
+            const ncCid = document.getElementById('ncustom_client_id');
+            if (ncCid && document.activeElement !== ncCid && st.new_custom_client_id != null) ncCid.value = st.new_custom_client_id;
+            const ndBtn = document.getElementById('btn_activate_ndaily');
+            if (ndBtn && !ndBtn.dataset.saving) {
+                const onDaily = isNew && slot === 'daily';
+                ndBtn.textContent = onDaily ? '✅ Đang dùng — lưu lại để chào' : '💬 Lưu và bật giao tiếp hằng ngày';
+            }
+            renderSpeakHome();
+            renderSpeakPath();
+            renderSpeakProfile();
+        }
+        async function refreshSpeakStatus() {
+            try {
+                const res = await fetch('/api/speak', { cache: 'no-store' });
+                applySpeakStatus(await res.json());
+            } catch (e) {}
+        }
+        function switchApp(name) {
+            if (name === 'control') parkToolTab('control', 'app_control_host');
+            if (name === 'ota') parkToolTab('ota', 'app_ota_host');
+            if (name === 'tools') {
+                parkToolTab('robot', 'app_tools_host');
+                const guide = document.getElementById('trim_guide_img');
+                if (guide && !guide.getAttribute('src')) guide.setAttribute('src', '/trim_guide.png');
+                loadRobotSettings();
+                trimInitUi();
+                trimLoad();
+                requestAnimationFrame(function() { setTimeout(trimDrawArrows, 40); });
+            }
+            if (name === 'ota') {
+                pollOtaStatus();
+                if (!otaCheckedOnce) checkOfficialUpdate();
+            }
+            ['home','path','buddy','help','rank','profile','setup','control','ota','tools'].forEach(function (n) {
+                const panel = document.getElementById('app_' + n);
+                const nav = document.getElementById('nav_' + n);
+                if (panel) panel.classList.toggle('active', n === name);
+                if (nav) nav.classList.toggle('active', n === name);
+            });
+            if (name === 'path') { renderA1Chips(); renderSpeakPath(); }
+            if (name === 'rank') renderSpeakRank();
+            if (name === 'home') renderSpeakHome();
+            window.scrollTo(0, 0);
+        }
+        function openRobot(tab) {
+            if (englishStyle === 'new') {
+                showNewApp();
+                if (tab === 'control') { switchApp('control'); return; }
+                if (tab === 'ota') { switchApp('ota'); return; }
+                if (tab === 'robot') { switchApp('tools'); return; }
+                switchApp('setup');
+                return;
+            }
+            if (tab === 'ndaily') tab = 'daily';
+            if (tab === 'ncustom') tab = 'custom';
+            if (tab === 'speak') tab = 'course';
+            showOldRobot();
+            switchTab(tab || 'robot', true);
+            window.scrollTo(0, 0);
+        }
+        function closeRobot() {
+            if (englishStyle === 'new') showNewApp();
+            else {
+                showOldRobot();
+                switchTab('course', true);
+            }
+            logStop();
+            window.scrollTo(0, 0);
+        }
+        async function loadSpeakUnit() {
+            await refreshSpeakStatus();
+            speakUnit = null;
+            const lv = speakLevel();
+            const uid = speakUnitId();
+            try {
+                const base = ((speakStatus && speakStatus.base) || '').replace(/\/$/, '');
+                if (base) {
+                    const res = await fetch(base + '/speak/' + lv + '/' + uid + '.json', { cache: 'no-store' });
+                    if (res.ok) speakUnit = await res.json();
+                }
+            } catch (e) {}
+            if (!speakUnit) {
+                try {
+                    const res = await fetch('/speak/' + lv + '/' + uid + '.json', { cache: 'no-store' });
+                    if (res.ok) speakUnit = await res.json();
+                } catch (e) {}
+            }
+            renderSpeakHome();
+            renderSpeakPath();
+            renderSpeakProfile();
+        }
+        function childName() {
+            return (document.getElementById('profile_student_name') && document.getElementById('profile_student_name').value.trim())
+                || (document.getElementById('student_name') && document.getElementById('student_name').value.trim())
+                || (speakStatus && speakStatus.student_name)
+                || (currentConfig && currentConfig.student_name) || 'bạn nhỏ';
+        }
+        function ageFromDob(dob) {
+            if (!dob) return 0;
+            const d = new Date(dob + 'T00:00:00');
+            if (isNaN(d.getTime())) return 0;
+            const now = new Date();
+            let a = now.getFullYear() - d.getFullYear();
+            const m = now.getMonth() - d.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+            return (a >= 1 && a < 18) ? a : 0;
+        }
+        function onProfileDobChange() {
+            const dob = (document.getElementById('profile_dob') && document.getElementById('profile_dob').value) || '';
+            const age = ageFromDob(dob);
+            const ageEl = document.getElementById('profile_age');
+            if (ageEl && age) ageEl.value = age;
+        }
+        function renderSpeakHome() {
+            const name = childName();
+            document.getElementById('app_hello_name').textContent = name;
+            const ageEl = document.getElementById('profile_age');
+            const ageHome = document.getElementById('app_hello_age');
+            const ageN = parseInt(ageEl && ageEl.value, 10) || ageFromDob((document.getElementById('profile_dob') || {}).value);
+            if (ageHome) ageHome.textContent = ageN > 0 ? (ageN + ' tuổi') : '';
+            const info = a1UnitInfo(speakUnitId());
+            const unitTitle = speakUnit ? ((speakUnit.level || 'A1').toUpperCase() + ' · ' + (speakUnit.title_en || speakUnit.theme)) : ('A1 · ' + info[1]);
+            const nowTitle = document.getElementById('now_unit_title');
+            if (nowTitle) nowTitle.textContent = 'Chương trình học của ' + name;
+            const nowGoal = document.getElementById('now_unit_goal');
+            if (nowGoal) nowGoal.textContent = 'Bấm để robot bắt đầu dạy · ' + info[1];
+            const homeLevel = document.getElementById('home_level');
+            if (homeLevel) homeLevel.textContent = 'CON ĐANG HỌC · ' + ((speakUnit && speakUnit.level) || 'A1').toUpperCase();
+            const homeTheme = document.getElementById('home_theme');
+            if (homeTheme) homeTheme.textContent = (speakUnit && (speakUnit.title_en || speakUnit.theme)) || info[1];
+            const line = document.getElementById('speak_unit_line');
+            if (line) line.textContent = unitTitle;
+            const goal = document.getElementById('speak_unit_goal');
+            if (goal) goal.textContent = (speakUnit && speakUnit.goal_vi) || '';
+            const cards = (speakUnit && speakUnit.cards) || [];
+            const words = (speakStatus && speakStatus.words_done) || cards.filter(function (c, i) { return c.type === 'word' && speakCardDone(i); }).length;
+            const phrases = (speakStatus && speakStatus.phrases_done) || cards.filter(function (c, i) { return c.type === 'phrase' && speakCardDone(i); }).length;
+            document.getElementById('stat_words').textContent = words;
+            document.getElementById('stat_phrases').textContent = phrases;
+            const mins = document.getElementById('stat_minutes');
+            if (mins) mins.textContent = Math.min(speakDoneIndex(), cards.length || speakDoneIndex());
+            const acts = [
+                { tag: 'TRÒ CHUYỆN', cls: '', title: 'Lần đầu gặp gỡ — chào bạn', go: goDailyChat },
+                { tag: 'TRÒ CHUYỆN', cls: '', title: 'Giao tiếp hằng ngày', go: goDailyChat },
+                { tag: 'HỌC CÙNG EMUN', cls: 'word', title: 'Bài học · ' + info[1], go: function () { startSpeak(); } },
+                { tag: 'TRÒ CHUYỆN', cls: '', title: 'Hỏi thăm sở thích', go: function () { switchApp('profile'); } },
+                { tag: 'HỌC CÙNG EMUN', cls: 'word', title: 'Xem thẻ trên điện thoại', go: function () { openLesson(0); } },
+                { tag: 'HỌC CÙNG EMUN', cls: 'word', title: 'Đố vui nhìn hình', go: openQuiz },
+                { tag: 'TRÒ CHUYỆN', cls: '', title: 'Nói về chủ đề hôm nay', go: goDailyChat },
+                { tag: 'HỌC CÙNG EMUN', cls: 'word', title: 'Ôn unit đang học', go: function () { switchApp('path'); } }
+            ];
+            const doneActs = Math.min(8, speakDoneIndex() > 0 ? Math.min(8, 2 + Math.floor(speakDoneIndex() / 6)) : ((speakStatus && speakStatus.slot) === 'daily' ? 1 : 0));
+            const countEl = document.getElementById('today_count');
+            if (countEl) countEl.textContent = doneActs + '/8';
+            const list = document.getElementById('today_list');
+            if (!list) return;
+            list.innerHTML = '';
+            acts.forEach(function (a, i) {
+                const div = document.createElement('div');
+                div.className = 'tl-item' + (i < doneActs ? ' done' : '');
+                div.onclick = a.go;
+                div.innerHTML = '<div class="tl-n">' + (i + 1) + '</div><div class="tl-body"><span class="tag ' + a.cls + '">' +
+                    a.tag + '</span><div>' + a.title + '</div></div><div class="tl-min">5 phút</div>';
+                list.appendChild(div);
+            });
+        }
+        function renderSpeakPath() {
+            const cur = speakUnitId();
+            const info = a1UnitInfo(cur);
+            const n = Number(cur.slice(1)) || 1;
+            const lvl = document.getElementById('path_level');
+            if (lvl) lvl.textContent = 'CON ĐANG HỌC CHỦ ĐỀ ' + n;
+            const theme = document.getElementById('path_theme');
+            if (theme) theme.textContent = (speakUnit && (speakUnit.title_en || speakUnit.theme)) || info[1];
+            const illu = document.querySelector('#app_path .now-learn .illu');
+            if (illu) {
+                const cover = unitCoverUrl(cur, info[2]);
+                illu.innerHTML = '<img src="' + cover + '" alt="" style="width:72px;height:72px;border-radius:16px;object-fit:cover;background:#efe8ff" onerror="this.parentNode.textContent=\'' + (info[3] || '📚') + '\'">';
+            }
+            renderA1Chips();
+            renderUnitStrip();
+            const box = document.getElementById('path_cards');
+            if (!box) return;
+            box.innerHTML = '';
+            if (pathTrack === 'stem') {
+                box.innerHTML = '<div class="app-card"><h2>STEM</h2><p class="hint">Sắp có hoạt động STEM trên robot. Hiện học lộ trình A1 trước.</p></div>';
+                return;
+            }
+            const nav = document.createElement('div');
+            nav.className = 'unit-nav';
+            const prev = shiftUnitId(cur, -1);
+            const next = shiftUnitId(cur, 1);
+            nav.innerHTML =
+                '<button type="button" ' + (prev ? '' : 'disabled ') + 'onclick="selectA1Unit(\'' + (prev || cur) + '\')">‹ Unit trước</button>' +
+                '<button type="button" onclick="startA1Unit(\'' + cur + '\')">Học unit này</button>' +
+                '<button type="button" ' + (next ? '' : 'disabled ') + 'onclick="selectA1Unit(\'' + (next || cur) + '\')">Unit sau ›</button>';
+            box.appendChild(nav);
+            const cards = (speakUnit && speakUnit.cards) || [];
+            const doneN = Math.min(speakDoneIndex(), cards.length);
+            const head = document.createElement('div');
+            head.className = 'sec-h';
+            head.innerHTML = '<h2>Thẻ unit ' + n + '</h2><span class="link">' + doneN + '/' + cards.length + '</span>';
+            box.appendChild(head);
+            if (!cards.length) {
+                const empty = document.createElement('div');
+                empty.className = 'app-card';
+                empty.innerHTML = '<p class="hint">Chưa tải được JSON unit. Kiểm tra máy :8765 rồi bấm Học unit này.</p>';
+                box.appendChild(empty);
+            }
+            cards.forEach(function (c, i) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'topic-row';
+                btn.onclick = function () { openLesson(i); };
+                const fallback = speakImgFallback(c);
+                const mark = speakCardDone(i) ? '<span class="done-dot">✓</span>' : '';
+                btn.innerHTML = '<img src="' + speakImg(c) + '" alt="" onerror="this.onerror=null;this.src=\'' + fallback + '\'">' +
+                    '<div class="t"><span class="tag ' + c.type + '">' + speakTypeLabel(c.type) +
+                    '</span><b>' + (c.en || '') + '</b><small>' + (c.vi || '') + '</small></div>' + mark;
+                box.appendChild(btn);
+            });
+            const more = document.createElement('div');
+            more.className = 'sec-h';
+            more.innerHTML = '<h2>Mọi chủ đề — bấm để xem, Học unit này để robot dạy</h2>';
+            box.appendChild(more);
+            A1_UNITS.forEach(function (u, i) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'topic-row' + (u[0] === cur ? ' current' : '');
+                btn.onclick = function () { selectA1Unit(u[0]); };
+                const src = unitCoverUrl(u[0], u[2]);
+                btn.innerHTML = '<img src="' + src + '" alt="" onerror="this.style.background=\'#efe8ff\'">' +
+                    '<div class="t"><small>CHỦ ĐỀ ' + (i + 1) + (u[0] === cur ? ' · ĐANG XEM' : '') + '</small><b>' + u[1] + '</b></div>';
+                box.appendChild(btn);
+            });
+        }
+        function renderSpeakRank() {
+            const cards = (speakUnit && speakUnit.cards) || [];
+            const words = Number((document.getElementById('stat_words') || {}).textContent) || 0;
+            const phrases = Number((document.getElementById('stat_phrases') || {}).textContent) || 0;
+            const turns = Math.min(speakDoneIndex(), cards.length || speakDoneIndex());
+            const setTxt = function (id, t) { const el = document.getElementById(id); if (el) el.textContent = t; };
+            setTxt('rank_turns', turns);
+            setTxt('rank_words', words);
+            setTxt('rank_phrases', phrases);
+            setTxt('today_turns', '+' + turns + ' lượt');
+            setTxt('today_words', '+' + words + ' từ');
+            setTxt('today_phrases', '+' + phrases + ' câu');
+            setTxt('week_minutes', turns + ' phút');
+            const bars = document.getElementById('week_bars');
+            if (bars) {
+                bars.innerHTML = '';
+                const day = (new Date().getDay() + 6) % 7;
+                for (let i = 0; i < 7; i++) {
+                    const b = document.createElement('i');
+                    if (i === day) { b.className = 'on'; b.style.height = Math.max(12, Math.min(80, 8 + turns * 4)) + 'px'; }
+                    else b.style.height = '8px';
+                    bars.appendChild(b);
+                }
+            }
+            const miles = [
+                [1, '1 giờ nói đầu tiên', 'Khởi đầu', 'Thói quen luyện nói mỗi ngày 5–10 phút sẽ giúp con tiến nhanh.'],
+                [5, '5 giờ nói', 'Đang nảy mầm', 'Não con đang học cách tự xử lý tiếng Anh, phản xạ trực tiếp.'],
+                [15, '15 giờ nói', 'Tiến vững', 'Phản xạ hội thoại nhanh và tự nhiên hơn.'],
+                [30, '30 giờ nói', 'Tăng tốc', 'Mốc tiến bộ rõ: hỏi, trả lời mà không dừng lại dịch.'],
+                [60, '60 giờ nói', 'Phản xạ tốt', 'Đủ vốn để tự tin tình huống giao tiếp đơn giản.'],
+                [100, '100 giờ nói', 'Top học viên', 'Không chỉ nói được nhiều hơn, còn tự tin hơn hẳn.'],
+                [400, '400 giờ nói', 'Bậc thầy', 'Tiếng Anh trở thành công cụ con thực sự sở hữu.']
+            ];
+            const hours = turns / 12;
+            const box = document.getElementById('mile_list');
+            if (!box) return;
+            box.innerHTML = '';
+            miles.forEach(function (m) {
+                const div = document.createElement('div');
+                div.className = 'mile' + (hours >= m[0] ? ' on' : '');
+                div.innerHTML = '<div class="mile-n">' + m[0] + '</div><div><b>' + m[1] + ' <span class="pill-tag">' + m[2] + '</span></b><p>' + m[3] + '</p></div>';
+                box.appendChild(div);
+            });
+        }
+        function renderSpeakProfile() {
+            const name = childName();
+            const nameEl = document.getElementById('profile_name');
+            if (nameEl) nameEl.textContent = name;
+            const done = speakDoneIndex();
+            const ach = document.getElementById('ach_level');
+            if (ach) {
+                ach.textContent = done >= 13 ? 'Cụm câu' : done >= 6 ? 'Từ vựng' : done >= 1 ? 'Tập nói' : 'Bạn mới';
+            }
+            const cardsEl = document.getElementById('ach_cards');
+            if (cardsEl) cardsEl.textContent = done;
+            const likesEl = document.getElementById('profile_likes');
+            const likes = ((likesEl && likesEl.value) || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+            const count = document.getElementById('like_count');
+            if (count) count.textContent = likes.length + '/8';
+            const chips = document.getElementById('like_chips');
+            if (chips) {
+                chips.innerHTML = likes.map(function (l) {
+                    return '<button type="button" class="plus" style="width:auto;padding:0 14px;margin:0 8px 8px 0;height:40px;font-size:.9em">' + l + '</button>';
+                }).join('') + '<button type="button" class="plus" id="like_add">+</button>';
+                const add = document.getElementById('like_add');
+                if (add && likesEl) add.onclick = function () { likesEl.focus(); };
+            }
+            const streak = document.getElementById('ov_streak');
+            if (streak) streak.textContent = done > 0 ? '1' : '0';
+            renderSpeakRank();
+        }
+        function speakFirstPhrase() {
+            if (!speakUnit) return 0;
+            const i = (speakUnit.cards || []).findIndex(function (c) { return c.type === 'phrase'; });
+            return i < 0 ? 0 : i;
+        }
+        let startSpeakBusy = false;
+        async function startSpeak(index) {
+            if (startSpeakBusy) return;
+            startSpeakBusy = true;
+            try {
+                const body = {
+                    action: 'start',
+                    level: speakLevel(),
+                    unit: speakUnitId(),
+                    index: (index == null ? -1 : index)
+                };
+                const data = await postSpeak(body);
+                if (data && data.error) throw new Error(data.error);
+                await refreshSpeakStatus();
+                showToast('✅ Robot đang vào bài học — đang kết nối AI dạy và chào');
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không bắt đầu được. Kiểm tra máy :8765'));
+            } finally {
+                startSpeakBusy = false;
+            }
+        }
+        async function stopSpeak() {
+            try {
+                await postSpeak({ action: 'stop' });
+                await refreshSpeakStatus();
+                showToast('Đã về giao tiếp hằng ngày — robot đang kết nối lại và chào');
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            }
+        }
+        async function saveSpeakBase() {
+            const base = (document.getElementById('speak_base').value || '').trim();
+            if (!base) { showToast('Nhập địa chỉ máy, ví dụ http://192.168.100.161:8765'); return; }
+            try {
+                await postSpeak({ action: 'base', base: base });
+                await loadSpeakUnit();
+                showToast('✅ Đã lưu địa chỉ bài học');
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            }
+        }
+        async function saveSpeakSubtitles() {
+            try {
+                await postSpeak({
+                    action: 'subtitles',
+                    robot: !!(document.getElementById('sub_robot') && document.getElementById('sub_robot').checked),
+                    stt: !!(document.getElementById('sub_stt') && document.getElementById('sub_stt').checked)
+                });
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không lưu phụ đề'));
+            }
+        }
+        const EXPLAIN_LEVEL_INFO = {
+            off: {
+                title: 'Chỉ nói',
+                note: 'Đang chọn Chỉ nói: robot đọc từ / câu tiếng Anh rồi kêu bé nhắc lại. Không giảng nghĩa, không đưa ví dụ. Hợp khi bé đã biết từ, muốn luyện nói nhanh.',
+                toast: '✅ Chỉ nói — không giảng nghĩa'
+            },
+            basic: {
+                title: 'Cơ bản',
+                note: 'Đang chọn Cơ bản: robot giảng nghĩa ngắn (tiếng Việt + tiếng Anh) rồi mới kêu bé nói. Không đi sâu ví dụ hay lúc nào dùng câu. Hợp lần đầu học từ mới.',
+                toast: '✅ Cơ bản — giảng nghĩa ngắn rồi luyện nói'
+            },
+            detailed: {
+                title: 'Chi tiết',
+                note: 'Đang chọn Chi tiết: robot giảng kỹ nghĩa, ví dụ và lúc nào dùng câu đó, rồi mới luyện nói. Hợp khi bé cần hiểu sâu trước khi nói.',
+                toast: '✅ Chi tiết — giảng kỹ rồi luyện nói'
+            }
+        };
+        function explainLevelValue() {
+            const r = document.querySelector('input[name="explain_level"]:checked');
+            return r ? r.value : 'off';
+        }
+        function paintExplainLevel(level) {
+            const lv = EXPLAIN_LEVEL_INFO[level] ? level : 'off';
+            const radio = document.querySelector('input[name="explain_level"][value="' + lv + '"]');
+            if (radio) radio.checked = true;
+            paintAiPick('explain_pick', lv);
+            document.querySelectorAll('.ex-btns button').forEach(function (btn) {
+                btn.classList.toggle('on', btn.getAttribute('data-ex') === lv);
+            });
+            const info = EXPLAIN_LEVEL_INFO[lv];
+            document.querySelectorAll('[data-ex-note]').forEach(function (el) {
+                el.textContent = info.note;
+            });
+            const sub = document.getElementById('explain_help_sub');
+            if (sub) sub.textContent = 'Đang chọn: ' + info.title;
+            document.querySelectorAll('.ex-help-list li').forEach(function (li) {
+                li.classList.toggle('on', li.getAttribute('data-ex') === lv);
+            });
+        }
+        async function saveExplainLevel(level) {
+            const lv = EXPLAIN_LEVEL_INFO[level] ? level : explainLevelValue();
+            paintExplainLevel(lv);
+            try {
+                const data = await postSpeak({ action: 'explain', level: lv });
+                if (data && data.error) throw new Error(data.error);
+                showToast(EXPLAIN_LEVEL_INFO[lv].toast);
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không lưu mức giải thích'));
+            }
+        }
+        function showExplainHelp() {
+            paintExplainLevel(explainLevelValue());
+            const m = document.getElementById('explain_help_modal');
+            if (m) m.hidden = false;
+        }
+        function hideExplainHelp() {
+            const m = document.getElementById('explain_help_modal');
+            if (m) m.hidden = true;
+        }
+        function speakAiBackend() {
+            const r = document.querySelector('input[name="speak_ai_backend"]:checked');
+            return r ? r.value : 'xiaozhi';
+        }
+        function paintAiPick(pickId, backend) {
+            const pick = document.getElementById(pickId);
+            if (!pick) return;
+            pick.querySelectorAll('label').forEach(function (lab) {
+                lab.classList.toggle('on', lab.getAttribute('data-for') === backend);
+            });
+        }
+        function toggleSpeakAiFields() {
+            const be = speakAiBackend();
+            const xz = document.getElementById('speak_xiaozhi_fields');
+            const ge = document.getElementById('speak_gemini_fields');
+            if (xz) xz.classList.toggle('show', be === 'xiaozhi');
+            if (ge) ge.classList.toggle('show', be === 'gemini');
+            paintAiPick('speak_ai_pick', be);
+            const btn = document.getElementById('btn_save_speak_ai');
+            if (btn) btn.textContent = be === 'gemini' ? 'Lưu Gemini học bài' : 'Lưu Xiaozhi học bài';
+        }
+        function fillSpeakIdentity(st) {
+            if (!st) return;
+            const macEl = document.getElementById('speak_mac');
+            if (macEl && document.activeElement !== macEl && st.mac != null) macEl.value = st.mac;
+            const idEl = document.getElementById('speak_client_id');
+            if (idEl && document.activeElement !== idEl && st.client_id != null) idEl.value = st.client_id;
+            const modelEl = document.getElementById('speak_ai_model');
+            if (modelEl && document.activeElement !== modelEl && st.model != null) modelEl.value = st.model || 'gemini-3.8-live';
+            const voiceEl = document.getElementById('speak_ai_voice');
+            if (voiceEl && document.activeElement !== voiceEl && st.voice) voiceEl.value = st.voice;
+            const hint = document.getElementById('speak_key_hint');
+            if (hint) hint.textContent = st.has_key ? ('Đã lưu key: ' + (st.key_hint || '…')) : 'Chưa có Gemini key dạy học';
+            const radio = document.querySelector('input[name="speak_ai_backend"][value="' + (st.ai_backend || 'xiaozhi') + '"]');
+            if (radio && !document.querySelector('input[name="speak_ai_backend"]:focus')) radio.checked = true;
+            toggleSpeakAiFields();
+        }
+        let englishStyle = 'old';
+        let englishSlot = 'daily';
+        let styleBusy = false;
+        let applyingStyleUi = false;
+        let englishUiReady = false;
+        function paintEnglishChrome(style) {
+            const isNew = style === 'new';
+            document.body.classList.toggle('english-new', isNew);
+            document.body.classList.toggle('english-old', !isNew);
+            const oldTab = document.getElementById('style_tab_old');
+            const newTab = document.getElementById('style_tab_new');
+            if (oldTab) oldTab.classList.toggle('active', !isNew);
+            if (newTab) newTab.classList.toggle('active', isNew);
+            const spin = document.getElementById('mode_spin');
+            if (spin) spin.classList.toggle('is-new', isNew);
+            const disc = document.getElementById('mode_spin_disc');
+            if (disc) disc.textContent = isNew ? 'MỚI' : 'CŨ';
+            const title = document.getElementById('robot_title');
+            if (title) title.textContent = isNew ? 'Cài đặt robot · tiếng Anh mới' : 'Tiếng Anh cũ · World Edu';
+            const now = document.getElementById('style_now');
+            if (now) now.textContent = isNew
+                ? 'App học mới — Trang chủ / Lộ trình / Buddy'
+                : 'Desktop cũ — World Edu / giao tiếp / tự cấu hình';
+        }
+        function showNewApp() {
+            const parent = document.getElementById('app_parent');
+            const robot = document.getElementById('app_robot');
+            if (parent) parent.hidden = false;
+            if (robot) robot.hidden = true;
+            document.body.classList.add('app-mode');
+            document.body.classList.remove('robot-mode');
+            logStop();
+        }
+        function showOldRobot() {
+            restoreToolTabs();
+            const parent = document.getElementById('app_parent');
+            const robot = document.getElementById('app_robot');
+            if (parent) parent.hidden = true;
+            if (robot) robot.hidden = false;
+            document.body.classList.remove('app-mode');
+            document.body.classList.add('robot-mode');
+        }
+        function showRobotOverlay() {
+            showNewApp();
+        }
+        function stayOnRobotUi() {
+            if (englishStyle === 'new') showNewApp();
+            else showOldRobot();
+        }
+        function enterNewSection(name) {
+            openRobot(name);
+        }
+        function enterEnglishScreen(style, force) {
+            const next = (style === 'new') ? 'new' : 'old';
+            const changed = next !== englishStyle;
+            englishStyle = next;
+            paintEnglishChrome(next);
+            if (!changed && englishUiReady && !force) return;
+            englishUiReady = true;
+            if (next === 'new') {
+                showNewApp();
+                if (englishSlot === 'custom' && (changed || force)) switchApp('setup');
+                else if (changed || force) switchApp('home');
+            } else {
+                showOldRobot();
+                switchTab('course', true);
+            }
+            window.scrollTo(0, 0);
+        }
+        function goLearnEnglish() {
+            startSpeak();
+        }
+        async function goDailyChat() {
+            switchApp('home');
+            if (speakStatus && speakStatus.slot === 'daily' && !speakStatus.on) {
+                return;
+            }
+            try {
+                const data = await postSpeak({ action: 'new_daily' });
+                if (data && data.error) throw new Error(data.error);
+                applySpeakStatus(data);
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không bật giao tiếp'));
+            }
+        }
+        function applyEnglishStyleUi(st) {
+            if (!st || !st.style || applyingStyleUi) return;
+            applyingStyleUi = true;
+            englishSlot = st.slot || 'daily';
+            enterEnglishScreen(st.style);
+            applyingStyleUi = false;
+        }
+        async function setEnglishStyle(style, slot, fromTab) {
+            if (styleBusy) return;
+            if (style === englishStyle && (!slot || slot === englishSlot) && fromTab) return;
+            if (style === englishStyle && !slot) {
+                enterEnglishScreen(style, true);
+                return;
+            }
+            if (style === 'new' && !slot) englishSlot = 'daily';
+            if (slot) englishSlot = slot;
+            if (!fromTab) enterEnglishScreen(style, true);
+            styleBusy = true;
+            const spin = document.getElementById('mode_spin');
+            if (spin) spin.classList.add('spinning');
+            try {
+                const body = { action: 'style', style: style };
+                if (slot) body.slot = slot;
+                const data = await postSpeak(body);
+                if (data && data.error) throw new Error(data.error);
+                applySpeakStatus(data);
+                if (!fromTab) {
+                    showToast(style === 'new'
+                        ? '✅ Đã sang tiếng Anh mới · giao tiếp hằng ngày — robot đang chào'
+                        : '✅ Đã sang giao diện cũ · World Edu');
+                }
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không đổi chế độ'));
+            } finally {
+                setTimeout(function () {
+                    if (spin) spin.classList.remove('spinning');
+                }, 560);
+                styleBusy = false;
+            }
+        }
+        function toggleEnglishStyle() {
+            setEnglishStyle(englishStyle === 'new' ? 'old' : 'new');
+        }
+        function dailyAiBackend() {
+            const r = document.querySelector('input[name="daily_ai_backend"]:checked');
+            return r ? r.value : 'xiaozhi';
+        }
+        function toggleDailyAiFields() {
+            const be = dailyAiBackend();
+            const xz = document.getElementById('ndaily_xiaozhi_fields');
+            const ge = document.getElementById('ndaily_gemini_fields');
+            if (xz) xz.classList.toggle('show', be === 'xiaozhi');
+            if (ge) ge.classList.toggle('show', be === 'gemini');
+            paintAiPick('daily_ai_pick', be);
+            const btn = document.getElementById('btn_activate_ndaily');
+            if (btn) btn.textContent = be === 'gemini' ? 'Lưu Gemini giao tiếp' : 'Lưu Xiaozhi giao tiếp';
+        }
+        function fillDailyIdentity(st) {
+            if (!st) return;
+            const macEl = document.getElementById('ndaily_mac');
+            if (macEl && document.activeElement !== macEl && st.daily_mac != null) macEl.value = st.daily_mac;
+            const idEl = document.getElementById('ndaily_client_id_input');
+            if (idEl && document.activeElement !== idEl && st.daily_client_id != null) idEl.value = st.daily_client_id;
+            const modelEl = document.getElementById('ndaily_ai_model');
+            if (modelEl && document.activeElement !== modelEl && st.daily_model != null) modelEl.value = st.daily_model || 'gemini-3.8-live';
+            const voiceEl = document.getElementById('ndaily_ai_voice');
+            if (voiceEl && document.activeElement !== voiceEl && st.daily_voice) voiceEl.value = st.daily_voice;
+            const hint = document.getElementById('ndaily_key_hint');
+            if (hint) hint.textContent = st.daily_has_key ? ('Đã lưu key: ' + (st.daily_key_hint || '…')) : 'Chưa có Gemini key giao tiếp';
+            const radio = document.querySelector('input[name="daily_ai_backend"][value="' + (st.daily_ai_backend || 'xiaozhi') + '"]');
+            if (radio && !document.querySelector('input[name="daily_ai_backend"]:focus')) radio.checked = true;
+            toggleDailyAiFields();
+        }
+        async function saveDailyIdentity() {
+            const btn = document.getElementById('btn_activate_ndaily');
+            if (btn) btn.dataset.saving = '1';
+            const backend = dailyAiBackend();
+            try {
+                const data = await postSpeak({
+                    action: 'daily_identity',
+                    mac: '',
+                    client_id: '',
+                    ai_backend: backend,
+                    key: (document.getElementById('ndaily_ai_key') && document.getElementById('ndaily_ai_key').value || '').trim(),
+                    model: (document.getElementById('ndaily_ai_model') && document.getElementById('ndaily_ai_model').value || '').trim(),
+                    voice: (document.getElementById('ndaily_ai_voice') && document.getElementById('ndaily_ai_voice').value) || ''
+                });
+                if (data && data.error) throw new Error(data.error);
+                const keyEl = document.getElementById('ndaily_ai_key');
+                if (keyEl) keyEl.value = '';
+                applySpeakStatus(data);
+                showToast('✅ Đã bật giao tiếp hằng ngày — robot đang kết nối lại và chào');
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không bật giao tiếp'));
+            } finally {
+                if (btn) delete btn.dataset.saving;
+            }
+        }
+        async function activateNewDaily() {
+            return saveDailyIdentity();
+        }
+        async function saveNewCustom() {
+            const mac = (document.getElementById('ncustom_mac').value || '').trim();
+            const clientId = (document.getElementById('ncustom_client_id').value || '').trim();
+            if (mac && !isValidMacString(mac)) {
+                showToast('❌ MAC ID phải dạng aa:bb:cc:dd:ee:ff');
+                return;
+            }
+            try {
+                const data = await postSpeak({ action: 'new_custom', mac: mac, client_id: clientId });
+                if (data && data.error) throw new Error(data.error);
+                applySpeakStatus(data);
+                showToast('✅ Đã lưu Xiaozhi kiểu mới — Hi Jason dùng MAC này');
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không lưu'));
+            }
+        }
+        async function saveSpeakIdentity() {
+            const mac = (document.getElementById('speak_mac').value || '').trim();
+            const clientId = (document.getElementById('speak_client_id').value || '').trim();
+            const backend = speakAiBackend();
+            if (backend === 'xiaozhi' && mac && !isValidMacString(mac)) {
+                showToast('❌ MAC ID phải dạng aa:bb:cc:dd:ee:ff');
+                return;
+            }
+            try {
+                const data = await postSpeak({
+                    action: 'identity',
+                    mac: mac,
+                    client_id: clientId,
+                    ai_backend: backend,
+                    key: (document.getElementById('speak_ai_key').value || '').trim(),
+                    model: (document.getElementById('speak_ai_model').value || '').trim(),
+                    voice: document.getElementById('speak_ai_voice').value || ''
+                });
+                if (data && data.error) throw new Error(data.error);
+                document.getElementById('speak_ai_key').value = '';
+                await refreshSpeakStatus();
+                showToast('✅ Đã lưu tài khoản dạy học — Hi Jason vẫn giao tiếp. Bấm Bắt đầu học khi muốn học');
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            }
+        }
+        async function saveSpeakProfile() {
+            const dob = (document.getElementById('profile_dob') && document.getElementById('profile_dob').value || '').trim();
+            let age = parseInt(document.getElementById('profile_age').value, 10) || 0;
+            if (!age && dob) age = ageFromDob(dob);
+            const likes = (document.getElementById('profile_likes').value || '').trim();
+            const name = (document.getElementById('profile_student_name') && document.getElementById('profile_student_name').value || '').trim();
+            try {
+                await postSpeak({ action: 'profile', age: age, likes: likes, dob: dob, name: name });
+                const oldName = document.getElementById('student_name');
+                if (oldName) oldName.value = name;
+                if (currentConfig) currentConfig.student_name = name;
+                await refreshSpeakStatus();
+                showToast('✅ Đã lưu hồ sơ');
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            }
+        }
+        async function copyXiaozhiPrompt(fieldId, okMsg) {
+            const el = document.getElementById(fieldId || 'ai_xiaozhi_prompt');
+            const text = (el && el.value) || '';
+            if (!text) { showToast('Chưa có prompt — mở tab AI sau khi robot đã kết nối'); return; }
+            let copied = false;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    copied = true;
+                }
+            } catch (e) {}
+            if (!copied) {
+                try {
+                    el.removeAttribute('readonly');
+                    el.focus();
+                    el.select();
+                    el.setSelectionRange(0, el.value.length);
+                    copied = document.execCommand('copy');
+                    el.setAttribute('readonly', 'readonly');
+                } catch (e) {
+                    try { el.setAttribute('readonly', 'readonly'); } catch (e2) {}
+                }
+            }
+            if (copied) {
+                showToast('✅ ' + (okMsg || 'Đã copy prompt'));
+            } else {
+                if (el) { el.focus(); el.select(); }
+                showToast('Ô đã chọn — bấm Ctrl+C (hoặc Cmd+C) để copy');
+            }
+        }
+        function showLessonCard(i, hideText) {
+            if (!speakUnit || !speakUnit.cards || !speakUnit.cards[i]) {
+                showToast('Chưa tải được unit mẫu');
+                return;
+            }
+            quizHide = !!hideText;
+            lessonIdx = i;
+            const c = speakUnit.cards[i];
+            const img = document.getElementById('lesson_img');
+            img.onerror = function () { img.onerror = null; img.src = speakImgFallback(c); };
+            img.src = speakImg(c);
+            document.getElementById('lesson_en').textContent = quizHide && c.type === 'word' ? '???' : c.en;
+            document.getElementById('lesson_vi').textContent = quizHide ? 'Nhìn hình rồi nói. Bấm Đúng rồi để lật chữ.' : (c.vi || '');
+            document.getElementById('lesson_say').textContent = c.teacher || '';
+            document.getElementById('lesson').classList.add('show');
+        }
+        async function openLesson(i, hideText, alreadyStarted) {
+            if (!speakUnit || !speakUnit.cards || !speakUnit.cards[i]) {
+                showToast('Chưa tải được unit mẫu');
+                return;
+            }
+            if (!hideText && !alreadyStarted && i >= speakDoneIndex()) {
+                try {
+                    const data = await postSpeak({ action: 'start', level: speakLevel(), unit: speakUnitId(), index: i });
+                    if (data && data.error) showToast(data.error);
+                    await refreshSpeakStatus();
+                } catch (e) {}
+            }
+            showLessonCard(i, hideText);
+        }
+        function openQuiz() {
+            const i = (speakUnit && speakUnit.cards || []).findIndex(function (c) { return c.type === 'word'; });
+            openLesson(i < 0 ? 0 : i, true);
+        }
+        function closeLesson() {
+            document.getElementById('lesson').classList.remove('show');
+        }
+        function lessonDelta(d) {
+            if (!speakUnit) return;
+            const n = speakUnit.cards.length;
+            lessonIdx = (lessonIdx + d + n) % n;
+            showLessonCard(lessonIdx, quizHide && speakUnit.cards[lessonIdx].type === 'word');
+        }
+        async function markSaidAndNext() {
+            if (!speakUnit) return;
+            const c = speakUnit.cards[lessonIdx];
+            if (quizHide && document.getElementById('lesson_en').textContent === '???') {
+                document.getElementById('lesson_en').textContent = c.en;
+                document.getElementById('lesson_vi').textContent = c.vi || '';
+                return;
+            }
+            try {
+                const data = await postSpeak({ action: 'next' });
+                await refreshSpeakStatus();
+                if (data && data.finished) {
+                    showToast(data.next_unit
+                        ? '✅ Hết chủ đề — robot hỏi học lại, unit tiếp, hay nghỉ'
+                        : '✅ Hết chủ đề cuối — robot hỏi học lại hay nghỉ');
+                    closeLesson();
+                    return;
+                }
+            } catch (e) {
+                showToast('❌ ' + e.message);
+                return;
+            }
+            if (lessonIdx + 1 < speakUnit.cards.length) {
+                showLessonCard(lessonIdx + 1, quizHide && speakUnit.cards[lessonIdx + 1].type === 'word');
+            } else {
+                showToast('✅ Hết unit mẫu');
+                closeLesson();
+            }
+        }
     </script>
+    </div>
 </body>
 </html>

@@ -7,10 +7,14 @@
 #include "mqtt_protocol.h"
 #include "websocket_protocol.h"
 #include "direct_ai_protocol.h"
+#include "direct_ai_config.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+#include "speak_lesson.h"
+#endif
 
 #include <cstring>
 #include <cctype>
@@ -69,6 +73,9 @@ void Application::Initialize() {
         const char* mac = PickAndSaveMacPoolForCourse(boot_course);
         ESP_LOGI(TAG, "Boot MAC pool (course %u): %s", (unsigned)boot_course, mac ? mac : "(none)");
     }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    SpeakLesson::Get().ApplyDailyPoolOnBoot();
+#endif
 
     // Fresh Client-Id every boot (with current Device-Id) to avoid server spam/timeout.
     auto& board = Board::GetInstance();
@@ -524,6 +531,9 @@ void Application::InitializeProtocol(bool prefer_websocket) {
 
     const DirectAiBackend direct = DirectAiConfig::LoadBackend();
     DirectAiConfig::SetRunningBackend(direct);
+    running_device_id_ = SystemInfo::GetMacAddress();
+    ESP_LOGI(TAG, "InitializeProtocol Device-Id=%s backend=%s",
+             running_device_id_.c_str(), DirectAiConfig::BackendName(direct));
 
     if (direct != DirectAiBackend::kOff) {
         ESP_LOGI(TAG, "Direct AI mode: %s", DirectAiConfig::BackendName(direct));
@@ -827,10 +837,23 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
         return;
     }
 
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    SpeakLesson::Get().EnsureDailyOnWake();
+#endif
+    EnsureProtocolMatchesConfig();
+    if (!protocol_) {
+        ESP_LOGE(TAG, "No protocol after backend switch");
+        SetDeviceState(kDeviceStateIdle);
+        return;
+    }
+
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
             return;
         }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        SpeakLesson::Get().OnNewTalkSession();
+#endif
     }
 
     SetListeningMode(mode);
@@ -947,11 +970,25 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
         return;
     }
 
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    SpeakLesson::Get().EnsureDailyOnWake();
+#endif
+    EnsureProtocolMatchesConfig();
+    if (!protocol_) {
+        ESP_LOGE(TAG, "No protocol after backend switch");
+        SetDeviceState(kDeviceStateIdle);
+        audio_service_.EnableWakeWordDetection(true);
+        return;
+    }
+
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
             audio_service_.EnableWakeWordDetection(true);
             return;
         }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        SpeakLesson::Get().OnNewTalkSession();
+#endif
     }
 
     ESP_LOGI(TAG, "Wake word detected: %s", wake_word.c_str());
@@ -989,6 +1026,9 @@ void Application::HandleStateChangedEvent() {
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            SpeakLesson::Get().OnTalkIdle();
+#endif
             display->DismissNotification();
             display->SetStatus(Lang::Strings::STANDBY);
             if (!music_playing_display_active_) {
@@ -1011,6 +1051,9 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateListening: {
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            SpeakLesson::Get().OnAssistantTurnDone();
+#endif
             board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
 #if CONFIG_SILENCE_PROMPT_ENABLE
@@ -1540,14 +1583,46 @@ void Application::PatchMqttIdentityToCurrentMac() {
     }
 }
 
+void Application::EnsureProtocolMatchesConfig() {
+    const DirectAiBackend want = DirectAiConfig::LoadBackend();
+    const DirectAiBackend have = DirectAiConfig::RunningBackend();
+    const std::string want_mac = SystemInfo::GetMacAddress();
+    // Xiaozhi teaching and World Edu are both backend=off; Device-Id is what picks the course.
+    if (protocol_ && want == have && want_mac == running_device_id_) {
+        return;
+    }
+    ESP_LOGI(TAG, "Protocol backend %s -> %s, Device-Id %s -> %s",
+             DirectAiConfig::BackendName(have), DirectAiConfig::BackendName(want),
+             running_device_id_.c_str(), want_mac.c_str());
+    if (protocol_) {
+        if (protocol_->IsAudioChannelOpened()) {
+            AbortSpeaking(kAbortReasonNone);
+            PrepareAudioChannelClose();
+            protocol_->CloseAudioChannel();
+        }
+        protocol_.reset();
+    }
+    Settings ws_settings("websocket", false);
+    const bool has_ws = !ws_settings.GetString("url").empty();
+    if (!has_ws) {
+        PatchMqttIdentityToCurrentMac();
+    }
+    InitializeProtocol(has_ws);
+}
+
 void Application::ApplyDeviceIdentity() {
     // Fast path (matches other FW): close old session → open new with Device-Id from NVS.
     // No CheckVersion / activation UI. Then simulate wake word so the server greets.
+    if (activation_task_handle_ != nullptr) {
+        ESP_LOGW(TAG, "ApplyDeviceIdentity: activation task is running");
+        return;
+    }
+    if (identity_applying_.exchange(true)) {
+        identity_reapply_ = true;
+        ESP_LOGW(TAG, "ApplyDeviceIdentity: coalesced (already in progress)");
+        return;
+    }
     Schedule([this]() {
-        if (identity_task_handle_ != nullptr || activation_task_handle_ != nullptr) {
-            ESP_LOGW(TAG, "ApplyDeviceIdentity: another identity/activation task is running");
-            return;
-        }
 
         const std::string mac = SystemInfo::GetMacAddress();
         ESP_LOGI(TAG, "ApplyDeviceIdentity (fast): Device-Id=%s", mac.c_str());
@@ -1575,7 +1650,16 @@ void Application::ApplyDeviceIdentity() {
         const bool has_ws = !ws_settings.GetString("url").empty();
 
         // New Client-Id on every course/MAC switch (A→B) before reconnect.
+        // Teach mode keeps its own Client-Id in speak NVS — never overwrite World Edu UUID.
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        if (SpeakLesson::Get().UsesNewIdentity()) {
+            SpeakLesson::Get().EnsureActiveClientId();
+        } else {
+            Board::GetInstance().RegenerateUuid();
+        }
+#else
         Board::GetInstance().RegenerateUuid();
+#endif
         ESP_LOGI(TAG, "ApplyDeviceIdentity: new Client-Id=%s Device-Id=%s",
                  Board::GetInstance().GetUuid().c_str(), mac.c_str());
 
@@ -1591,7 +1675,22 @@ void Application::ApplyDeviceIdentity() {
         auto display = Board::GetInstance().GetDisplay();
         if (display != nullptr) {
             display->SetChatMessage("system", "");
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            const char* note = "Đã về tiếng Anh cũ";
+            if (SpeakLesson::Get().UsesNewIdentity()) {
+                const char* slot = SpeakLesson::Get().EnglishSlotName();
+                if (strcmp(slot, "daily") == 0) {
+                    note = "Giao tiếp hằng ngày";
+                } else if (strcmp(slot, "custom") == 0) {
+                    note = "Xiaozhi tự cấu hình mới";
+                } else {
+                    note = "Học tiếng Anh";
+                }
+            }
+            display->ShowNotification(note, 2000);
+#else
             display->ShowNotification("Đã đổi khóa", 2000);
+#endif
         }
 
         // After stale CloseAudioChannel idle callback is drained, open like "Hi,Jason"
@@ -1604,6 +1703,11 @@ void Application::ApplyDeviceIdentity() {
             }
             ESP_LOGI(TAG, "ApplyDeviceIdentity: auto greet via wake word '%s'", wake_word.c_str());
             WakeWordInvoke(wake_word);
+            identity_applying_ = false;
+            if (identity_reapply_.exchange(false)) {
+                ESP_LOGI(TAG, "ApplyDeviceIdentity: running coalesced retry");
+                ApplyDeviceIdentity();
+            }
         });
     });
 }

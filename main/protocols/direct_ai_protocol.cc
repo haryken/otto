@@ -10,6 +10,8 @@
 #include <cstring>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <freertos/idf_additions.h>
 #include <mbedtls/base64.h>
 
@@ -272,7 +274,7 @@ bool DirectAiProtocol::OpenAudioChannel() {
 
     const char* name = DirectAiConfig::BackendName(config_.backend);
     if (config_.backend == DirectAiBackend::kOff) {
-        SetError("AI: chưa chọn nhà cung cấp (web :8080, tab AI)");
+        SetError("AI: chưa chọn nhà cung cấp (web :8080 — dạy học: Trang chủ; World Edu: tab AI)");
         return false;
     }
     if (config_.key.empty()) {
@@ -288,6 +290,8 @@ bool DirectAiProtocol::OpenAudioChannel() {
         // Keys without search quota/permission refuse the whole session.
         ESP_LOGW(TAG, "%s refused the session with web search (%s), retrying without it",
                  name, error.c_str());
+        // Let TLS/WebSocket teardown finish before the next malloc-heavy setup JSON.
+        vTaskDelay(pdMS_TO_TICKS(300));
         ok = Connect(false, &error);
         if (ok) {
             no_search_[idx] = true;
@@ -500,6 +504,16 @@ std::string DirectAiProtocol::BuildInstructions() const {
     if (!config_.instructions.empty()) {
         text += "\n\nYêu cầu thêm của chủ robot:\n" + config_.instructions;
     }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    {
+        extern std::string OttoSpeakDirectAiPrompt();
+        std::string teach = OttoSpeakDirectAiPrompt();
+        if (!teach.empty()) {
+            text.append("\n\n");
+            text.append(teach);
+        }
+    }
+#endif
     return text;
 }
 
@@ -956,10 +970,11 @@ void DirectAiProtocol::Tick() {
     if (!ready_) {
         return;
     }
-    if (config_generation_ != DirectAiConfig::Generation() && !speaking_) {
-        ESP_LOGI(TAG, "Settings changed, closing the session");
+    // Never hang up a live lesson/chat because NVS/identity flipped (speak.off,
+    // web save, MAC switch). The new config is picked up on the next connect.
+    if (config_generation_ != DirectAiConfig::Generation()) {
         config_generation_ = DirectAiConfig::Generation();
-        RequestClose();
+        ESP_LOGI(TAG, "Settings changed during session: keep talking, apply on next connect");
         return;
     }
     const int64_t now = NowUs();

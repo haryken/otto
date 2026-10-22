@@ -9,6 +9,7 @@
 #include "ota.h"
 #include "otto_course_units.h"
 #include "otto_web_control.h"
+#include "speak_lesson.h"
 #include "system_info.h"
 #include <esp_log.h>
 #include <esp_http_server.h>
@@ -29,6 +30,8 @@
 #include <algorithm>
 
 static const char* TAG = "WSControl";
+
+#include "boards/otto-robot/speak_embed.inc"
 
 static const char kOfficialFirmwareUrl[] =
     "https://github.com/haryken/wirepodxiaozhi/releases/download/robot/xiaozhi.bin";
@@ -507,6 +510,27 @@ esp_err_t WebSocketControlServer::trim_guide_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::speak_file_handler(httpd_req_t *req) {
+    std::string uri = req->uri;
+    auto q = uri.find('?');
+    if (q != std::string::npos) {
+        uri.resize(q);
+    }
+    for (size_t i = 0; i < kSpeakEmbedFileCount; ++i) {
+        if (uri == kSpeakEmbedFiles[i].uri) {
+            httpd_resp_set_type(req, kSpeakEmbedFiles[i].mime);
+            OttoHttpCommonHeaders(req);
+            httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
+            const size_t len = kSpeakEmbedFiles[i].end - kSpeakEmbedFiles[i].start;
+            httpd_resp_send(req, kSpeakEmbedFiles[i].start, len);
+            return ESP_OK;
+        }
+    }
+    OttoHttpCommonHeaders(req);
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
+}
+
 esp_err_t WebSocketControlServer::api_config_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
     OttoHttpCommonHeaders(req);
@@ -747,6 +771,10 @@ esp_err_t WebSocketControlServer::api_config_post_handler(httpd_req_t *req) {
         const char* picked = PickAndSaveMacPoolForCourse(static_cast<uint8_t>(new_idx));
         ESP_LOGI(TAG, "MAC pool course %d picked: %s", new_idx, picked ? picked : "(none)");
     }
+
+    // Saving World Edu / old Daily / old Custom leaves new-English style so
+    // Hi Jason uses that course Device-Id instead of teaching / new-daily MAC.
+    SpeakLesson::Get().Disarm();
 
     std::string new_mac = SystemInfo::GetMacAddress();
     if (course_changed || new_mac != old_mac ||
@@ -1482,6 +1510,154 @@ esp_err_t WebSocketControlServer::api_log_boot_get_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t WebSocketControlServer::api_speak_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    std::string json = SpeakLesson::Get().StatusJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 2048) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    std::string body(total_len, 0);
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, body.data() + received, total_len - received);
+        if (ret <= 0) {
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+    cJSON* root = cJSON_Parse(body.c_str());
+    if (!root) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"JSON\"}");
+        return ESP_OK;
+    }
+    auto str = [&](const char* k, const char* def) {
+        cJSON* it = cJSON_GetObjectItem(root, k);
+        return cJSON_IsString(it) && it->valuestring ? it->valuestring : def;
+    };
+    std::string action = str("action", "");
+    auto& lesson = SpeakLesson::Get();
+    std::string out;
+    if (action == "base") {
+        lesson.SetBaseUrl(str("base", ""));
+        out = lesson.StatusJson();
+    } else if (action == "start") {
+        int idx = -1;
+        cJSON* i = cJSON_GetObjectItem(root, "index");
+        if (cJSON_IsNumber(i)) {
+            idx = i->valueint;
+        }
+        out = lesson.Start(str("level", "a1"), str("unit", "u01"), idx, str("backend", ""), true);
+    } else if (action == "stop") {
+        out = lesson.Stop();
+    } else if (action == "reset") {
+        out = lesson.ResetUnit();
+    } else if (action == "next") {
+        out = lesson.Next();
+    } else if (action == "show") {
+        out = lesson.ShowCurrent();
+    } else if (action == "unit") {
+        out = lesson.UnitJson();
+    } else if (action == "profile") {
+        int age = 0;
+        cJSON* a = cJSON_GetObjectItem(root, "age");
+        if (cJSON_IsNumber(a)) {
+            age = a->valueint;
+        }
+        lesson.SetProfile(age, str("likes", ""), str("dob", ""));
+        std::string name = str("name", "");
+        if (!name.empty() || cJSON_IsString(cJSON_GetObjectItem(root, "name"))) {
+            SaveStudentName(name.c_str());
+        }
+        out = lesson.StatusJson();
+    } else if (action == "identity") {
+        bool clear_key = cJSON_IsTrue(cJSON_GetObjectItem(root, "clear_key"));
+        std::string instr = lesson.AiInstructions();
+        if (cJSON_IsString(cJSON_GetObjectItem(root, "instructions"))) {
+            instr = str("instructions", "");
+        }
+        out = lesson.SetIdentity(
+            str("mac", ""),
+            str("client_id", ""),
+            str("ai_backend", ""),
+            str("key", ""),
+            clear_key,
+            str("model", ""),
+            str("voice", ""),
+            instr);
+    } else if (action == "style") {
+        bool is_new = strcmp(str("style", "old"), "new") == 0;
+        int slot = -1;
+        std::string slot_s = str("slot", "");
+        if (slot_s == "teach") {
+            slot = 0;
+        } else if (slot_s == "daily") {
+            slot = 1;
+        } else if (slot_s == "custom") {
+            slot = 2;
+        }
+        out = lesson.SetEnglishStyle(is_new, slot);
+    } else if (action == "new_daily") {
+        out = lesson.GoDaily(str("backend", ""));
+    } else if (action == "daily_identity") {
+        bool clear_key = cJSON_IsTrue(cJSON_GetObjectItem(root, "clear_key"));
+        out = lesson.SetDailyIdentity(
+            str("mac", ""),
+            str("client_id", ""),
+            str("ai_backend", ""),
+            str("key", ""),
+            clear_key,
+            str("model", ""),
+            str("voice", ""),
+            str("instructions", ""));
+    } else if (action == "new_custom") {
+        out = lesson.SetNewCustom(str("mac", ""), str("client_id", ""));
+    } else if (action == "subtitles") {
+        bool robot = lesson.ShowRobotSubtitle();
+        bool stt = lesson.ShowSttSubtitle();
+        cJSON* r = cJSON_GetObjectItem(root, "robot");
+        cJSON* u = cJSON_GetObjectItem(root, "stt");
+        if (cJSON_IsBool(r)) {
+            robot = cJSON_IsTrue(r);
+        }
+        if (cJSON_IsBool(u)) {
+            stt = cJSON_IsTrue(u);
+        }
+        out = lesson.SetSubtitles(robot, stt);
+    } else if (action == "explain") {
+        int level = 0;
+        std::string lv = str("level", "");
+        if (lv == "basic") {
+            level = 1;
+        } else if (lv == "detailed") {
+            level = 2;
+        } else if (lv == "off" || lv == "speak") {
+            level = 0;
+        } else {
+            cJSON* n = cJSON_GetObjectItem(root, "level");
+            if (cJSON_IsNumber(n)) {
+                level = n->valueint;
+            }
+        }
+        out = lesson.SetExplainLevel(level);
+    } else {
+        out = "{\"success\":false,\"error\":\"action\"}";
+    }
+    cJSON_Delete(root);
+    httpd_resp_sendstr(req, out.c_str());
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
@@ -1495,6 +1671,7 @@ bool WebSocketControlServer::Start(int port) {
     config.max_open_sockets = 7;
     config.ctrl_port = 32769;
     config.max_uri_handlers = 32;
+    config.uri_match_fn = httpd_uri_match_wildcard;
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",
@@ -1516,6 +1693,14 @@ bool WebSocketControlServer::Start(int port) {
         .uri = "/trim_guide.png",
         .method = HTTP_GET,
         .handler = trim_guide_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t speak_uri = {
+        .uri = "/speak/?*",
+        .method = HTTP_GET,
+        .handler = speak_file_handler,
         .user_ctx = nullptr,
         .is_websocket = false
     };
@@ -1656,6 +1841,22 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_speak_get_uri = {
+        .uri = "/api/speak",
+        .method = HTTP_GET,
+        .handler = api_speak_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_speak_post_uri = {
+        .uri = "/api/speak",
+        .method = HTTP_POST,
+        .handler = api_speak_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
         auto reg = [](httpd_handle_t handle, const httpd_uri_t* uri) {
             esp_err_t err = httpd_register_uri_handler(handle, uri);
@@ -1666,6 +1867,7 @@ bool WebSocketControlServer::Start(int port) {
         reg(server_handle_, &ws_uri);
         reg(server_handle_, &page_uri);
         reg(server_handle_, &trim_guide_uri);
+        reg(server_handle_, &speak_uri);
         reg(server_handle_, &api_get_uri);
         reg(server_handle_, &api_post_uri);
         reg(server_handle_, &api_robot_get_uri);
@@ -1683,6 +1885,8 @@ bool WebSocketControlServer::Start(int port) {
         reg(server_handle_, &api_ai_post_uri);
         reg(server_handle_, &api_log_get_uri);
         reg(server_handle_, &api_log_boot_get_uri);
+        reg(server_handle_, &api_speak_get_uri);
+        reg(server_handle_, &api_speak_post_uri);
         ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d (lru purge on)", port);
         return true;
     }

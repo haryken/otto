@@ -1,6 +1,10 @@
 #include "board.h"
 #include "system_info.h"
 #include "settings.h"
+#include "sdkconfig.h"
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+#include "speak_lesson.h"
+#endif
 #include "display/display.h"
 #include "display/oled_display.h"
 #include "assets/lang_config.h"
@@ -23,6 +27,15 @@ Board::Board() {
 }
 
 std::string Board::GetUuid() {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    if (SpeakLesson::Get().UsesNewIdentity()) {
+        SpeakLesson::Get().EnsureActiveClientId();
+        std::string teach_id = SpeakLesson::Get().ActiveClientId();
+        if (!teach_id.empty()) {
+            return teach_id;
+        }
+    }
+#endif
     Settings board_ro("board", false);
     std::string from_nvs = board_ro.GetString("uuid");
     if (!from_nvs.empty()) {

@@ -3,6 +3,7 @@
 #include "display/lcd_display.h"
 
 #include <memory>
+#include <string>
 
 /**
  * @brief Otto机器人GIF表情显示类
@@ -23,6 +24,8 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     virtual void ShowQrCode(const char* text) override;
     virtual void HideQrCode() override;
     virtual void SetupUI() override;
+    virtual void RefreshChatOverlay() override;
+    virtual void UpdateStatusBar(bool update_all = false) override;
 
    private:
     void InitializeOttoEmojis();
@@ -32,10 +35,19 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     /** Keep subtitle at bottom; multiline text draws above the full-screen eye GIF. */
     void ConfigureChatLayout();
     void RaiseStatusChrome();
+    void ShowTalkOnBattery(const char* utf8_icon);
+    void RestoreBatteryIcon();
+    bool WantSpeakSubtitle(const char* role) const;
+    /** Keep the speaking-card JPEG on the face while TTS/emotion would restore the eye GIF. Caller holds the display lock. */
+    bool KeepTeachingCardOnTop();
 
     lv_obj_t* qr_overlay_ = nullptr;
     lv_obj_t* qr_image_ = nullptr;
     std::unique_ptr<LvglImage> qr_image_holder_;
     esp_timer_handle_t qr_timer_ = nullptr;
     bool qr_visible_ = false;
+    bool talk_replaces_battery_ = false;
+    const char* talk_icon_ = nullptr;
+    std::string last_chat_role_;
+    std::string last_chat_content_;
 };

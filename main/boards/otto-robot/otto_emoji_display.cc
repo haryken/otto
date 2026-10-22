@@ -1,4 +1,5 @@
 #include "otto_emoji_display.h"
+#include "speak_lesson.h"
 
 #include <esp_log.h>
 #include <esp_heap_caps.h>
@@ -15,6 +16,8 @@ extern "C" {
 #include "display/lvgl_display/lvgl_theme.h"
 
 #define TAG "OttoEmojiDisplay"
+
+LV_FONT_DECLARE(OTTO_ICON_FONT);
 
 static constexpr int kQrAutoHideMs = 20000;
 
@@ -64,15 +67,101 @@ void OttoEmojiDisplay::RaiseStatusChrome() {
     }
 }
 
+void OttoEmojiDisplay::ShowTalkOnBattery(const char* utf8_icon) {
+    talk_icon_ = utf8_icon;
+    talk_replaces_battery_ = utf8_icon != nullptr && utf8_icon[0] != '\0';
+    if (battery_label_ == nullptr) {
+        return;
+    }
+    lv_obj_set_style_text_font(battery_label_, &OTTO_ICON_FONT, 0);
+    lv_label_set_text(battery_label_, talk_icon_ ? talk_icon_ : "");
+    lv_obj_clear_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void OttoEmojiDisplay::RestoreBatteryIcon() {
+    talk_replaces_battery_ = false;
+    talk_icon_ = nullptr;
+    if (battery_label_ == nullptr) {
+        return;
+    }
+    auto* theme = static_cast<LvglTheme*>(current_theme_);
+    if (theme != nullptr && theme->icon_font() != nullptr) {
+        lv_obj_set_style_text_font(battery_label_, theme->icon_font()->font(), 0);
+    }
+    lv_label_set_text(battery_label_, battery_icon_ ? battery_icon_ : "");
+    lv_obj_clear_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void OttoEmojiDisplay::UpdateStatusBar(bool update_all) {
+    LvglDisplay::UpdateStatusBar(update_all);
+    if (!talk_replaces_battery_ || talk_icon_ == nullptr) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    if (battery_label_ == nullptr) {
+        return;
+    }
+    lv_obj_set_style_text_font(battery_label_, &OTTO_ICON_FONT, 0);
+    lv_label_set_text(battery_label_, talk_icon_);
+    lv_obj_clear_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
+}
+
+bool OttoEmojiDisplay::WantSpeakSubtitle(const char* role) const {
+    if (hide_subtitle_) {
+        return false;
+    }
+    if (!SpeakLesson::Get().IsOn()) {
+        return true;
+    }
+    if (role != nullptr && strcmp(role, "user") == 0) {
+        return SpeakLesson::Get().ShowSttSubtitle();
+    }
+    if (role != nullptr && strcmp(role, "assistant") == 0) {
+        return SpeakLesson::Get().ShowRobotSubtitle();
+    }
+    return true;
+}
+
+void OttoEmojiDisplay::RefreshChatOverlay() {
+    SetChatMessage(last_chat_role_.c_str(), last_chat_content_.c_str());
+}
+
+bool OttoEmojiDisplay::KeepTeachingCardOnTop() {
+    if (qr_visible_ || !SpeakLesson::Get().IsOn() || preview_image_cached_ == nullptr ||
+        preview_image_ == nullptr) {
+        return false;
+    }
+    const auto state = Application::GetInstance().GetDeviceState();
+    if (state != kDeviceStateSpeaking && state != kDeviceStateListening) {
+        return false;
+    }
+    if (gif_controller_) {
+        gif_controller_->Stop();
+    }
+    if (emoji_box_ != nullptr) {
+        lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_remove_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(preview_image_);
+    return true;
+}
+
 void OttoEmojiDisplay::ConfigureChatLayout() {
     DisplayLockGuard lock(this);
     if (bottom_bar_ == nullptr || chat_message_label_ == nullptr) {
         return;
     }
 
+    const bool teach_card = SpeakLesson::Get().IsOn() && preview_image_cached_ != nullptr &&
+                            preview_image_ != nullptr &&
+                            !lv_obj_has_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+    if (top_bar_ != nullptr) {
+        lv_obj_set_style_bg_opa(top_bar_, teach_card ? LV_OPA_0 : LV_OPA_50, 0);
+    }
+
     lv_obj_set_width(bottom_bar_, LV_HOR_RES);
     lv_obj_set_height(bottom_bar_, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(bottom_bar_, LV_OPA_80, 0);
+    lv_obj_set_style_bg_opa(bottom_bar_, teach_card ? LV_OPA_60 : LV_OPA_80, 0);
     lv_obj_set_style_bg_color(bottom_bar_, lv_color_black(), 0);
     lv_obj_set_style_pad_top(bottom_bar_, 4, 0);
     lv_obj_set_style_pad_bottom(bottom_bar_, 4, 0);
@@ -96,6 +185,14 @@ void OttoEmojiDisplay::ConfigureChatLayout() {
         return;
     }
 
+    if (KeepTeachingCardOnTop()) {
+        if (bottom_bar_ != nullptr && !lv_obj_has_flag(bottom_bar_, LV_OBJ_FLAG_HIDDEN)) {
+            lv_obj_move_foreground(bottom_bar_);
+        }
+        RaiseStatusChrome();
+        return;
+    }
+
     // emoji_box_ must stay above the opaque full-screen container_, not behind it.
     if (emoji_box_ != nullptr) {
         lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
@@ -108,12 +205,17 @@ void OttoEmojiDisplay::ConfigureChatLayout() {
 }
 
 void OttoEmojiDisplay::SetChatMessage(const char* role, const char* content) {
-    SpiLcdDisplay::SetChatMessage(role, content);
+    if (role != nullptr) {
+        last_chat_role_ = role;
+    }
+    last_chat_content_ = content ? content : "";
+    const bool show = WantSpeakSubtitle(last_chat_role_.c_str());
+    SpiLcdDisplay::SetChatMessage(role, show ? last_chat_content_.c_str() : "");
     DisplayLockGuard lock(this);
     if (bottom_bar_ == nullptr) {
         return;
     }
-    if (content != nullptr && content[0] != '\0' && !hide_subtitle_) {
+    if (show && !last_chat_content_.empty() && !hide_subtitle_) {
         lv_obj_align(bottom_bar_, LV_ALIGN_BOTTOM_MID, 0, 0);
     }
     ConfigureChatLayout();
@@ -146,7 +248,6 @@ void OttoEmojiDisplay::InitializeOttoEmojis() {
     ESP_LOGI(TAG, "Otto表情初始化将由Assets系统处理");
 }
 
-LV_FONT_DECLARE(OTTO_ICON_FONT);
 void OttoEmojiDisplay::SetEmotion(const char* emotion) {
     // Otto assets use GIF names (staticstate, happy, ...), not Font Awesome keys like "neutral".
     if (emotion != nullptr &&
@@ -172,6 +273,17 @@ void OttoEmojiDisplay::SetEmotion(const char* emotion) {
         return;
     }
 
+    {
+        DisplayLockGuard lock(this);
+        if (KeepTeachingCardOnTop()) {
+            if (bottom_bar_ != nullptr && !lv_obj_has_flag(bottom_bar_, LV_OBJ_FLAG_HIDDEN)) {
+                lv_obj_move_foreground(bottom_bar_);
+            }
+            RaiseStatusChrome();
+            return;
+        }
+    }
+
     SpiLcdDisplay::SetEmotion(emotion);
     ConfigureEmojiLayout();
     ConfigureChatLayout();
@@ -187,35 +299,35 @@ void OttoEmojiDisplay::SetStatus(const char* status) {
     }
 
     if (strcmp(status, Lang::Strings::LISTENING) == 0) {
-        lv_obj_set_style_text_font(status_label_, &OTTO_ICON_FONT, 0);
-        lv_label_set_text(status_label_, "\xEF\x84\xB0");  // U+F130 麦克风图标
-        lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(status_label_, "");
+        lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
+        ShowTalkOnBattery("\xEF\x84\xB0");  // mic replaces battery
         return;
     } else if (strcmp(status, Lang::Strings::SPEAKING) == 0) {
-        lv_obj_set_style_text_font(status_label_, &OTTO_ICON_FONT, 0);
-        lv_label_set_text(status_label_, "\xEF\x80\xA8");  // U+F028 说话图标
-        lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(status_label_, "");
+        lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
+        ShowTalkOnBattery("\xEF\x80\xA8");  // speaker replaces battery
         return;
     } else if (strcmp(status, Lang::Strings::CONNECTING) == 0) {
-        lv_obj_set_style_text_font(status_label_, &OTTO_ICON_FONT, 0);
-        lv_label_set_text(status_label_, "\xEF\x83\x81");  // U+F0c1 连接图标
-        lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(status_label_, "");
+        lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        ShowTalkOnBattery("\xEF\x83\x81");
         return;
     } else if (strcmp(status, Lang::Strings::STANDBY) == 0) {
+        RestoreBatteryIcon();
         lv_obj_set_style_text_font(status_label_, text_font, 0);
         lv_label_set_text(status_label_, "");
-        lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(battery_label_, LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
+    RestoreBatteryIcon();
     lv_obj_set_style_text_font(status_label_, text_font, 0);
     lv_label_set_text(status_label_, status);
+    lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void OttoEmojiDisplay::ShowQrCode(const char* text) {
@@ -354,15 +466,17 @@ void OttoEmojiDisplay::HideQrCode() {
         }
         qr_image_holder_.reset();
         qr_visible_ = false;
-        if (emoji_box_ != nullptr) {
+        if (!KeepTeachingCardOnTop() && emoji_box_ != nullptr) {
             lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
-    // Recreate/start GIF emotion so eyes blink again after QR.
-    SetEmotion("staticstate");
+    if (!SpeakLesson::Get().IsOn() || preview_image_cached_ == nullptr) {
+        SetEmotion("staticstate");
+    }
     ConfigureChatLayout();
-    ESP_LOGI(TAG, "HideQrCode: restored emoji GIF");
+    ESP_LOGI(TAG, "HideQrCode: restored %s",
+             (SpeakLesson::Get().IsOn() && preview_image_cached_) ? "teaching card" : "emoji GIF");
 }
 
 void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
@@ -390,11 +504,12 @@ void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
 
     preview_image_cached_ = std::move(image);
     auto img_dsc = preview_image_cached_->image_dsc();
-    // 设置图片源并显示预览图片
     lv_image_set_src(preview_image_, img_dsc);
-    lv_image_set_rotation(preview_image_, 900);
+    // Camera frames are landscape; teaching cards are square 240x240 with baked text.
+    // Keep square cards upright even after the unit finishes (on_=false).
+    const bool square_card = img_dsc->header.w > 0 && img_dsc->header.w == img_dsc->header.h;
+    lv_image_set_rotation(preview_image_, square_card ? 0 : 900);
     if (img_dsc->header.w > 0 && img_dsc->header.h > 0) {
-        // zoom factor 1.0
         lv_image_set_scale(preview_image_, 256 * width_ / img_dsc->header.w);
     }
 
@@ -404,6 +519,13 @@ void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     }
     lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(preview_image_);
+    if (bottom_bar_ != nullptr && !lv_obj_has_flag(bottom_bar_, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_move_foreground(bottom_bar_);
+    }
+    RaiseStatusChrome();
     esp_timer_stop(preview_timer_);
-    ESP_ERROR_CHECK(esp_timer_start_once(preview_timer_, PREVIEW_IMAGE_DURATION_MS * 1000));
+    if (!SpeakLesson::Get().IsOn() && !square_card) {
+        ESP_ERROR_CHECK(esp_timer_start_once(preview_timer_, PREVIEW_IMAGE_DURATION_MS * 1000));
+    }
 }

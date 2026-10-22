@@ -53,7 +53,13 @@ static esp_err_t decode_with_new_jpeg(const uint8_t* src, size_t src_len, uint8_
 
     ESP_LOGD(TAG, "JPEG header info: width=%d, height=%d", out_info.width, out_info.height);
 
-    out_buf = jpeg_calloc_align(out_info.width * out_info.height * 2, 16);
+    {
+        const size_t rgb_bytes = (size_t)out_info.width * (size_t)out_info.height * 2;
+        out_buf = (uint8_t*)heap_caps_aligned_calloc(16, 1, rgb_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (out_buf == NULL) {
+            out_buf = (uint8_t*)heap_caps_aligned_calloc(16, 1, rgb_bytes, MALLOC_CAP_8BIT);
+        }
+    }
     if (out_buf == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for JPEG output buffer");
         ret = ESP_ERR_NO_MEM;
@@ -87,7 +93,7 @@ jpeg_dec_failed:
         jpeg_dec = NULL;
     }
     if (out_buf) {
-        jpeg_free_align(out_buf);
+        heap_caps_free(out_buf);
         out_buf = NULL;
     }
 

@@ -148,6 +148,9 @@ public:
      */
     void NotifyMusicFinished();
     AudioService& GetAudioService() { return audio_service_; }
+    bool IsAudioChannelOpened() const {
+        return protocol_ && protocol_->IsAudioChannelOpened();
+    }
     
     /**
      * Reset protocol resources (thread-safe)
@@ -164,12 +167,14 @@ public:
     void ApplyDeviceIdentity();
 
 private:
+    void EnsureProtocolMatchesConfig();
     Application();
     ~Application();
 
     std::mutex mutex_;
     std::deque<std::function<void()>> main_tasks_;
     std::unique_ptr<Protocol> protocol_;
+    std::string running_device_id_;
     EventGroupHandle_t event_group_ = nullptr;
     esp_timer_handle_t clock_timer_handle_ = nullptr;
     DeviceStateMachine state_machine_;
@@ -191,6 +196,8 @@ private:
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
     TaskHandle_t identity_task_handle_ = nullptr;
+    std::atomic<bool> identity_applying_{false};
+    std::atomic<bool> identity_reapply_{false};
 
     // Self-Control web OTA status (:8080 progress UI)
     mutable std::mutex web_ota_mutex_;
