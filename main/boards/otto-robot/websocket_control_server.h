@@ -53,12 +53,17 @@ private:
     static esp_err_t api_ota_get_handler(httpd_req_t *req);
     static esp_err_t api_ota_post_handler(httpd_req_t *req);
     static esp_err_t api_ota_upload_handler(httpd_req_t *req);
+    static esp_err_t api_ota_check_handler(httpd_req_t *req);
     static esp_err_t api_action_post_handler(httpd_req_t *req);
     static esp_err_t api_unit_post_handler(httpd_req_t *req);
     static esp_err_t api_pose_get_handler(httpd_req_t *req);
     static esp_err_t api_pose_post_handler(httpd_req_t *req);
     static esp_err_t api_trim_get_handler(httpd_req_t *req);
     static esp_err_t api_trim_post_handler(httpd_req_t *req);
+    static esp_err_t api_ai_get_handler(httpd_req_t *req);
+    static esp_err_t api_ai_post_handler(httpd_req_t *req);
+    static esp_err_t api_log_get_handler(httpd_req_t *req);
+    static esp_err_t api_log_boot_get_handler(httpd_req_t *req);
     
     void HandleMessage(httpd_req_t *req, const char* data, size_t len);
     void AddClient(httpd_req_t *req);

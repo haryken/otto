@@ -4,6 +4,9 @@
 #include "board.h"
 #include "audio_codec.h"
 #include "device_identity_presets.h"
+#include "direct_ai_config.h"
+#include "log_buffer.h"
+#include "ota.h"
 #include "otto_course_units.h"
 #include "otto_web_control.h"
 #include "system_info.h"
@@ -11,18 +14,28 @@
 #include <esp_http_server.h>
 #include <esp_idf_version.h>
 #include <esp_ota_ops.h>
+#include <esp_app_desc.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/idf_additions.h>
 #include <nvs.h>
 #include <sys/param.h>
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
 #include <map>
+#include <mutex>
 #include <string>
 #include <algorithm>
 
 static const char* TAG = "WSControl";
+
+static const char kOfficialFirmwareUrl[] =
+    "https://github.com/haryken/wirepodxiaozhi/releases/download/robot/xiaozhi.bin";
+
+static std::mutex s_fw_check_mutex;
+static bool s_fw_check_running = false;
+static std::string s_fw_check_json = "{\"state\":\"idle\"}";
 
 #define OTTO_NVS_NS "otto"
 #define WIFI_NVS_NS "wifi"
@@ -1063,6 +1076,65 @@ esp_err_t WebSocketControlServer::api_ota_upload_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+static void FirmwareCheckTask(void*) {
+    FirmwareProbe probe;
+    bool reachable = Ota::ProbeFirmware(kOfficialFirmwareUrl, &probe);
+    bool exists = reachable && (probe.http_status == 200 || probe.http_status == 206);
+    const esp_app_desc_t* cur = esp_app_get_description();
+    const esp_partition_t* part = esp_ota_get_next_update_partition(NULL);
+
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "state", "done");
+    cJSON_AddStringToObject(root, "url", kOfficialFirmwareUrl);
+    cJSON_AddBoolToObject(root, "reachable", reachable);
+    cJSON_AddNumberToObject(root, "http_status", probe.http_status);
+    cJSON_AddBoolToObject(root, "exists", exists);
+    cJSON_AddBoolToObject(root, "valid", probe.valid);
+    cJSON_AddBoolToObject(root, "same", probe.same_as_running);
+    cJSON_AddBoolToObject(root, "too_big", part && probe.size > part->size);
+    cJSON_AddNumberToObject(root, "size", static_cast<double>(probe.size));
+    cJSON_AddStringToObject(root, "version", probe.version.c_str());
+    cJSON_AddStringToObject(root, "date", probe.date.c_str());
+    cJSON_AddStringToObject(root, "time", probe.time.c_str());
+    cJSON_AddStringToObject(root, "current_version", cur->version);
+    cJSON_AddStringToObject(root, "current_date", cur->date);
+    cJSON_AddStringToObject(root, "current_time", cur->time);
+    char* printed = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    ESP_LOGI(TAG, "Firmware check: status=%d valid=%d same=%d size=%u",
+             probe.http_status, probe.valid, probe.same_as_running, (unsigned)probe.size);
+    {
+        std::lock_guard<std::mutex> lock(s_fw_check_mutex);
+        s_fw_check_json = printed ? printed : "{\"state\":\"done\",\"reachable\":false}";
+        s_fw_check_running = false;
+    }
+    if (printed) {
+        cJSON_free(printed);
+    }
+    vTaskDeleteWithCaps(NULL);
+}
+
+esp_err_t WebSocketControlServer::api_ota_check_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+
+    std::lock_guard<std::mutex> lock(s_fw_check_mutex);
+    if (req->method == HTTP_POST && !s_fw_check_running) {
+        s_fw_check_running = true;
+        s_fw_check_json = "{\"state\":\"checking\"}";
+        // TLS handshake needs more stack than the httpd task has; nothing here touches flash.
+        if (xTaskCreatePinnedToCoreWithCaps(FirmwareCheckTask, "fw_check", 8192, nullptr, 3,
+                                            nullptr, tskNO_AFFINITY, MALLOC_CAP_SPIRAM) != pdPASS) {
+            s_fw_check_running = false;
+            s_fw_check_json = "{\"state\":\"done\",\"reachable\":false,\"error\":\"task\"}";
+        }
+    }
+    httpd_resp_sendstr(req, s_fw_check_json.c_str());
+    return ESP_OK;
+}
+
 esp_err_t WebSocketControlServer::api_action_post_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
     OttoHttpCommonHeaders(req);
@@ -1306,6 +1378,110 @@ esp_err_t WebSocketControlServer::api_trim_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// ========== Direct AI (OpenAI / Grok / Gemini) ==========
+
+esp_err_t WebSocketControlServer::api_ai_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    std::string json = DirectAiConfig::ToWebJson();
+    httpd_resp_sendstr(req, json.c_str());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_ai_post_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > 4096) {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
+        return ESP_OK;
+    }
+    std::string body(total_len, '\0');
+    int received = 0;
+    while (received < total_len) {
+        int ret = httpd_req_recv(req, body.data() + received, total_len - received);
+        if (ret <= 0) {
+            return ESP_FAIL;
+        }
+        received += ret;
+    }
+
+    cJSON* root = cJSON_ParseWithLength(body.data(), body.size());
+    bool backend_changed = false;
+    std::string error;
+    const bool ok = root != nullptr && DirectAiConfig::ApplyWebJson(root, &backend_changed, &error);
+    cJSON_Delete(root);
+    if (!ok) {
+        if (error.empty()) {
+            error = "Invalid JSON";
+        }
+        cJSON* reply = cJSON_CreateObject();
+        cJSON_AddBoolToObject(reply, "success", false);
+        cJSON_AddStringToObject(reply, "error", error.c_str());
+        char* printed = cJSON_PrintUnformatted(reply);
+        httpd_resp_sendstr(req, printed ? printed : "{\"success\":false}");
+        cJSON_free(printed);
+        cJSON_Delete(reply);
+        return ESP_OK;
+    }
+
+    // Xiaozhi <-> direct AI swaps the protocol and boot flow; switching between
+    // AI providers applies on the next conversation.
+    const DirectAiBackend saved = DirectAiConfig::LoadBackend();
+    const DirectAiBackend running = DirectAiConfig::RunningBackend();
+    const bool reboot = (saved == DirectAiBackend::kOff) != (running == DirectAiBackend::kOff);
+    if (!reboot && saved != DirectAiBackend::kOff) {
+        DirectAiConfig::SetRunningBackend(saved);
+    }
+    httpd_resp_sendstr(req, reboot ? "{\"success\":true,\"reboot\":true}"
+                                   : "{\"success\":true,\"reboot\":false}");
+    if (reboot) {
+        ESP_LOGI(TAG, "AI mode changed, rebooting");
+        vTaskDelay(pdMS_TO_TICKS(800));
+        Application::GetInstance().Schedule([]() {
+            Application::GetInstance().Reboot();
+        });
+    }
+    return ESP_OK;
+}
+
+// ========== Device log ==========
+
+// GET /api/log?from=N: log text after byte N; X-Log-Next is the N for the next poll.
+esp_err_t WebSocketControlServer::api_log_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Access-Control-Expose-Headers", "X-Log-Next");
+
+    uint64_t from = 0;
+    char query[48];
+    char value[24];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "from", value, sizeof(value)) == ESP_OK) {
+        from = strtoull(value, nullptr, 10);
+    }
+    uint64_t next = 0;
+    std::string text = LogBuffer::Read(from, &next);
+    // newlib nano printf has no %llu.
+    const std::string next_str = std::to_string(next);
+    httpd_resp_set_hdr(req, "X-Log-Next", next_str.c_str());
+    httpd_resp_send(req, text.data(), text.size());
+    return ESP_OK;
+}
+
+esp_err_t WebSocketControlServer::api_log_boot_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    OttoHttpCommonHeaders(req);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    std::string text = LogBuffer::PreviousBootReport();
+    httpd_resp_send(req, text.data(), text.size());
+    return ESP_OK;
+}
+
 // ========== Server Start ==========
 
 bool WebSocketControlServer::Start(int port) {
@@ -1400,6 +1576,22 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_ota_check_get_uri = {
+        .uri = "/api/ota/check",
+        .method = HTTP_GET,
+        .handler = api_ota_check_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_ota_check_post_uri = {
+        .uri = "/api/ota/check",
+        .method = HTTP_POST,
+        .handler = api_ota_check_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     httpd_uri_t api_action_post_uri = {
         .uri = "/api/action",
         .method = HTTP_POST,
@@ -1432,6 +1624,38 @@ bool WebSocketControlServer::Start(int port) {
         .is_websocket = false
     };
 
+    httpd_uri_t api_ai_get_uri = {
+        .uri = "/api/ai",
+        .method = HTTP_GET,
+        .handler = api_ai_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_ai_post_uri = {
+        .uri = "/api/ai",
+        .method = HTTP_POST,
+        .handler = api_ai_post_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_log_get_uri = {
+        .uri = "/api/log",
+        .method = HTTP_GET,
+        .handler = api_log_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
+    httpd_uri_t api_log_boot_get_uri = {
+        .uri = "/api/log/boot",
+        .method = HTTP_GET,
+        .handler = api_log_boot_get_handler,
+        .user_ctx = nullptr,
+        .is_websocket = false
+    };
+
     if (httpd_start(&server_handle_, &config) == ESP_OK) {
         auto reg = [](httpd_handle_t handle, const httpd_uri_t* uri) {
             esp_err_t err = httpd_register_uri_handler(handle, uri);
@@ -1449,10 +1673,16 @@ bool WebSocketControlServer::Start(int port) {
         reg(server_handle_, &api_ota_get_uri);
         reg(server_handle_, &api_ota_post_uri);
         reg(server_handle_, &api_ota_upload_uri);
+        reg(server_handle_, &api_ota_check_get_uri);
+        reg(server_handle_, &api_ota_check_post_uri);
         reg(server_handle_, &api_action_post_uri);
         reg(server_handle_, &api_unit_post_uri);
         reg(server_handle_, &api_trim_get_uri);
         reg(server_handle_, &api_trim_post_uri);
+        reg(server_handle_, &api_ai_get_uri);
+        reg(server_handle_, &api_ai_post_uri);
+        reg(server_handle_, &api_log_get_uri);
+        reg(server_handle_, &api_log_boot_get_uri);
         ESP_LOGI(TAG, "WebSocket + Self-Control server started on port %d (lru purge on)", port);
         return true;
     }

@@ -65,6 +65,41 @@
         .progress-bar.failed { background: #e74c3c; }
         .progress-bar.success { background: #28a745; }
         .ota-msg { font-family: monospace; margin-top: 10px; font-size: 0.9em; word-break: break-all; }
+        .ota-current { font-weight: bold; color: #2c3e50; }
+        .ota-safe { margin-top: 10px; padding: 8px 10px; background: #eef6ff; border-radius: 6px; font-size: 0.85em; color: #34495e; line-height: 1.4; }
+        .ota-way-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .ota-way-head h3 { font-size: 1.15em; color: #2c3e50; margin: 0 0 4px; }
+        .ota-way-num { flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; background: #28a745; color: #fff; font-weight: bold; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
+        .ota-way-num-manual { background: #7f8c8d; }
+        .ota-tag { display: inline-block; font-size: 0.8em; font-weight: bold; padding: 3px 8px; border-radius: 10px; background: #d4edda; color: #1e7e34; }
+        .ota-tag-manual { background: #ececec; color: #555; }
+        .ota-steps { margin: 6px 0 12px 20px; padding: 0; line-height: 1.55; font-size: 0.92em; color: #444; }
+        .ota-steps li { margin: 3px 0; }
+        .ota-check-box { padding: 12px; border-radius: 8px; background: #f8f9fa; border: 1px solid #e9ecef; }
+        .ota-check-title { font-weight: bold; font-size: 1.05em; }
+        .ota-check-detail { margin-top: 6px; font-size: 0.9em; color: #555; white-space: pre-line; line-height: 1.45; }
+        .ota-way[data-state="new"] { border: 3px solid #28a745; box-shadow: 0 0 16px rgba(40,167,69,0.35); }
+        .ota-way[data-state="new"] .ota-check-box { background: #d4edda; border-color: #28a745; }
+        .ota-way[data-state="new"] .ota-check-title { color: #1e7e34; font-size: 1.25em; }
+        .ota-way[data-state="latest"] .ota-check-box { background: #e8f6ff; border-color: #b8daff; }
+        .ota-way[data-state="offline"] .ota-check-box,
+        .ota-way[data-state="invalid"] .ota-check-box { background: #fff8e1; border-color: #ffe08a; }
+        .ota-btn-now { background: #28a745; color: #fff; font-size: 1.35em; padding: 18px; animation: ota-pulse 1.6s ease-in-out infinite; }
+        .ota-btn-now:hover { background: #218838; }
+        .ota-btn-now:disabled { background: #ccc; animation: none; cursor: wait; }
+        .ota-btn-now[hidden] { display: none; }
+        @keyframes ota-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(40,167,69,0.6); } 50% { box-shadow: 0 0 0 12px rgba(40,167,69,0); } }
+        .ota-btn-secondary { background: #fff; color: #3498db; border: 2px solid #3498db; font-size: 1em; padding: 10px; }
+        .ota-btn-secondary:disabled { color: #aaa; border-color: #ccc; cursor: wait; }
+        .ota-switch { display: flex; gap: 8px; margin: 12px 0; }
+        .ota-switch-btn { flex: 1; padding: 12px 8px; border: 2px solid #ddd; border-radius: 8px; background: #fff; font-weight: bold; cursor: pointer; color: #555; font-size: 0.95em; }
+        .ota-switch-btn.active { border-color: #3498db; background: #eaf4fc; color: #1f6fa8; }
+        .ota-manual[hidden] { display: none; }
+        .ota-file-pick { display: block; margin: 8px 0; padding: 14px; border: 2px dashed #3498db; border-radius: 8px; text-align: center; color: #1f6fa8; font-weight: bold; background: #f5faff; }
+        .ota-file-pick input { display: none; }
+        .ota-file-pick.picked { border-style: solid; border-color: #28a745; background: #eafaf0; color: #1e7e34; }
+        .tab-btn.has-update { position: relative; }
+        .tab-btn.has-update::after { content: "MỚI"; position: absolute; top: -8px; right: -4px; background: #e74c3c; color: #fff; font-size: 0.7em; padding: 2px 6px; border-radius: 8px; }
         .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 280px; margin: 12px auto; }
         .dpad .spacer { visibility: hidden; }
         .btn-action { display: block; width: 100%; padding: 16px 8px; border: none; border-radius: 10px; font-size: 1em; font-weight: bold; cursor: pointer; background: #3498db; color: #fff; }
@@ -132,18 +167,39 @@
             text-align: center;
             margin-bottom: 6px;
         }
-        .trim-btns { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; }
-        .trim-btns button {
-            padding: 7px 0;
+        .trim-btns { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+        .trim-dir {
+            position: relative;
+            height: 44px;
             border: none;
-            border-radius: 6px;
-            background: #7f8c8d;
-            color: #fff;
-            font-weight: bold;
-            font-size: 0.85em;
+            background: transparent;
+            padding: 0;
             cursor: pointer;
+            color: #fff;
         }
-        .trim-btns button:active { opacity: 0.85; }
+        .trim-dir i {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .trim-dir.up i { clip-path: polygon(50% 4%, 4% 96%, 96% 96%); background: #27ae60; }
+        .trim-dir.down i { clip-path: polygon(4% 4%, 96% 4%, 50% 96%); background: #e74c3c; }
+        .trim-dir.left i { clip-path: polygon(4% 50%, 96% 8%, 96% 92%); background: #e74c3c; }
+        .trim-dir.right i { clip-path: polygon(4% 8%, 96% 50%, 4% 92%); background: #27ae60; }
+        .trim-dir b {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72em;
+            font-weight: 800;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        .trim-dir.up b { padding-top: 12px; }
+        .trim-dir.down b { padding-bottom: 12px; }
+        .trim-dir:active { opacity: 0.82; transform: scale(0.95); }
         .trim-hero {
             position: relative;
             display: flex;
@@ -174,7 +230,7 @@
             .trim-map { gap: 4px; padding: 6px 2px; }
             .trim-ctrl { padding: 6px; }
             .trim-ctrl h3 { font-size: 0.72em; }
-            .trim-btns button { padding: 6px 0; font-size: 0.8em; }
+            .trim-dir { height: 38px; }
             .trim-hero img { width: 150px; }
             .trim-hero { min-height: 200px; }
         }
@@ -182,6 +238,42 @@
         .pose-seq li { padding: 8px 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 6px; font-family: monospace; font-size: 0.9em; display: flex; justify-content: space-between; gap: 8px; }
         .pose-seq li button { border: none; background: #e74c3c; color: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
         pre.pose-json { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 8px; font-size: 0.75em; overflow-x: auto; max-height: 160px; margin-top: 8px; }
+        input[type="password"], .ai-field select, .ai-field textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; font-family: inherit; background: #fff; }
+        .ai-field textarea { min-height: 90px; resize: vertical; }
+        .ai-field > label { font-weight: bold; margin-top: 12px; }
+        .ai-key-row { display: flex; gap: 8px; align-items: center; }
+        .ai-key-row input { flex: 1; }
+        .btn-mini { padding: 9px 12px; border: 1px solid #e74c3c; background: #fff; color: #e74c3c; border-radius: 6px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+        .ai-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+        .ai-running { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: #eef6ff; font-size: 0.9em; }
+        .tabs { flex-wrap: wrap; }
+        .tab-btn { min-width: 90px; }
+        pre.log-box { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 8px; font-size: 0.72em; line-height: 1.35; overflow: auto; white-space: pre-wrap; word-break: break-all; max-height: 60vh; min-height: 120px; }
+        pre.log-box.short { max-height: 40vh; }
+        .log-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .log-tools button { padding: 8px 12px; border: 1px solid #3498db; background: #fff; color: #3498db; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .log-tools .ai-check { margin: 0; }
+        .modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 30, 45, 0.55); backdrop-filter: blur(3px); animation: modal-fade 0.18s ease-out; }
+        .modal-backdrop[hidden] { display: none; }
+        .modal-box { width: 100%; max-width: 420px; background: #fff; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); overflow: hidden; animation: modal-pop 0.22s cubic-bezier(.2,.9,.3,1.2); }
+        .modal-head { padding: 22px 22px 8px; text-align: center; }
+        .modal-icon { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; background: #d4edda; }
+        .modal-box.warn .modal-icon { background: #fff3cd; }
+        .modal-title { margin: 0; font-size: 1.25em; color: #2c3e50; }
+        .modal-sub { margin-top: 6px; color: #1e7e34; font-weight: bold; }
+        .modal-body { padding: 8px 22px 4px; }
+        .modal-list { list-style: none; margin: 8px 0; padding: 0; }
+        .modal-list li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin: 6px 0; background: #f6f8fa; border-radius: 8px; font-size: 0.92em; line-height: 1.4; color: #444; }
+        .modal-list li.warn { background: #fff8e1; color: #7a5b00; font-weight: bold; }
+        .modal-actions { display: flex; gap: 10px; padding: 14px 22px 22px; }
+        .modal-actions button { flex: 1; padding: 13px 10px; border: none; border-radius: 10px; font-size: 1em; font-weight: bold; cursor: pointer; }
+        .modal-cancel { background: #eef1f4; color: #555; }
+        .modal-cancel:hover { background: #e2e6ea; }
+        .modal-ok { background: #28a745; color: #fff; box-shadow: 0 4px 12px rgba(40,167,69,0.35); }
+        .modal-ok:hover { background: #218838; }
+        .modal-box.warn .modal-ok { background: #e67e22; box-shadow: 0 4px 12px rgba(230,126,34,0.35); }
+        @keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes modal-pop { from { opacity: 0; transform: translateY(16px) scale(0.95); } to { opacity: 1; transform: none; } }
     </style>
 </head>
 <body>
@@ -189,12 +281,28 @@
         <h1>Cài đặt robot Emun</h1>
     </header>
     <div id="toast" class="toast"></div>
+    <div id="confirm_modal" class="modal-backdrop" hidden>
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirm_title">
+            <div class="modal-head">
+                <div class="modal-icon" id="confirm_icon"></div>
+                <h3 class="modal-title" id="confirm_title"></h3>
+                <div class="modal-sub" id="confirm_sub"></div>
+            </div>
+            <div class="modal-body"><ul class="modal-list" id="confirm_list"></ul></div>
+            <div class="modal-actions">
+                <button type="button" class="modal-cancel" id="confirm_cancel">Huỷ</button>
+                <button type="button" class="modal-ok" id="confirm_ok">Đồng ý</button>
+            </div>
+        </div>
+    </div>
 
     <div class="tabs">
         <button type="button" class="tab-btn active" id="tab_btn_course" onclick="switchTab('course')">📚 Khóa học</button>
         <button type="button" class="tab-btn" id="tab_btn_control" onclick="switchTab('control')">🎮 Điều khiển</button>
         <button type="button" class="tab-btn" id="tab_btn_robot" onclick="switchTab('robot')">⚙️ Cài đặt</button>
         <button type="button" class="tab-btn" id="tab_btn_ota" onclick="switchTab('ota')">🔄 Cập nhật</button>
+        <button type="button" class="tab-btn" id="tab_btn_ai" onclick="switchTab('ai')">🤖 AI</button>
+        <button type="button" class="tab-btn" id="tab_btn_log" onclick="switchTab('log')">📜 Log</button>
     </div>
 
     <div id="tab_course" class="tab-panel active">
@@ -374,27 +482,27 @@
         </div>
         <div class="card">
             <h2>🎯 Hiệu chỉnh gốc động cơ</h2>
-            <p class="hint"><b>±</b> xoay khớp liền (mũi tên chỉ đúng khớp). Đứng thẳng ổn → <b>Lưu gốc</b>.</p>
+            <p class="hint"><b>Xanh</b> lên/phải · <b>Đỏ</b> xuống/trái. Số trên mũi tên = bước 1 hoặc 5. Đứng thẳng ổn → <b>Lưu gốc</b>.</p>
             <div class="trim-map" id="trim_map">
                 <div class="trim-side">
                     <div class="trim-ctrl" data-joint="rl" data-key="right_leg">
                         <h3>Hông phải <span>RL</span></h3>
                         <input type="number" id="trim_right_leg" min="-50" max="50" value="0" step="1">
                         <div class="trim-btns">
-                            <button type="button" onclick="trimNudge('right_leg',-5)">−5</button>
-                            <button type="button" onclick="trimNudge('right_leg',-1)">−1</button>
-                            <button type="button" onclick="trimNudge('right_leg',1)">+1</button>
-                            <button type="button" onclick="trimNudge('right_leg',5)">+5</button>
+                            <button type="button" class="trim-dir right" onclick="trimNudge('right_leg',-5)"><i></i><b>5</b></button>
+                            <button type="button" class="trim-dir right" onclick="trimNudge('right_leg',-1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir left" onclick="trimNudge('right_leg',1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir left" onclick="trimNudge('right_leg',5)"><i></i><b>5</b></button>
                         </div>
                     </div>
                     <div class="trim-ctrl" data-joint="rf" data-key="right_foot">
                         <h3>Bàn phải <span>RF</span></h3>
                         <input type="number" id="trim_right_foot" min="-50" max="50" value="0" step="1">
                         <div class="trim-btns">
-                            <button type="button" onclick="trimNudge('right_foot',-5)">−5</button>
-                            <button type="button" onclick="trimNudge('right_foot',-1)">−1</button>
-                            <button type="button" onclick="trimNudge('right_foot',1)">+1</button>
-                            <button type="button" onclick="trimNudge('right_foot',5)">+5</button>
+                            <button type="button" class="trim-dir down" onclick="trimNudge('right_foot',-5)"><i></i><b>5</b></button>
+                            <button type="button" class="trim-dir down" onclick="trimNudge('right_foot',-1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir up" onclick="trimNudge('right_foot',1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir up" onclick="trimNudge('right_foot',5)"><i></i><b>5</b></button>
                         </div>
                     </div>
                 </div>
@@ -406,20 +514,20 @@
                         <h3>Hông trái <span>LL</span></h3>
                         <input type="number" id="trim_left_leg" min="-50" max="50" value="0" step="1">
                         <div class="trim-btns">
-                            <button type="button" onclick="trimNudge('left_leg',-5)">−5</button>
-                            <button type="button" onclick="trimNudge('left_leg',-1)">−1</button>
-                            <button type="button" onclick="trimNudge('left_leg',1)">+1</button>
-                            <button type="button" onclick="trimNudge('left_leg',5)">+5</button>
+                            <button type="button" class="trim-dir right" onclick="trimNudge('left_leg',-5)"><i></i><b>5</b></button>
+                            <button type="button" class="trim-dir right" onclick="trimNudge('left_leg',-1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir left" onclick="trimNudge('left_leg',1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir left" onclick="trimNudge('left_leg',5)"><i></i><b>5</b></button>
                         </div>
                     </div>
                     <div class="trim-ctrl" data-joint="lf" data-key="left_foot">
                         <h3>Bàn trái <span>LF</span></h3>
                         <input type="number" id="trim_left_foot" min="-50" max="50" value="0" step="1">
                         <div class="trim-btns">
-                            <button type="button" onclick="trimNudge('left_foot',-5)">−5</button>
-                            <button type="button" onclick="trimNudge('left_foot',-1)">−1</button>
-                            <button type="button" onclick="trimNudge('left_foot',1)">+1</button>
-                            <button type="button" onclick="trimNudge('left_foot',5)">+5</button>
+                            <button type="button" class="trim-dir up" onclick="trimNudge('left_foot',-5)"><i></i><b>5</b></button>
+                            <button type="button" class="trim-dir up" onclick="trimNudge('left_foot',-1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir down" onclick="trimNudge('left_foot',1)"><i></i><b>1</b></button>
+                            <button type="button" class="trim-dir down" onclick="trimNudge('left_foot',5)"><i></i><b>5</b></button>
                         </div>
                     </div>
                 </div>
@@ -462,23 +570,143 @@
     </div>
 
     <div id="tab_ota" class="tab-panel">
-        <div class="card">
-            <h2>🔄 Cập nhật firmware (OTA)</h2>
-            <p class="hint">Hai cách: dán <b>URL</b> hoặc chọn file <b>xiaozhi.bin</b> (trong thư mục <code>build/</code>) rồi bấm cập nhật. <b>Không</b> dùng <code>merged-binary.bin</code> / full flash. Fail → giữ phần mềm cũ. Thành công sẽ reboot.</p>
-
-            <label class="hint" style="display:block;margin-top:8px">Từ link</label>
-            <input type="text" id="ota_url" placeholder="https://example.com/xiaozhi.bin" autocomplete="off" spellcheck="false">
-            <button class="btn btn-save" id="btn_ota" onclick="startOta()">⬇️ Cập nhật từ URL</button>
-
-            <hr style="border:none;border-top:1px solid #e9ecef;margin:16px 0">
-
-            <label class="hint" style="display:block">Từ file trên máy</label>
-            <input type="file" id="ota_file" accept=".bin,application/octet-stream" style="width:100%;margin:8px 0;font-size:14px">
-            <button class="btn btn-save" id="btn_ota_upload" onclick="startOtaUpload()">📤 Tải lên và cập nhật</button>
-
+        <div class="card ota-progress-card" id="ota_progress_card">
+            <h2>📊 Tình trạng cập nhật</h2>
+            <div class="ota-current" id="ota_current">Phiên bản robot đang chạy: …</div>
             <div class="progress-wrap"><div class="progress-bar" id="ota_bar"></div></div>
-            <div class="ota-msg" id="ota_msg">Chưa chạy</div>
+            <div class="ota-msg" id="ota_msg">Chưa có cập nhật nào đang chạy.</div>
             <div class="status" id="ota_status"></div>
+            <p class="ota-safe">🔒 Nếu cập nhật lỗi, robot <b>tự giữ phần mềm cũ</b> và vẫn chạy bình thường. Cập nhật thành công thì robot tự khởi động lại.</p>
+        </div>
+
+        <div class="card ota-way" id="ota_official_card" data-state="checking">
+            <div class="ota-way-head">
+                <span class="ota-way-num">1</span>
+                <div>
+                    <h3>Cập nhật tự động</h3>
+                    <span class="ota-tag">⭐ Khuyên dùng · Dễ nhất</span>
+                </div>
+            </div>
+            <ol class="ota-steps">
+                <li>Robot phải đang <b>kết nối WiFi có Internet</b>.</li>
+                <li>Trang tự kiểm tra khi bạn mở tab này. Muốn kiểm tra lại thì bấm <b>🔍 Kiểm tra lại</b>.</li>
+                <li>Nếu có bản mới, bấm nút xanh <b>⬇️ CẬP NHẬT NGAY</b>.</li>
+                <li>Chờ khoảng <b>1–3 phút</b>, <b>không tắt nguồn</b> robot. Xong robot tự khởi động lại.</li>
+            </ol>
+            <div class="ota-check-box" id="ota_official_box">
+                <div class="ota-check-title" id="ota_official_title">🔍 Đang kiểm tra bản cập nhật…</div>
+                <div class="ota-check-detail" id="ota_official_msg"></div>
+            </div>
+            <button class="btn ota-btn-now" id="btn_ota_official" onclick="startOfficialOta()" hidden>⬇️ CẬP NHẬT NGAY</button>
+            <button class="btn ota-btn-secondary" id="btn_ota_check" onclick="checkOfficialUpdate()">🔍 Kiểm tra lại</button>
+        </div>
+
+        <div class="card ota-way">
+            <div class="ota-way-head">
+                <span class="ota-way-num ota-way-num-manual">2</span>
+                <div>
+                    <h3>Cập nhật thủ công</h3>
+                    <span class="ota-tag ota-tag-manual">🛠️ Dành cho người tự build firmware</span>
+                </div>
+            </div>
+            <p class="hint">Chọn một trong hai cách bên dưới. Chỉ dùng file <b>xiaozhi.bin</b> (trong thư mục <code>build/</code>), <b>không</b> dùng <code>merged-binary.bin</code>.</p>
+            <div class="ota-switch" role="tablist">
+                <button type="button" class="ota-switch-btn active" id="ota_mode_file" onclick="setOtaManualMode('file')">📤 Từ file trên máy</button>
+                <button type="button" class="ota-switch-btn" id="ota_mode_url" onclick="setOtaManualMode('url')">🔗 Từ link</button>
+            </div>
+
+            <div class="ota-manual" id="ota_manual_file">
+                <ol class="ota-steps">
+                    <li>Lấy file <b>xiaozhi.bin</b> trong thư mục <code>build/</code> sau khi build.</li>
+                    <li>Bấm <b>Chọn file</b> bên dưới và chọn file đó.</li>
+                    <li>Bấm <b>📤 Tải lên và cập nhật</b>.</li>
+                    <li><b>Giữ trang này mở</b> đến khi thanh tiến trình chạy xong.</li>
+                </ol>
+                <label class="ota-file-pick">
+                    <input type="file" id="ota_file" accept=".bin,application/octet-stream" onchange="onOtaFilePicked()">
+                    <span id="ota_file_label">📁 Chọn file xiaozhi.bin</span>
+                </label>
+                <button class="btn btn-save" id="btn_ota_upload" onclick="startOtaUpload()">📤 Tải lên và cập nhật</button>
+            </div>
+
+            <div class="ota-manual" id="ota_manual_url" hidden>
+                <ol class="ota-steps">
+                    <li>Dán <b>link tải trực tiếp</b> tới file <code>.bin</code> (bắt đầu bằng <code>http://</code> hoặc <code>https://</code>).</li>
+                    <li>Bấm <b>⬇️ Cập nhật từ link</b>.</li>
+                    <li>Robot tự tải file về và cài, bạn có thể đóng trang.</li>
+                </ol>
+                <input type="text" id="ota_url" placeholder="https://example.com/xiaozhi.bin" autocomplete="off" spellcheck="false">
+                <button class="btn btn-save" id="btn_ota" onclick="startOta()">⬇️ Cập nhật từ link</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab_ai" class="tab-panel">
+        <div class="card">
+            <h2>🤖 Chế độ trò chuyện</h2>
+            <p class="hint"><b>Xiaozhi</b>: dùng máy chủ Xiaozhi như cũ. <b>OpenAI / Grok / Gemini</b>: robot nói chuyện thẳng với AI bằng API key của bạn, không qua máy chủ trung gian (phí tính vào tài khoản API của bạn).</p>
+            <div class="unit-grid" id="ai_modes">
+                <label><input type="radio" name="ai_backend" value="xiaozhi" onchange="aiOnModeChange()"> Xiaozhi (mặc định)</label>
+                <label><input type="radio" name="ai_backend" value="openai" onchange="aiOnModeChange()"> OpenAI Realtime</label>
+                <label><input type="radio" name="ai_backend" value="grok" onchange="aiOnModeChange()"> Grok Voice (xAI)</label>
+                <label><input type="radio" name="ai_backend" value="gemini" onchange="aiOnModeChange()"> Gemini Live (Google)</label>
+            </div>
+            <p class="hint">Đổi giữa Xiaozhi và AI trực tiếp thì robot tự khởi động lại. Đổi giữa các AI với nhau thì áp dụng từ lần trò chuyện sau.</p>
+            <div class="ai-running" id="ai_running">Đang tải…</div>
+        </div>
+
+        <div class="card ai-field" id="ai_provider_card" style="display:none">
+            <h2 id="ai_provider_title">🔑 Nhà cung cấp</h2>
+            <label for="ai_key">API key</label>
+            <div class="ai-key-row">
+                <input type="password" id="ai_key" autocomplete="off" spellcheck="false" placeholder="Để trống = giữ key đã lưu">
+                <button type="button" class="btn-mini" id="ai_clear_key" onclick="aiClearKey()">Xóa key</button>
+            </div>
+            <div class="hint" id="ai_key_hint"></div>
+            <div class="hint" id="ai_key_where"></div>
+            <label for="ai_voice">Giọng nói</label>
+            <select id="ai_voice"></select>
+            <label for="ai_model">Model</label>
+            <input type="text" id="ai_model" list="ai_model_list" autocomplete="off" spellcheck="false">
+            <datalist id="ai_model_list"></datalist>
+            <div class="hint" id="ai_model_help"></div>
+        </div>
+
+        <div class="card ai-field" id="ai_chat_card" style="display:none">
+            <h2>💬 Cách trò chuyện</h2>
+            <label for="ai_language">Ngôn ngữ nghe</label>
+            <select id="ai_language">
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+                <option value="auto">Tự nhận diện</option>
+            </select>
+            <label for="ai_instructions">Dặn thêm cho robot (tùy chọn)</label>
+            <textarea id="ai_instructions" maxlength="600" placeholder="Ví dụ: Tên bạn là Emun. Người nói chuyện với bạn là bé Na 7 tuổi, hãy nói thật dễ hiểu."></textarea>
+            <div class="hint"><span id="ai_instr_count">0</span>/600 ký tự</div>
+            <label class="ai-check"><input type="checkbox" id="ai_search"> Cho phép tra cứu Internet (Grok / Gemini)</label>
+            <div class="hint">Key không có quyền tra cứu thì robot tự bỏ phần này.</div>
+        </div>
+
+        <button class="btn btn-save" id="btn_save_ai" onclick="saveAiSettings()">💾 Lưu cài đặt AI</button>
+        <div class="status" id="ai_status"></div>
+    </div>
+
+    <div id="tab_log" class="tab-panel">
+        <div class="card">
+            <h2>🧯 Lần khởi động trước</h2>
+            <p class="hint">Lý do robot khởi động lại. Nếu do crash / treo thì có thêm thông tin lỗi và log cuối cùng trước khi khởi động lại (mất nếu rút nguồn hoặc sụt áp).</p>
+            <pre class="log-box short" id="log_boot">Đang tải…</pre>
+        </div>
+        <div class="card">
+            <h2>📜 Log trực tiếp</h2>
+            <div class="log-tools">
+                <label class="ai-check"><input type="checkbox" id="log_auto" checked onchange="logSchedule()"> Tự cập nhật</label>
+                <button type="button" onclick="logCopy()">Sao chép</button>
+                <button type="button" onclick="logDownload()">Tải file</button>
+                <button type="button" onclick="logClearView()">Xóa màn hình</button>
+            </div>
+            <pre class="log-box" id="log_live"></pre>
+            <p class="hint">Robot giữ khoảng 64 KB log gần nhất trong RAM. Log cũng xem được tại <code>/api/log</code> và <code>/api/log/boot</code>.</p>
         </div>
     </div>
 
@@ -1182,6 +1410,18 @@
             document.getElementById('tab_btn_control').classList.toggle('active', name === 'control');
             document.getElementById('tab_btn_robot').classList.toggle('active', name === 'robot');
             document.getElementById('tab_btn_ota').classList.toggle('active', name === 'ota');
+            document.getElementById('tab_ai').classList.toggle('active', name === 'ai');
+            document.getElementById('tab_btn_ai').classList.toggle('active', name === 'ai');
+            document.getElementById('tab_log').classList.toggle('active', name === 'log');
+            document.getElementById('tab_btn_log').classList.toggle('active', name === 'log');
+            if (name === 'ai') {
+                loadAiSettings();
+            }
+            if (name === 'log') {
+                logOpen();
+            } else {
+                logStop();
+            }
             if (name === 'robot') {
                 const guide = document.getElementById('trim_guide_img');
                 if (guide && !guide.getAttribute('src')) {
@@ -1194,6 +1434,7 @@
             }
             if (name === 'ota') {
                 pollOtaStatus();
+                if (!otaCheckedOnce) checkOfficialUpdate();
             }
         }
 
@@ -1393,16 +1634,36 @@
         function setOtaButtonsDisabled(disabled, runningLabel) {
             const btn = document.getElementById('btn_ota');
             const btnUp = document.getElementById('btn_ota_upload');
+            const btnNow = document.getElementById('btn_ota_official');
             btn.disabled = disabled;
             btnUp.disabled = disabled;
+            btnNow.disabled = disabled;
             if (disabled) {
-                btn.textContent = runningLabel || 'Đang cập nhật...';
-                btnUp.textContent = runningLabel || 'Đang tải lên...';
+                btn.textContent = runningLabel || '⏳ Đang cập nhật...';
+                btnUp.textContent = runningLabel || '⏳ Đang tải lên...';
+                btnNow.textContent = runningLabel || '⏳ Đang cập nhật...';
             } else {
-                btn.textContent = '⬇️ Cập nhật từ URL';
+                btn.textContent = '⬇️ Cập nhật từ link';
                 btnUp.textContent = '📤 Tải lên và cập nhật';
+                btnNow.textContent = '⬇️ CẬP NHẬT NGAY';
             }
         }
+        function setOtaManualMode(mode) {
+            document.getElementById('ota_manual_file').hidden = mode !== 'file';
+            document.getElementById('ota_manual_url').hidden = mode !== 'url';
+            document.getElementById('ota_mode_file').classList.toggle('active', mode === 'file');
+            document.getElementById('ota_mode_url').classList.toggle('active', mode === 'url');
+        }
+        function onOtaFilePicked() {
+            const input = document.getElementById('ota_file');
+            const file = input.files && input.files[0];
+            const label = document.getElementById('ota_file_label');
+            label.parentElement.classList.toggle('picked', !!file);
+            label.textContent = file
+                ? '✅ ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB) — bấm để đổi file'
+                : '📁 Chọn file xiaozhi.bin';
+        }
+        const OTA_STATE_TEXT = { idle: 'Chưa có cập nhật nào đang chạy', running: 'Đang cập nhật', success: 'Thành công', failed: 'Thất bại' };
         function setOtaUi(data) {
             const bar = document.getElementById('ota_bar');
             const msg = document.getElementById('ota_msg');
@@ -1412,12 +1673,12 @@
             bar.classList.remove('failed', 'success');
             if (data.state === 'failed') bar.classList.add('failed');
             if (data.state === 'success') bar.classList.add('success');
-            let line = (data.message || data.state || '') + (data.speed_kbps ? (' · ' + data.speed_kbps + ' KB/s') : '');
+            let line = (data.message || OTA_STATE_TEXT[data.state] || '') + (data.speed_kbps ? (' · ' + data.speed_kbps + ' KB/s') : '');
             if (data.error) line += ' [' + data.error + ']';
             msg.textContent = line || '—';
-            st.textContent = 'Trạng thái: ' + (data.state || 'idle') + ' · ' + pct + '%';
+            st.textContent = data.state === 'running' ? 'Đã xong ' + pct + '%' : '';
             const running = data.state === 'running';
-            setOtaButtonsDisabled(running, running ? 'Đang cập nhật...' : null);
+            setOtaButtonsDisabled(running, running ? '⏳ Đang cập nhật... ' + pct + '%' : null);
             if (running) {
                 if (!otaPollTimer) otaPollTimer = setInterval(pollOtaStatus, 800);
             } else if (otaPollTimer) {
@@ -1436,11 +1697,161 @@
             }
         }
 
-        async function startOta() {
-            const url = document.getElementById('ota_url').value.trim();
+        let officialOtaUrl = '';
+        let officialOtaVersion = '';
+        let otaCheckTimer = null;
+        let otaCheckedOnce = false;
+        function showOfficialCheck(d) {
+            const card = document.getElementById('ota_official_card');
+            const title = document.getElementById('ota_official_title');
+            const msg = document.getElementById('ota_official_msg');
+            const btnCheck = document.getElementById('btn_ota_check');
+            const btnGo = document.getElementById('btn_ota_official');
+            let state = 'checking';
+            if (d.state === 'done') {
+                if (!d.reachable) state = 'offline';
+                else if (!d.exists) state = 'none';
+                else if (!d.valid || d.too_big) state = 'invalid';
+                else if (d.same) state = 'latest';
+                else state = 'new';
+            } else if (d.state !== 'checking') {
+                state = 'idle';
+            }
+            card.dataset.state = state;
+            btnCheck.disabled = state === 'checking';
+            btnGo.hidden = state !== 'new';
+            document.getElementById('tab_btn_ota').classList.toggle('has-update', state === 'new');
+            officialOtaUrl = state === 'new' ? d.url : '';
+            officialOtaVersion = d.version || '';
+            if (d.current_version) {
+                document.getElementById('ota_current').textContent = 'Phiên bản robot đang chạy: ' + d.current_version;
+            }
+            const sizeKb = Math.round((d.size || 0) / 1024);
+            if (state === 'checking') {
+                title.textContent = '🔍 Đang kiểm tra bản cập nhật…';
+                msg.textContent = '';
+            } else if (state === 'idle') {
+                title.textContent = 'Chưa kiểm tra';
+                msg.textContent = 'Bấm “Kiểm tra lại” để xem có bản mới không.';
+            } else if (state === 'offline') {
+                title.textContent = '⚠️ Không kiểm tra được';
+                msg.textContent = 'Robot chưa vào được Internet. Kiểm tra WiFi rồi bấm “Kiểm tra lại”.';
+            } else if (state === 'none') {
+                title.textContent = 'ℹ️ Chưa có bản cập nhật mới';
+                msg.textContent = 'Robot đang dùng phần mềm hiện tại, không cần làm gì thêm.';
+            } else if (state === 'invalid') {
+                title.textContent = '⚠️ Bản trên máy chủ bị lỗi';
+                msg.textContent = 'File cập nhật không hợp lệ' + (d.too_big ? ' (quá lớn)' : '') + '. Hãy báo người phát triển.';
+            } else if (state === 'latest') {
+                title.textContent = '✅ Robot đã cài bản cập nhật này rồi';
+                msg.textContent = 'Không cần cập nhật.';
+            } else {
+                title.textContent = '🆕 Có bản cập nhật mới!';
+                msg.textContent = 'Phiên bản mới: ' + (d.version || '?') + (sizeKb ? ' (' + sizeKb + ' KB)' : '')
+                    + '\nBấm nút xanh bên dưới để cập nhật.';
+            }
+        }
+        async function pollOfficialCheck() {
+            try {
+                const resp = await fetch('/api/ota/check');
+                const d = await resp.json();
+                showOfficialCheck(d);
+                if (d.state !== 'checking' && otaCheckTimer) {
+                    clearInterval(otaCheckTimer);
+                    otaCheckTimer = null;
+                }
+            } catch (err) {
+                // robot busy or rebooting; keep polling
+            }
+        }
+        async function checkOfficialUpdate() {
+            otaCheckedOnce = true;
+            try {
+                const resp = await fetch('/api/ota/check', { method: 'POST' });
+                showOfficialCheck(await resp.json());
+            } catch (err) {
+                showOfficialCheck({ state: 'done', reachable: false });
+                return;
+            }
+            if (!otaCheckTimer) otaCheckTimer = setInterval(pollOfficialCheck, 1000);
+        }
+        function showConfirm(opts) {
+            const modal = document.getElementById('confirm_modal');
+            const box = modal.querySelector('.modal-box');
+            const okBtn = document.getElementById('confirm_ok');
+            const cancelBtn = document.getElementById('confirm_cancel');
+            box.classList.toggle('warn', !!opts.warn);
+            document.getElementById('confirm_icon').textContent = opts.icon || '⬇️';
+            document.getElementById('confirm_title').textContent = opts.title || '';
+            const sub = document.getElementById('confirm_sub');
+            sub.textContent = opts.sub || '';
+            sub.hidden = !opts.sub;
+            const list = document.getElementById('confirm_list');
+            list.innerHTML = '';
+            (opts.items || []).forEach(function (it) {
+                const li = document.createElement('li');
+                if (it.warn) li.className = 'warn';
+                const ic = document.createElement('span');
+                ic.textContent = it.icon || '•';
+                const tx = document.createElement('span');
+                tx.textContent = it.text;
+                li.append(ic, tx);
+                list.appendChild(li);
+            });
+            okBtn.textContent = opts.okText || 'Đồng ý';
+            cancelBtn.textContent = opts.cancelText || 'Huỷ';
+            modal.hidden = false;
+            okBtn.focus();
+            return new Promise(function (resolve) {
+                function close(result) {
+                    modal.hidden = true;
+                    okBtn.onclick = cancelBtn.onclick = modal.onclick = null;
+                    document.removeEventListener('keydown', onKey);
+                    resolve(result);
+                }
+                function onKey(e) {
+                    if (e.key === 'Escape') close(false);
+                }
+                okBtn.onclick = function () { close(true); };
+                cancelBtn.onclick = function () { close(false); };
+                modal.onclick = function (e) { if (e.target === modal) close(false); };
+                document.addEventListener('keydown', onKey);
+            });
+        }
+        const OTA_CONFIRM_ITEMS = [
+            { icon: '⏱️', text: 'Robot tải và cài trong khoảng 1–3 phút, xong tự khởi động lại.' },
+            { icon: '🔒', text: 'Nếu cập nhật lỗi, robot tự giữ phần mềm cũ.' },
+            { icon: '🔌', text: 'Không tắt nguồn robot trong lúc cập nhật.', warn: true }
+        ];
+        async function startOfficialOta() {
+            if (!officialOtaUrl) return;
+            const ok = await showConfirm({
+                icon: '🚀',
+                title: 'Cập nhật robot ngay?',
+                sub: 'Phiên bản ' + (officialOtaVersion || 'mới'),
+                items: OTA_CONFIRM_ITEMS,
+                okText: '⬇️ Cập nhật ngay'
+            });
+            if (!ok) return;
+            startOta(officialOtaUrl);
+        }
+
+        async function startOta(fixedUrl) {
+            const url = fixedUrl || document.getElementById('ota_url').value.trim();
             if (!/^https?:\/\//i.test(url)) {
                 showToast('❌ URL phải bắt đầu http:// hoặc https://');
                 return;
+            }
+            if (!fixedUrl) {
+                const ok = await showConfirm({
+                    icon: '🔗',
+                    title: 'Cập nhật từ link này?',
+                    sub: url.length > 60 ? url.slice(0, 57) + '…' : url,
+                    items: [{ icon: '⚠️', text: 'Chỉ dùng link bạn tin tưởng, trỏ thẳng tới file xiaozhi.bin.' }].concat(OTA_CONFIRM_ITEMS),
+                    okText: '⬇️ Cập nhật',
+                    warn: true
+                });
+                if (!ok) return;
             }
             setOtaButtonsDisabled(true, 'Đang cập nhật...');
             try {
@@ -1460,7 +1871,7 @@
             }
         }
 
-        function startOtaUpload() {
+        async function startOtaUpload() {
             const input = document.getElementById('ota_file');
             const file = input.files && input.files[0];
             if (!file) {
@@ -1476,6 +1887,15 @@
                 showToast('❌ File quá nhỏ — hãy chọn xiaozhi.bin');
                 return;
             }
+            const ok = await showConfirm({
+                icon: '📤',
+                title: 'Tải file này lên robot?',
+                sub: file.name + ' · ' + Math.round(file.size / 1024) + ' KB',
+                items: [{ icon: '🖥️', text: 'Giữ trang này mở đến khi thanh tiến trình chạy xong.' }].concat(OTA_CONFIRM_ITEMS),
+                okText: '📤 Tải lên',
+                warn: true
+            });
+            if (!ok) return;
             setOtaButtonsDisabled(true, 'Đang tải lên...');
             document.getElementById('ota_msg').textContent = 'Đang tải lên ' + file.name + ' (' + Math.round(file.size/1024) + ' KB)...';
             document.getElementById('ota_bar').style.width = '0%';
@@ -1618,7 +2038,308 @@
         document.getElementById('student_name').addEventListener('input', markConfigDirty);
         document.getElementById('custom_mac').addEventListener('input', markConfigDirty);
 
+        // ===== Direct AI (OpenAI / Grok / Gemini) =====
+        const AI_PROVIDERS = {
+            openai: {
+                title: '🔑 OpenAI Realtime',
+                keyPh: 'sk-… (để trống = giữ key đã lưu)',
+                where: 'Lấy key tại <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a> (cần nạp credit).',
+                voices: [['coral', 'coral'], ['alloy', 'alloy'], ['ash', 'ash'], ['ballad', 'ballad'], ['echo', 'echo'],
+                         ['sage', 'sage'], ['shimmer', 'shimmer'], ['verse', 'verse'], ['marin', 'marin'], ['cedar', 'cedar']],
+                models: ['gpt-realtime-mini', 'gpt-realtime'],
+                modelHelp: 'gpt-realtime-mini (mặc định): rẻ, nhanh. gpt-realtime: thông minh hơn, đắt hơn.'
+            },
+            grok: {
+                title: '🔑 Grok Voice (xAI)',
+                keyPh: 'xai-… (để trống = giữ key đã lưu)',
+                where: 'Lấy key tại <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a>.',
+                voices: [['eve', 'Eve — nữ, vui tươi, năng động'], ['ara', 'Ara — nữ, ấm áp, thân thiện'],
+                         ['sal', 'Sal — trung tính, nhẹ nhàng'], ['rex', 'Rex — nam, tự tin, rõ ràng'],
+                         ['leo', 'Leo — nam, trầm, uy lực']],
+                models: ['grok-voice-latest'],
+                modelHelp: 'grok-voice-latest luôn dùng bản mới nhất của xAI.'
+            },
+            gemini: {
+                title: '🔑 Gemini Live (Google)',
+                keyPh: 'AIza… (để trống = giữ key đã lưu)',
+                where: 'Lấy key tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.',
+                voices: [['Kore', 'Kore'], ['Puck', 'Puck'], ['Zephyr', 'Zephyr'], ['Aoede', 'Aoede'], ['Leda', 'Leda'],
+                         ['Charon', 'Charon'], ['Fenrir', 'Fenrir'], ['Orus', 'Orus'], ['Achird', 'Achird'], ['Sulafat', 'Sulafat']],
+                models: ['gemini-3.8-live', 'gemini-2.5-flash-native-audio-latest'],
+                modelHelp: 'gemini-3.8-live (mặc định): nhanh nhất. Tra Google cần key có bật thanh toán. gemini-2.5-flash-native-audio-latest: chậm hơn nhưng tra Google được với key miễn phí.'
+            }
+        };
+        const AI_NAMES = { xiaozhi: 'Xiaozhi', openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini' };
+        let aiData = null;
+        let aiDrafts = {};
+        let aiShown = '';
+
+        function aiSelectedMode() {
+            const r = document.querySelector('input[name="ai_backend"]:checked');
+            return r ? r.value : 'xiaozhi';
+        }
+
+        function aiStashCard() {
+            if (!aiShown || !aiDrafts[aiShown]) return;
+            const d = aiDrafts[aiShown];
+            d.key = document.getElementById('ai_key').value.trim();
+            d.voice = document.getElementById('ai_voice').value;
+            d.model = document.getElementById('ai_model').value.trim();
+        }
+
+        function aiShowCard(name) {
+            const card = document.getElementById('ai_provider_card');
+            const chat = document.getElementById('ai_chat_card');
+            const p = AI_PROVIDERS[name];
+            aiShown = p ? name : '';
+            card.style.display = p ? '' : 'none';
+            chat.style.display = p ? '' : 'none';
+            if (!p) return;
+            const d = aiDrafts[name];
+            const info = (aiData && aiData[name]) || {};
+            document.getElementById('ai_provider_title').textContent = p.title;
+            const keyInput = document.getElementById('ai_key');
+            keyInput.placeholder = p.keyPh;
+            keyInput.value = d.key;
+            let hint;
+            if (d.clear) hint = 'Key sẽ bị xóa khi bấm Lưu.';
+            else if (info.has_key) hint = 'Đã lưu key: ' + info.key_hint;
+            else hint = 'Chưa có key.';
+            document.getElementById('ai_key_hint').textContent = hint;
+            document.getElementById('ai_key_where').innerHTML = p.where + ' Key chỉ lưu trên robot, trang này chỉ hiện vài ký tự.';
+            document.getElementById('ai_clear_key').style.display = info.has_key && !d.clear ? '' : 'none';
+
+            const voice = document.getElementById('ai_voice');
+            voice.innerHTML = '';
+            const voices = p.voices.slice();
+            if (d.voice && !voices.some(v => v[0] === d.voice)) voices.push([d.voice, d.voice]);
+            voices.forEach(function (v) {
+                const o = document.createElement('option');
+                o.value = v[0];
+                o.textContent = v[1] + (v[0] === info.default_voice ? ' (mặc định)' : '');
+                voice.appendChild(o);
+            });
+            voice.value = d.voice || info.default_voice || p.voices[0][0];
+
+            const list = document.getElementById('ai_model_list');
+            list.innerHTML = '';
+            p.models.forEach(function (m) {
+                const o = document.createElement('option');
+                o.value = m;
+                list.appendChild(o);
+            });
+            const model = document.getElementById('ai_model');
+            model.placeholder = info.default_model || p.models[0];
+            model.value = d.model;
+            document.getElementById('ai_model_help').textContent = p.modelHelp + ' Để trống = mặc định.';
+        }
+
+        function aiOnModeChange() {
+            aiStashCard();
+            aiShowCard(aiSelectedMode());
+        }
+
+        function aiClearKey() {
+            if (!aiShown) return;
+            aiDrafts[aiShown].clear = true;
+            aiDrafts[aiShown].key = '';
+            aiShowCard(aiShown);
+        }
+
+        function aiUpdateRunning() {
+            const el = document.getElementById('ai_running');
+            if (!aiData) { el.textContent = ''; return; }
+            let text = 'Robot đang dùng: ' + (AI_NAMES[aiData.running] || aiData.running);
+            if (aiData.backend !== aiData.running) {
+                text += ' — đã lưu ' + (AI_NAMES[aiData.backend] || aiData.backend) + ', áp dụng sau khi khởi động lại / lần trò chuyện sau';
+            }
+            el.textContent = text;
+        }
+
+        function aiUpdateCount() {
+            document.getElementById('ai_instr_count').textContent = document.getElementById('ai_instructions').value.length;
+        }
+
+        async function loadAiSettings() {
+            try {
+                const res = await fetch('/api/ai', { cache: 'no-store' });
+                aiData = await res.json();
+            } catch (e) {
+                document.getElementById('ai_running').textContent = 'Không tải được cài đặt AI';
+                return;
+            }
+            aiDrafts = {};
+            Object.keys(AI_PROVIDERS).forEach(function (name) {
+                const info = aiData[name] || {};
+                aiDrafts[name] = { key: '', clear: false, voice: info.voice || '', model: info.model || '' };
+            });
+            aiShown = '';
+            const radio = document.querySelector('input[name="ai_backend"][value="' + aiData.backend + '"]');
+            if (radio) radio.checked = true;
+            document.getElementById('ai_language').value = aiData.language || 'vi';
+            document.getElementById('ai_instructions').value = aiData.instructions || '';
+            document.getElementById('ai_search').checked = aiData.search !== false;
+            aiUpdateCount();
+            aiUpdateRunning();
+            aiShowCard(aiSelectedMode());
+        }
+
+        async function saveAiSettings() {
+            if (!aiData) { showToast('Chưa tải được cài đặt AI'); return; }
+            aiStashCard();
+            const mode = aiSelectedMode();
+            if (AI_PROVIDERS[mode]) {
+                const d = aiDrafts[mode];
+                const info = aiData[mode] || {};
+                if (!d.key && (d.clear || !info.has_key)) {
+                    showToast('Cần nhập API key cho ' + AI_NAMES[mode]);
+                    document.getElementById('ai_key').focus();
+                    return;
+                }
+            }
+            const body = {
+                backend: mode,
+                language: document.getElementById('ai_language').value,
+                instructions: document.getElementById('ai_instructions').value,
+                search: document.getElementById('ai_search').checked
+            };
+            Object.keys(aiDrafts).forEach(function (name) {
+                const d = aiDrafts[name];
+                const info = aiData[name] || {};
+                const voice = d.voice === info.default_voice ? '' : d.voice;
+                const entry = { model: d.model, voice: voice };
+                if (d.key) entry.key = d.key;
+                if (d.clear && !d.key) entry.clear_key = true;
+                body[name] = entry;
+            });
+            const btn = document.getElementById('btn_save_ai');
+            const status = document.getElementById('ai_status');
+            btn.disabled = true;
+            status.textContent = 'Đang lưu…';
+            try {
+                const res = await fetch('/api/ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const r = await res.json();
+                if (!r.success) {
+                    status.textContent = '';
+                    showToast('Lỗi: ' + (r.error || 'không lưu được'));
+                    return;
+                }
+                document.getElementById('ai_key').value = '';
+                if (r.reboot) {
+                    status.textContent = 'Đã lưu — robot đang khởi động lại, đợi khoảng 15 giây rồi tải lại trang.';
+                    showToast('Đã lưu, robot khởi động lại');
+                    return;
+                }
+                status.textContent = 'Đã lưu';
+                showToast('Đã lưu cài đặt AI');
+                loadAiSettings();
+            } catch (e) {
+                status.textContent = '';
+                showToast('Không gửi được: ' + e);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById('ai_instructions').addEventListener('input', aiUpdateCount);
+
+        // ===== Device log =====
+        const LOG_VIEW_MAX = 300000;
+        let logNext = 0;
+        let logTimer = null;
+        let logBusy = false;
+
+        async function logLoadBoot() {
+            try {
+                const res = await fetch('/api/log/boot', { cache: 'no-store' });
+                document.getElementById('log_boot').textContent = await res.text();
+            } catch (e) {
+                document.getElementById('log_boot').textContent = 'Không tải được';
+            }
+        }
+
+        async function logPoll() {
+            if (logBusy) return;
+            logBusy = true;
+            try {
+                const res = await fetch('/api/log?from=' + logNext, { cache: 'no-store' });
+                const text = await res.text();
+                const next = Number(res.headers.get('X-Log-Next'));
+                if (next < logNext) {
+                    // Robot rebooted: start over and refresh the boot report.
+                    document.getElementById('log_live').textContent = '';
+                    logLoadBoot();
+                }
+                logNext = next;
+                if (text) {
+                    const box = document.getElementById('log_live');
+                    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+                    let all = box.textContent + text;
+                    if (all.length > LOG_VIEW_MAX) all = all.slice(all.length - LOG_VIEW_MAX);
+                    box.textContent = all;
+                    if (atBottom) box.scrollTop = box.scrollHeight;
+                }
+            } catch (e) {
+                // Robot offline or rebooting; keep polling.
+            } finally {
+                logBusy = false;
+            }
+        }
+
+        function logSchedule() {
+            logStop();
+            if (document.getElementById('log_auto').checked &&
+                document.getElementById('tab_log').classList.contains('active')) {
+                logTimer = setInterval(logPoll, 1500);
+            }
+        }
+
+        function logStop() {
+            if (logTimer) clearInterval(logTimer);
+            logTimer = null;
+        }
+
+        function logOpen() {
+            logLoadBoot();
+            logPoll();
+            logSchedule();
+        }
+
+        function logClearView() {
+            document.getElementById('log_live').textContent = '';
+        }
+
+        function logFullText() {
+            return '===== Lần khởi động trước =====\n' + document.getElementById('log_boot').textContent +
+                '\n\n===== Log trực tiếp =====\n' + document.getElementById('log_live').textContent;
+        }
+
+        async function logCopy() {
+            try {
+                await navigator.clipboard.writeText(logFullText());
+                showToast('Đã sao chép log');
+            } catch (e) {
+                showToast('Trình duyệt không cho sao chép, dùng "Tải file"');
+            }
+        }
+
+        function logDownload() {
+            const blob = new Blob([logFullText()], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'robot-log-' + new Date().toISOString().replace(/[:.]/g, '-') + '.txt';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }
+
         document.addEventListener('DOMContentLoaded', loadConfig);
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() { if (!otaCheckedOnce) checkOfficialUpdate(); }, 1500);
+        });
     </script>
 </body>
 </html>

@@ -101,6 +101,10 @@ void AudioService::Initialize(AudioCodec* codec) {
 #endif
 
     audio_processor_->OnOutput([this](std::vector<int16_t>&& data) {
+        if (raw_pcm_uplink_.load()) {
+            PushPcmToSendQueue(std::move(data));
+            return;
+        }
         PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(data));
     });
 
@@ -615,6 +619,26 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
             ESP_LOGW(TAG, "Encode queue full, dropping oldest frame (dropped %lu so far)",
                      (unsigned long)dropped_total);
         }
+    }
+}
+
+void AudioService::PushPcmToSendQueue(std::vector<int16_t>&& pcm) {
+    auto packet = std::make_unique<AudioStreamPacket>();
+    packet->sample_rate = 16000;
+    packet->frame_duration = OPUS_FRAME_DURATION_MS;
+    packet->pcm = true;
+    packet->payload.assign(reinterpret_cast<const uint8_t*>(pcm.data()),
+                           reinterpret_cast<const uint8_t*>(pcm.data() + pcm.size()));
+    {
+        std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+        /* Realtime mic audio: drop the oldest packet instead of blocking the AFE. */
+        if (audio_send_queue_.size() >= MAX_SEND_PACKETS_IN_QUEUE) {
+            audio_send_queue_.pop_front();
+        }
+        audio_send_queue_.push_back(std::move(packet));
+    }
+    if (callbacks_.on_send_queue_available) {
+        callbacks_.on_send_queue_available();
     }
 }
 

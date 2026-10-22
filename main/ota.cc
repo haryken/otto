@@ -10,6 +10,7 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <esp_app_format.h>
+#include <esp_app_desc.h>
 #include <esp_efuse.h>
 #include <esp_efuse_table.h>
 #include <esp_heap_caps.h>
@@ -23,6 +24,51 @@
 #include <algorithm>
 
 #define TAG "Ota"
+
+namespace {
+
+constexpr int kMaxRedirects = 5;
+
+bool IsRedirectStatus(int status) {
+    return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+}
+
+// GitHub release links answer 302 to a signed CDN URL; HttpClient does not follow redirects itself.
+std::unique_ptr<Http> OpenFollowingRedirects(const std::string& url, const std::string& range = "") {
+    auto network = Board::GetInstance().GetNetwork();
+    std::string current = url;
+    for (int hop = 0; hop <= kMaxRedirects; ++hop) {
+        auto http = network->CreateHttp(0);
+        if (!range.empty()) {
+            http->SetHeader("Range", range);
+        }
+        if (!http->Open("GET", current)) {
+            ESP_LOGE(TAG, "Failed to open HTTP connection");
+            return nullptr;
+        }
+        int status = http->GetStatusCode();
+        if (!IsRedirectStatus(status)) {
+            return http;
+        }
+        std::string location = http->GetResponseHeader("Location");
+        http->Close();
+        if (location.empty()) {
+            ESP_LOGE(TAG, "Redirect %d without Location", status);
+            return nullptr;
+        }
+        if (location[0] == '/') {
+            size_t scheme_end = current.find("://");
+            size_t path_start = current.find('/', scheme_end == std::string::npos ? 0 : scheme_end + 3);
+            location = current.substr(0, path_start) + location;
+        }
+        ESP_LOGI(TAG, "Redirect %d (hop %d)", status, hop + 1);
+        current = location;
+    }
+    ESP_LOGE(TAG, "Too many redirects");
+    return nullptr;
+}
+
+}  // namespace
 
 
 Ota::Ota() {
@@ -406,10 +452,8 @@ bool Ota::UpgradeFromReader(size_t content_length,
 bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progress, size_t speed)> callback) {
     ESP_LOGI(TAG, "Upgrading firmware from %s", firmware_url.c_str());
 
-    auto network = Board::GetInstance().GetNetwork();
-    auto http = network->CreateHttp(0);
-    if (!http->Open("GET", firmware_url)) {
-        ESP_LOGE(TAG, "Failed to open HTTP connection");
+    auto http = OpenFollowingRedirects(firmware_url);
+    if (!http) {
         return false;
     }
 
@@ -431,6 +475,62 @@ bool Ota::Upgrade(const std::string& firmware_url, std::function<void(int progre
         callback);
     http->Close();
     return ok;
+}
+
+bool Ota::ProbeFirmware(const std::string& firmware_url, FirmwareProbe* out) {
+    constexpr size_t kHeaderLen = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t)
+                                  + sizeof(esp_app_desc_t);
+    *out = FirmwareProbe{};
+
+    auto http = OpenFollowingRedirects(firmware_url, "bytes=0-" + std::to_string(kHeaderLen - 1));
+    if (!http) {
+        return false;
+    }
+    out->http_status = http->GetStatusCode();
+    if (out->http_status != 200 && out->http_status != 206) {
+        http->Close();
+        return true;
+    }
+
+    if (out->http_status == 206) {
+        std::string range = http->GetResponseHeader("Content-Range");
+        size_t slash = range.rfind('/');
+        if (slash != std::string::npos) {
+            out->size = strtoul(range.c_str() + slash + 1, nullptr, 10);
+        }
+    } else {
+        out->size = http->GetBodyLength();
+    }
+
+    std::vector<char> header(kHeaderLen);
+    size_t got = 0;
+    while (got < kHeaderLen) {
+        int ret = http->Read(header.data() + got, kHeaderLen - got);
+        if (ret <= 0) {
+            break;
+        }
+        got += ret;
+    }
+    http->Close();
+    if (got < kHeaderLen) {
+        ESP_LOGW(TAG, "Probe: short header (%u bytes)", (unsigned)got);
+        return true;
+    }
+
+    esp_app_desc_t desc;
+    memcpy(&desc, header.data() + sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t),
+           sizeof(desc));
+    if (static_cast<uint8_t>(header[0]) != ESP_IMAGE_HEADER_MAGIC || desc.magic_word != ESP_APP_DESC_MAGIC_WORD) {
+        ESP_LOGW(TAG, "Probe: not an ESP app image");
+        return true;
+    }
+    out->valid = true;
+    out->version.assign(desc.version, strnlen(desc.version, sizeof(desc.version)));
+    out->date.assign(desc.date, strnlen(desc.date, sizeof(desc.date)));
+    out->time.assign(desc.time, strnlen(desc.time, sizeof(desc.time)));
+    out->same_as_running = memcmp(desc.app_elf_sha256, esp_app_get_description()->app_elf_sha256,
+                                  sizeof(desc.app_elf_sha256)) == 0;
+    return true;
 }
 
 bool Ota::StartUpgrade(std::function<void(int progress, size_t speed)> callback) {

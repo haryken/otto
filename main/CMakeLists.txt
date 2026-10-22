@@ -29,7 +29,10 @@ set(SOURCES "audio/audio_codec.cc"
             "protocols/protocol.cc"
             "protocols/mqtt_protocol.cc"
             "protocols/websocket_protocol.cc"
+            "protocols/direct_ai_config.cc"
+            "protocols/direct_ai_protocol.cc"
             "mcp_server.cc"
+            "log_buffer.cc"
             "system_info.cc"
             "application.cc"
             "ota.cc"
@@ -1015,6 +1018,15 @@ endif()
 target_compile_definitions(${COMPONENT_LIB}
                     PRIVATE BOARD_TYPE=\"${BOARD_TYPE}\" BOARD_NAME=\"${BOARD_NAME}\"
                     PRIVATE BUILTIN_TEXT_FONT=${BUILTIN_TEXT_FONT} BUILTIN_ICON_FONT=${BUILTIN_ICON_FONT}
+                    )
+
+# log_buffer.cc copies panic output into RTC memory (crash log readable from the web page)
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+                    "-Wl,--wrap=esp_panic_handler"
+                    "-Wl,--wrap=panic_print_char"
+                    "-Wl,--wrap=panic_print_str"
+                    "-Wl,--wrap=panic_print_hex"
+                    "-Wl,--wrap=panic_print_dec"
                     )
 
 # Add generation rules

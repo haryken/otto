@@ -180,6 +180,8 @@ public:
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
     void ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);
+    /** Send queue gets raw 16 kHz PCM packets instead of Opus (direct AI mode). */
+    void SetRawPcmUplink(bool enable) { raw_pcm_uplink_.store(enable); }
 
 private:
     AudioCodec* codec_ = nullptr;
@@ -234,6 +236,7 @@ private:
     bool service_stopped_ = true;
     std::atomic<bool> capture_suspended_{false};
     std::atomic<bool> local_playback_active_{false};
+    std::atomic<bool> raw_pcm_uplink_{false};
     std::function<void()> stop_local_playback_handler_;
     bool audio_input_need_warmup_ = false;
 
@@ -245,6 +248,7 @@ private:
     void AudioOutputTask();
     void OpusCodecTask();
     void PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t>&& pcm);
+    void PushPcmToSendQueue(std::vector<int16_t>&& pcm);
     void SetDecodeSampleRate(int sample_rate, int frame_duration);
     void CheckAndUpdateAudioPowerState();
 };

@@ -325,6 +325,8 @@ public:
     void AddUserOnlyTool(const std::string& name, const std::string& description, const PropertyList& properties, std::function<ReturnValue(const PropertyList&)> callback);
     void ParseMessage(const cJSON* json);
     void ParseMessage(const std::string& message);
+    /** to_json() of every tool the AI may call (user-only tools excluded). */
+    std::vector<std::string> GetAiToolJsons() const;
 
 private:
     McpServer();

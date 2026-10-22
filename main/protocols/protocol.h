@@ -17,6 +17,7 @@ struct AudioStreamPacket {
     float playback_gain = 1.0f;  // PCM gain for local UI sounds (e.g. popup beep)
     bool frame_loss = false;     // UDP gap: play silence instead of decoding payload
     std::vector<uint8_t> payload;
+    bool pcm = false;            // payload is raw 16-bit PCM instead of Opus (direct AI mode)
 };
 
 struct BinaryProtocol2 {

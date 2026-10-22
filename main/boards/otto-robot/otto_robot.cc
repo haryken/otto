@@ -23,6 +23,9 @@
 #include "websocket_control_server.h"
 #include "wifi_board.h"
 
+#include <nvs.h>
+#include <ssid_manager.h>
+
 #define TAG "OttoRobot"
 
 extern void InitializeOttoController(const HardwareConfig& hw_config);
@@ -273,7 +276,28 @@ private:
         }
     }
 
+    // One-shot: add lab WiFi like a user-saved network. Deleting it in the
+    // config page sticks until NVS is erased (same as other SSIDs).
+    void EnsureDefaultTestWifi() {
+        nvs_handle_t nvs = 0;
+        if (nvs_open("wifi", NVS_READWRITE, &nvs) != ESP_OK) {
+            return;
+        }
+        uint8_t seeded = 0;
+        nvs_get_u8(nvs, "seed_huynh", &seeded);
+        if (seeded) {
+            nvs_close(nvs);
+            return;
+        }
+        nvs_set_u8(nvs, "seed_huynh", 1);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+        SsidManager::GetInstance().AddSsid("Huynh 2.4", "99999999");
+        ESP_LOGI(TAG, "Seeded WiFi \"Huynh 2.4\" (deletable like other saved networks)");
+    }
+
     void StartNetwork() override {
+        EnsureDefaultTestWifi();
         WifiBoard::StartNetwork();
         vTaskDelay(pdMS_TO_TICKS(1000));
         InitializeWebSocketControlServer();

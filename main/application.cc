@@ -6,6 +6,7 @@
 #include "audio_codec.h"
 #include "mqtt_protocol.h"
 #include "websocket_protocol.h"
+#include "direct_ai_protocol.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
 #include "assets.h"
@@ -16,6 +17,7 @@
 #include <esp_log.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
+#include <esp_netif_sntp.h>
 #include <arpa/inet.h>
 #include <font_awesome.h>
 
@@ -353,8 +355,18 @@ void Application::ActivationTask() {
     // Check for new assets version
     CheckAssetsVersion();
 
-    // Check for new firmware version
-    CheckNewVersion();
+    if (DirectAiConfig::LoadBackend() != DirectAiBackend::kOff) {
+        // Direct AI mode: no Xiaozhi OTA server, activation or MQTT/WebSocket config.
+        ota_->MarkCurrentVersionValid();
+        // The Xiaozhi server normally sets the clock; use NTP with Vietnam time instead.
+        setenv("TZ", "ICT-7", 1);
+        tzset();
+        esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+        esp_netif_sntp_init(&sntp_config);
+    } else {
+        // Check for new firmware version
+        CheckNewVersion();
+    }
 
     // Initialize the protocol
     InitializeProtocol();
@@ -510,7 +522,13 @@ void Application::InitializeProtocol(bool prefer_websocket) {
     const bool has_mqtt = !mqtt_settings.GetString("endpoint").empty() ||
                           (ota_ && ota_->HasMqttConfig());
 
-    if (prefer_websocket && has_ws) {
+    const DirectAiBackend direct = DirectAiConfig::LoadBackend();
+    DirectAiConfig::SetRunningBackend(direct);
+
+    if (direct != DirectAiBackend::kOff) {
+        ESP_LOGI(TAG, "Direct AI mode: %s", DirectAiConfig::BackendName(direct));
+        protocol_ = std::make_unique<DirectAiProtocol>();
+    } else if (prefer_websocket && has_ws) {
         // Course switch: Device-Id is a per-connection WebSocket header.
         protocol_ = std::make_unique<WebsocketProtocol>();
     } else if (ota_ && ota_->HasMqttConfig()) {

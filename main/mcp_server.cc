@@ -505,6 +505,16 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
     ReplyResult(id, json);
 }
 
+std::vector<std::string> McpServer::GetAiToolJsons() const {
+    std::vector<std::string> jsons;
+    for (const auto* tool : tools_) {
+        if (!tool->user_only()) {
+            jsons.push_back(tool->to_json());
+        }
+    }
+    return jsons;
+}
+
 void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments) {
     auto tool_iter = std::find_if(tools_.begin(), tools_.end(), 
                                  [&tool_name](const McpTool* tool) { 

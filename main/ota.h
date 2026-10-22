@@ -8,6 +8,16 @@
 #include <esp_err.h>
 #include "board.h"
 
+struct FirmwareProbe {
+    int http_status = 0;    // final status after redirects; 0 = network error
+    size_t size = 0;        // total .bin size, 0 if unknown
+    bool valid = false;     // header parsed as an ESP app image
+    bool same_as_running = false;
+    std::string version;
+    std::string date;
+    std::string time;
+};
+
 class Ota {
 public:
     Ota();
@@ -27,6 +37,8 @@ public:
     static bool UpgradeFromReader(size_t content_length,
                                   std::function<int(char* buf, size_t max_len)> reader,
                                   std::function<void(int progress, size_t speed)> callback);
+    /** Fetch only the app header of a remote .bin (follows redirects). False on network error. */
+    static bool ProbeFirmware(const std::string& firmware_url, FirmwareProbe* out);
     void MarkCurrentVersionValid();
 
     const std::string& GetFirmwareVersion() const { return firmware_version_; }
