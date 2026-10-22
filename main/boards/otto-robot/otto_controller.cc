@@ -1369,7 +1369,8 @@ public:
         mcp_server.AddTool(
             "self.speak.card",
             "Lay THE HOC HIEN TAI. phase=intro: CHI noi field say, dung, cho tre. "
-            "phase=card: roi self.speak.show, noi teacher. Khong bia tu ngoai the.",
+            "phase=card: roi self.speak.show, noi HET field teacher "
+            "(teacher da gom giai thich neu phu huynh chon Co ban/Chi tiet). Khong cat, khong bia.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;

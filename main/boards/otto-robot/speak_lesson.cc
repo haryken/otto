@@ -43,10 +43,10 @@ constexpr const char* kDoneSayLast =
 constexpr const char* kXiaozhiPrompt =
     "Khi tool self.speak.status cho on=true, bạn là giáo viên luyện NÓI tiếng Anh.\n"
     "Lượt ĐẦU (phase=intro / need_intro): CHỈ nói đúng field say, KHÔNG show, KHÔNG dạy từ vựng. Chờ trẻ đáp.\n"
-    "Lượt sau: gọi self.speak.card rồi self.speak.show, chỉ nói đúng field teacher, chờ trẻ nói mic.\n"
+    "Lượt sau: gọi self.speak.card rồi self.speak.show, nói HẾT field teacher rồi chờ mic.\n"
+    "teacher đã gồm giải thích nếu phụ huynh chọn Cơ bản/Chi tiết — phải nói hết, không cắt.\n"
     "Trẻ nói bất kỳ gì (sai, ngọng, tiếng Việt): khen ngắn \"Đúng rồi!\", gọi self.speak.next rồi show thẻ mới.\n"
-    "Không chữa phát âm, không bịa từ ngoài thẻ. Không có field explain: chỉ nói teacher, không giảng nghĩa.\n"
-    "Có explain: sau teacher nói đúng explain.vi (1-2 câu), không bịa thêm.\n"
+    "Không chữa phát âm, không bịa từ ngoài thẻ.\n"
     "phase=done / finished=true: HẾT CHỦ ĐỀ. CHỈ nói đúng field say. KHÔNG next, KHÔNG show, KHÔNG daily. Chờ trẻ.\n"
     "Học lại / từ đầu: self.speak.start index=0 cùng unit hiện tại.\n"
     "Chủ đề tiếp / unit sau: self.speak.start index=0 unit=next_unit (nếu có next_unit).\n"
@@ -58,9 +58,9 @@ constexpr const char* kXiaozhiPrompt =
 constexpr const char* kXiaozhiPromptEn =
     "When tool self.speak.status returns on=true, you are an English speaking teacher.\n"
     "FIRST turn (phase=intro / need_intro): say ONLY the \"say\" field. Do NOT show. Do NOT teach vocabulary. Wait for the child.\n"
-    "Later turns: call self.speak.card then self.speak.show, say ONLY the \"teacher\" field, then wait.\n"
+    "Later turns: call self.speak.card then self.speak.show, say the FULL \"teacher\" field, then wait.\n"
+    "teacher already includes the meaning if the parent chose Basic/Detailed — say all of it.\n"
     "Whatever the child says: praise \"Đúng rồi!\", call self.speak.next, then show the new card.\n"
-    "No explain field: say teacher only, do not teach meaning. If explain exists: after teacher, say explain.vi only.\n"
     "phase=done / finished=true: say ONLY \"say\". Do NOT next/show/daily. Wait.\n"
     "Restart this topic: self.speak.start index=0 same unit.\n"
     "Next topic: self.speak.start index=0 unit=next_unit (if next_unit is set).\n"
@@ -71,7 +71,7 @@ constexpr const char* kXiaozhiPromptEn =
 constexpr const char* kDirectPrompt =
     "Bạn đang ở CHẾ ĐỘ HỌC nói tiếng Anh.\n"
     "Lượt ĐẦU: gọi self.speak.card. phase=intro: CHỈ nói field say, không show/next. Chờ trẻ.\n"
-    "Lượt sau: card + show, nói teacher. Có explain thì nói thêm explain.vi. Không explain thì đừng giảng nghĩa.\n"
+    "Lượt sau: card + show, nói HẾT teacher (đã gồm giải thích nếu có). Không cắt, không bịa thêm.\n"
     "Trẻ nói gì cũng khen \"Đúng rồi!\", next rồi show.\n"
     "phase=done: CHỈ nói field say. Học lại: start index=0 cùng unit. Tiếp: start index=0 unit=next_unit. Nghỉ: self.speak.off.\n"
     "Được chọn tự do unit u01–u36, kể cả unit đã học. Không nhảy giao tiếp khi hết bài — phải hỏi trẻ.";
@@ -1010,14 +1010,8 @@ std::string SpeakLesson::CardJsonAt(int index, bool with_teacher) {
         const char* vi = str("vi");
         const char* teacher = str("teacher");
         std::string image = JoinUrl(std::string("speak/") + level_ + "/" + unit_ + "/" + id + ".jpg");
-        cJSON_AddStringToObject(out, "id", id);
-        cJSON_AddStringToObject(out, "type", type);
-        cJSON_AddStringToObject(out, "en", en);
-        cJSON_AddStringToObject(out, "vi", vi);
-        if (with_teacher) {
-            cJSON_AddStringToObject(out, "teacher", teacher);
-        }
-        cJSON_AddStringToObject(out, "image", image.c_str());
+        std::string teacher_out = teacher ? teacher : "";
+        cJSON* explain_wrap = nullptr;
         if (explain_level_ > 0) {
             cJSON* explain = cJSON_GetObjectItem(card, "explain");
             if (cJSON_IsObject(explain)) {
@@ -1030,17 +1024,35 @@ std::string SpeakLesson::CardJsonAt(int index, bool with_teacher) {
                     cJSON* vi_e = cJSON_GetObjectItem(block, "vi");
                     cJSON* en_e = cJSON_GetObjectItem(block, "en");
                     if (cJSON_IsString(vi_e) || cJSON_IsString(en_e)) {
-                        cJSON* wrap = cJSON_CreateObject();
+                        explain_wrap = cJSON_CreateObject();
                         if (cJSON_IsString(vi_e)) {
-                            cJSON_AddStringToObject(wrap, "vi", vi_e->valuestring);
+                            cJSON_AddStringToObject(explain_wrap, "vi", vi_e->valuestring);
+                            if (vi_e->valuestring && vi_e->valuestring[0]) {
+                                std::string merged = vi_e->valuestring;
+                                if (!teacher_out.empty()) {
+                                    merged += " ";
+                                    merged += teacher_out;
+                                }
+                                teacher_out = std::move(merged);
+                            }
                         }
                         if (cJSON_IsString(en_e)) {
-                            cJSON_AddStringToObject(wrap, "en", en_e->valuestring);
+                            cJSON_AddStringToObject(explain_wrap, "en", en_e->valuestring);
                         }
-                        cJSON_AddItemToObject(out, "explain", wrap);
                     }
                 }
             }
+        }
+        cJSON_AddStringToObject(out, "id", id);
+        cJSON_AddStringToObject(out, "type", type);
+        cJSON_AddStringToObject(out, "en", en);
+        cJSON_AddStringToObject(out, "vi", vi);
+        if (with_teacher) {
+            cJSON_AddStringToObject(out, "teacher", teacher_out.c_str());
+        }
+        cJSON_AddStringToObject(out, "image", image.c_str());
+        if (explain_wrap) {
+            cJSON_AddItemToObject(out, "explain", explain_wrap);
         }
         cJSON_AddBoolToObject(out, "done", false);
         cJSON_AddBoolToObject(out, "finished", index_ >= total);
