@@ -49,10 +49,16 @@
         .course-loading { position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(16, 24, 36, 0.62); }
         .course-loading[hidden] { display: none !important; }
         .course-loading-box { width: min(360px, 92vw); background: #fff; border-radius: 16px; padding: 28px 22px 24px; text-align: center; box-shadow: 0 18px 44px rgba(0,0,0,0.28); }
-        .course-loading-spin { width: 42px; height: 42px; margin: 0 auto 14px; border: 4px solid #dfe7ee; border-top-color: #1aa7a1; border-radius: 50%; animation: course-spin 0.75s linear infinite; }
+        .course-loading-dots { display: flex; justify-content: center; align-items: flex-end; gap: 10px; height: 40px; margin: 0 auto 14px; }
+        .course-loading-dots span { width: 13px; height: 13px; border-radius: 50%; background: #1aa7a1; animation: course-dot 0.72s ease-in-out infinite; }
+        .course-loading-dots span:nth-child(2) { animation-delay: 0.12s; }
+        .course-loading-dots span:nth-child(3) { animation-delay: 0.24s; }
         .course-loading-box b { display: block; font-size: 1.15em; color: #1a3a4a; }
         .course-loading-box small { display: block; margin-top: 8px; color: #667; line-height: 1.4; }
-        @keyframes course-spin { to { transform: rotate(360deg); } }
+        @keyframes course-dot {
+            0%, 80%, 100% { transform: translateY(0) scale(0.85); opacity: 0.35; }
+            40% { transform: translateY(-14px) scale(1.2); opacity: 1; }
+        }
         .status { text-align: center; font-size: 0.9em; color: #888; margin-top: 8px; }
         .no-units { color: #999; font-style: italic; padding: 10px 0; }
         .course-mac { color: #888; font-weight: normal; font-size: 0.9em; margin-left: 6px; }
@@ -359,7 +365,7 @@
         .stat-box b { display: block; font-size: 1.15em; color: #222831; }
         .stat-box span { color: #8b949e; font-size: 0.82em; }
         .app-nav { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(402px, calc(100% - 28px)); display: flex; background: #fff; border-radius: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); padding: 10px 4px 8px; z-index: 40; }
-        .app-nav button { flex: 1; border: none; background: none; padding: 4px 0; font-size: 0.62em; font-weight: 800; color: #c0c6ce; cursor: pointer; }
+        .app-nav button { flex: 1; border: none; background: none; padding: 4px 1px; font-size: 0.55em; font-weight: 800; color: #c0c6ce; cursor: pointer; }
         .app-card label { display: block; margin: 8px 0 4px; font-size: 0.85em; color: #556; font-weight: 700; }
         .toggle-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-weight: 700; color: #1f2a37; font-size: 0.95em; }
         .toggle-row input { width: 18px; height: 18px; flex-shrink: 0; }
@@ -514,7 +520,43 @@
         .week i.on { background: #1aa7a1; }
         .week-lbl { display: flex; gap: 8px; color: #8b949e; font-size: 0.75em; font-weight: 700; }
         .week-lbl span { flex: 1; text-align: center; }
-        .share-btn { width: 100%; border: none; background: #1aa7a1; color: #fff; font-weight: 800; border-radius: 999px; padding: 14px; cursor: pointer; }
+        .share-btn { width: 100%; border: none; background: #1aa7a1; color: #fff; font-weight: 800; border-radius: 999px; padding: 14px; cursor: pointer; font-family: inherit; }
+        body.english-new .btn,
+        body.english-new .btn-save,
+        body.english-new .share-btn,
+        body.english-new .path-learn-bot,
+        body.english-new .path-learn-now {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            border: none;
+            background: #1aa7a1;
+            color: #fff;
+            font-weight: 800;
+            font-size: 1em;
+            font-family: inherit;
+            border-radius: 999px;
+            padding: 14px;
+            cursor: pointer;
+            box-shadow: none;
+        }
+        body.english-new .path-learn-now { width: calc(100% - 32px); margin: 4px 16px 20px; }
+        body.english-new .btn:hover,
+        body.english-new .btn-save:hover,
+        body.english-new .share-btn:hover,
+        body.english-new .path-learn-bot:hover,
+        body.english-new .path-learn-now:hover { background: #15948e; }
+        body.english-new .btn-save:disabled { background: #ccc; color: #fff; }
+        body.english-new .btn-action.home,
+        body.english-new #btn_save_robot {
+            background: #1aa7a1;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+        body.english-new .btn-action.stop { border-radius: 999px; font-weight: 800; }
+        body.english-new .robot-dup,
+        body.english-new #btn_save_volume,
+        body.english-new #btn_save_robot { display: none !important; }
         .mile { display: flex; gap: 12px; padding: 12px 16px 12px 20px; }
         .mile-n { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #dce3ea; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #667; background: #fff; flex-shrink: 0; }
         .mile.on .mile-n { border-color: #1aa7a1; color: #1aa7a1; background: #e7fbf7; }
@@ -528,6 +570,23 @@
         .hobby input { width: 100%; padding: 10px; border: 1px solid #e4e8ee; border-radius: 12px; margin: 0 0 8px; box-sizing: border-box; font: inherit; }
         .pf-row { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 10px; }
         .setup-back { border: none; background: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 1.2em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .setup-tabs { display: flex; gap: 6px; margin: 0 16px 12px; }
+        .setup-tabs button { flex: 1; border: none; border-radius: 14px; padding: 10px 4px; font-weight: 800; font-size: 0.78em; background: #eef1f4; color: #667; cursor: pointer; font-family: inherit; }
+        .setup-tabs button.on[data-setup="ai"] { background: #6a4dff; color: #fff; }
+        .setup-tabs button.on[data-setup="lesson"] { background: #1aa7a1; color: #fff; }
+        .setup-tabs button.on[data-setup="chat"] { background: #ff7a45; color: #fff; }
+        .setup-tabs button.on[data-setup="more"] { background: #3b9ea4; color: #fff; }
+        .setup-sec { display: none; }
+        .setup-sec.on { display: block; }
+        .setup-ai-pick { display: flex; gap: 6px; margin: 0 0 14px; }
+        .setup-ai-pick label { margin: 0 !important; flex: 1; display: flex; flex-direction: column; gap: 2px; border: none; border-radius: 14px; padding: 10px 8px; cursor: pointer; background: #eef1f4; color: #445; text-align: center; }
+        .setup-ai-pick label.on[data-for="xiaozhi"] { background: #6a4dff; color: #fff; }
+        .setup-ai-pick label.on[data-for="gemini"] { background: #1aa7a1; color: #fff; }
+        .setup-ai-pick label b { font-size: 0.95em; }
+        .setup-ai-pick label small { color: inherit; opacity: 0.82; font-weight: 700; font-size: 0.7em; }
+        .setup-ai-pick input { display: none; }
+        .setup-unit { display: inline-block; margin: 0 0 10px; padding: 6px 10px; border-radius: 999px; background: #f3efff; color: #3d2a8a; font-weight: 800; font-size: 0.82em; }
+        .setup-prompt { min-height: 220px; width: 100%; padding: 12px; border: 1px solid #e4e8ee; border-radius: 14px; font-size: 0.82em; line-height: 1.45; resize: vertical; box-sizing: border-box; background: #f7f8fb; color: #222; }
         .app-tools-host > .tab-panel { display: block !important; }
         .app-tools-host .card {
             background: #fff;
@@ -580,7 +639,7 @@
     <div id="toast" class="toast"></div>
     <div id="course_loading" class="course-loading" hidden>
         <div class="course-loading-box" role="status" aria-live="polite">
-            <div class="course-loading-spin" aria-hidden="true"></div>
+            <div class="course-loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
             <b id="course_loading_title">Đang tải khóa học</b>
             <small id="course_loading_sub">Robot đang kéo bài và hình từ server…</small>
         </div>
@@ -701,6 +760,7 @@
                     <button type="button" data-as="guided" onclick="saveAssessment('guided')">Có hướng dẫn</button>
                     <button type="button" data-as="challenge" onclick="saveAssessment('challenge')">Thử thách</button>
                 </div>
+                <p class="ex-note" data-as-note></p>
             </div>
             <div class="stu-bar" id="path_students" hidden></div>
             <div id="path_cards"></div>
@@ -718,6 +778,41 @@
             <div class="grp">Giải trí</div>
             <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#ffe8f2">🎵</span><span><b>Nhạc YouTube</b><small>Gõ tên bài, phát loa robot</small></span><span class="chev">›</span></button>
             <button type="button" class="menu-row" onclick="openLesson(0)"><span class="menu-ico" style="background:#e7fbf7">📖</span><span><b>Truyện thẻ</b><small>Lật thẻ bài trên điện thoại</small></span><span class="chev">›</span></button>
+        </div>
+
+        <div id="app_ai" class="app-panel">
+            <div class="app-top">
+                <div class="app-hi" style="font-size:1.15em">Cá nhân hóa AI</div>
+                <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
+            </div>
+            <div class="app-card">
+                <h2>Mức giảng bài</h2>
+                <p class="hint">Robot chỉ gửi đúng phần giải thích đã chọn.</p>
+                <div class="ex-btns">
+                    <button type="button" data-ex="off" onclick="saveExplainLevel('minimal')">Ít</button>
+                    <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
+                    <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
+                </div>
+                <p class="ex-note" data-ex-note></p>
+            </div>
+            <div class="app-card">
+                <h2>Mức kiểm tra</h2>
+                <div class="ex-btns">
+                    <button type="button" data-as="encourage" onclick="saveAssessment('encourage')">Khích lệ</button>
+                    <button type="button" data-as="guided" onclick="saveAssessment('guided')">Có hướng dẫn</button>
+                    <button type="button" data-as="challenge" onclick="saveAssessment('challenge')">Thử thách</button>
+                </div>
+                <p class="ex-note" data-as-note></p>
+            </div>
+            <div class="app-card">
+                <h2>Khơi gợi khi im lặng</h2>
+                <p class="hint">Đang học mà bé không nói, robot nhắc lại sau:</p>
+                <div class="ex-btns" id="ai_silence_btns">
+                    <button type="button" data-slp="10" onclick="setSilenceSec(10)">10 giây</button>
+                    <button type="button" data-slp="20" onclick="setSilenceSec(20)">20 giây</button>
+                    <button type="button" data-slp="30" onclick="setSilenceSec(30)">30 giây</button>
+                </div>
+            </div>
         </div>
 
         <div id="app_help" class="app-panel">
@@ -799,150 +894,164 @@
         <div id="app_setup" class="app-panel">
             <div class="app-top">
                 <button type="button" class="setup-back" onclick="switchApp('home')">‹</button>
-                <div class="app-hi" style="font-size:1.15em">Cài đặt học</div>
+                <div class="app-hi" style="font-size:1.05em"><small>CÀI ĐẶT</small>Cài đặt AI học tập</div>
                 <button type="button" class="app-gear" onclick="switchApp('tools')">⚙️</button>
             </div>
-            <div class="app-card">
-                <h2>Địa chỉ bài học</h2>
-                <label>Link bài (một địa chỉ)</label>
-                <input type="text" id="speak_base" placeholder="http://192.168.100.161:8765 hoặc https://emun.pages.dev" oninput="paintSpeakSource()">
-                <button type="button" class="btn btn-save" onclick="saveSpeakBase()">Lưu địa chỉ</button>
-                <p class="hint" id="speak_src_hint">Một link. Bắt đầu bằng http:// thì robot kéo HTTP. https:// thì HTTPS. Không dự phòng link kia.</p>
+            <div class="setup-tabs" id="setup_tabs">
+                <button type="button" class="on" data-setup="ai" onclick="switchSetupTab('ai')">AI học</button>
+                <button type="button" data-setup="lesson" onclick="switchSetupTab('lesson')">Bài học</button>
+                <button type="button" data-setup="chat" onclick="switchSetupTab('chat')">Giao tiếp</button>
+                <button type="button" data-setup="more" onclick="switchSetupTab('more')">Khác</button>
             </div>
-            <div class="app-card">
-                <h2>Khi học bài</h2>
-                <p class="hint">Chọn <b>một</b> nhà cung cấp. Xiaozhi dùng MAC trên xiaozhi.me. Gemini dùng API key Google. Hai cái không dùng chung.</p>
-                <p><b id="speak_unit_line">A1 · Animals</b></p>
-                <p class="hint" id="speak_unit_goal"></p>
-                <div class="ai-pick" id="speak_ai_pick">
-                    <label data-for="xiaozhi">
-                        <input type="radio" name="speak_ai_backend" value="xiaozhi" checked onchange="toggleSpeakAiFields()">
-                        <b>Xiaozhi</b>
-                        <small>MAC + agent xiaozhi.me</small>
-                    </label>
-                    <label data-for="gemini">
-                        <input type="radio" name="speak_ai_backend" value="gemini" onchange="toggleSpeakAiFields()">
-                        <b>Gemini</b>
-                        <small>API key Google, nói thẳng</small>
-                    </label>
-                </div>
-                <div id="speak_xiaozhi_fields" class="ai-panel">
-                    <label>MAC ID dạy học</label>
-                    <input type="text" id="speak_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
-                    <label>Client ID</label>
-                    <input type="text" id="speak_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
-                    <p class="hint">Không hiện ô Gemini khi chọn Xiaozhi.</p>
-                </div>
-                <div id="speak_gemini_fields" class="ai-panel">
-                    <label>Gemini API key dạy học</label>
-                    <input type="password" id="speak_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
-                    <p class="hint" id="speak_key_hint"></p>
-                    <label>Model</label>
-                    <input type="text" id="speak_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
-                    <label>Giọng</label>
-                    <select id="speak_ai_voice">
-                        <option value="Kore">Kore</option>
-                        <option value="Puck">Puck</option>
-                        <option value="Zephyr">Zephyr</option>
-                        <option value="Aoede">Aoede</option>
-                        <option value="Leda">Leda</option>
-                        <option value="Charon">Charon</option>
-                    </select>
-                    <label class="toggle-row"><input type="checkbox" id="speak_stt_en" checked onchange="paintSpeakSttCodes()"> Chỉ nhận diện tiếng Anh</label>
-                    <p class="hint">Khi học, Gemini nghe ưu tiên tiếng Anh. Robot vẫn đọc Việt + Anh. Giao tiếp hằng ngày không đổi.</p>
-                    <div id="speak_stt_codes" class="stt-codes">
-                        <label><input type="checkbox" name="speak_stt_code" value="en-US" checked onchange="paintSpeakSttCodes()"> en-US Mỹ</label>
-                        <label><input type="checkbox" name="speak_stt_code" value="en-GB" onchange="paintSpeakSttCodes()"> en-GB Anh</label>
-                        <label><input type="checkbox" name="speak_stt_code" value="en-IN" onchange="paintSpeakSttCodes()"> en-IN Ấn</label>
-                        <label><input type="checkbox" name="speak_stt_code" value="en" onchange="paintSpeakSttCodes()"> en chung</label>
+
+            <div id="setup_sec_ai" class="setup-sec on">
+                <div class="app-card">
+                    <span class="setup-unit" id="speak_unit_line">A1 · Animals</span>
+                    <p class="hint" id="speak_unit_goal"></p>
+                    <p class="hint">Chọn một nhà cung cấp. Xiaozhi hiện MAC + prompt. Gemini hiện API key.</p>
+                    <div class="setup-ai-pick" id="speak_ai_pick">
+                        <label data-for="xiaozhi">
+                            <input type="radio" name="speak_ai_backend" value="xiaozhi" checked onchange="toggleSpeakAiFields()">
+                            <b>Xiaozhi</b>
+                            <small>MAC + agent</small>
+                        </label>
+                        <label data-for="gemini">
+                            <input type="radio" name="speak_ai_backend" value="gemini" onchange="toggleSpeakAiFields()">
+                            <b>Gemini</b>
+                            <small>API key</small>
+                        </label>
                     </div>
-                    <p class="hint">Chọn một hoặc nhiều mã. Gemini không có mã Úc; en-US / en vẫn nghe giọng Úc.</p>
-                    <p class="hint">Không cần MAC Xiaozhi khi học bằng Gemini.</p>
+                    <div id="speak_xiaozhi_fields" class="ai-panel">
+                        <label>MAC ID dạy học</label>
+                        <input type="text" id="speak_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+                        <label>Client ID</label>
+                        <input type="text" id="speak_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
+                        <label>Prompt Xiaozhi dạy học</label>
+                        <p class="hint">Dán lên xiaozhi.me (MAC dạy). Dòng đầu CẤM 5 câu outro YouTube.</p>
+                        <textarea id="setup_xiaozhi_prompt" class="setup-prompt" readonly></textarea>
+                        <button type="button" class="btn btn-save" onclick="copyXiaozhiPrompt('setup_xiaozhi_prompt', 'Đã copy prompt dạy học')">📋 Copy prompt dạy học</button>
+                    </div>
+                    <div id="speak_gemini_fields" class="ai-panel">
+                        <label>Gemini API key dạy học</label>
+                        <input type="password" id="speak_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
+                        <p class="hint" id="speak_key_hint"></p>
+                        <label>Model</label>
+                        <input type="text" id="speak_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
+                        <label>Giọng</label>
+                        <select id="speak_ai_voice">
+                            <option value="Kore">Kore</option>
+                            <option value="Puck">Puck</option>
+                            <option value="Zephyr">Zephyr</option>
+                            <option value="Aoede">Aoede</option>
+                            <option value="Leda">Leda</option>
+                            <option value="Charon">Charon</option>
+                        </select>
+                        <label class="toggle-row"><input type="checkbox" id="speak_stt_en" checked onchange="paintSpeakSttCodes()"> Chỉ nhận diện tiếng Anh</label>
+                        <p class="hint">Khi học, Gemini nghe ưu tiên tiếng Anh. Robot vẫn đọc Việt + Anh.</p>
+                        <div id="speak_stt_codes" class="stt-codes">
+                            <label><input type="checkbox" name="speak_stt_code" value="en-US" checked onchange="paintSpeakSttCodes()"> en-US Mỹ</label>
+                            <label><input type="checkbox" name="speak_stt_code" value="en-GB" onchange="paintSpeakSttCodes()"> en-GB Anh</label>
+                            <label><input type="checkbox" name="speak_stt_code" value="en-IN" onchange="paintSpeakSttCodes()"> en-IN Ấn</label>
+                            <label><input type="checkbox" name="speak_stt_code" value="en" onchange="paintSpeakSttCodes()"> en chung</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-save" id="btn_save_speak_ai" onclick="saveSpeakIdentity()">Lưu Xiaozhi học bài</button>
                 </div>
-                <button type="button" class="btn btn-save" id="btn_save_speak_ai" onclick="saveSpeakIdentity()">Lưu nhà cung cấp học</button>
             </div>
-            <div class="app-card">
-                <h2>Mức giải thích khi học <button type="button" class="setup-help-link" onclick="showExplainHelp()">Tìm hiểu thêm</button></h2>
-                <p class="hint">Chọn mức này trước khi học. Robot chỉ gửi đúng phần giải thích đã chọn cho AI.</p>
-                <div class="ai-pick three" id="explain_pick">
-                    <label data-for="off">
-                        <input type="radio" name="explain_level" value="minimal" checked onchange="saveExplainLevel()">
-                        <b>Ít</b>
-                        <small>nói mẫu, ít giảng</small>
-                    </label>
-                    <label data-for="basic">
-                        <input type="radio" name="explain_level" value="basic" onchange="saveExplainLevel()">
-                        <b>Cơ bản</b>
-                        <small>nghĩa ngắn VN + EN</small>
-                    </label>
-                    <label data-for="detailed">
-                        <input type="radio" name="explain_level" value="detailed" onchange="saveExplainLevel()">
-                        <b>Chi tiết</b>
-                        <small>nghĩa + ví dụ + cách dùng</small>
-                    </label>
+
+            <div id="setup_sec_lesson" class="setup-sec">
+                <div class="app-card">
+                    <h2>Địa chỉ bài học</h2>
+                    <label>Link bài (một địa chỉ)</label>
+                    <input type="text" id="speak_base" placeholder="http://192.168.100.161:8765 hoặc https://emun.pages.dev" oninput="paintSpeakSource()">
+                    <button type="button" class="btn btn-save" onclick="saveSpeakBase()">Lưu địa chỉ</button>
+                    <p class="hint" id="speak_src_hint">Một link. Bắt đầu bằng http:// thì robot kéo HTTP. https:// thì HTTPS.</p>
                 </div>
-                <p class="ex-note" id="explain_pick_note" data-ex-note></p>
-            </div>
-            <div class="app-card">
-                <h2>Màn hình khi học</h2>
-                <label class="toggle-row"><input type="checkbox" id="sub_robot" onchange="saveSpeakSubtitles()"> Phụ đề robot</label>
-                <label class="toggle-row"><input type="checkbox" id="sub_stt" onchange="saveSpeakSubtitles()"> Phụ đề bé nói</label>
-            </div>
-            <div class="app-card">
-                <h2>Khi giao tiếp hằng ngày</h2>
-                <p class="hint">Tách riêng với bài học. Xiaozhi dùng đúng pool 20 MAC của giao tiếp cũ, random MAC + Client-Id mỗi lần mở (bật máy, hết bài, bấm Giao tiếp).</p>
-                <div class="ai-pick" id="daily_ai_pick">
-                    <label data-for="xiaozhi">
-                        <input type="radio" name="daily_ai_backend" value="xiaozhi" checked onchange="toggleDailyAiFields()">
-                        <b>Xiaozhi</b>
-                        <small>20 MAC sẵn, random mỗi lần mở</small>
-                    </label>
-                    <label data-for="gemini">
-                        <input type="radio" name="daily_ai_backend" value="gemini" onchange="toggleDailyAiFields()">
-                        <b>Gemini</b>
-                        <small>API key giao tiếp riêng</small>
-                    </label>
+                <div class="app-card">
+                    <h2>Mức giải thích <button type="button" class="setup-help-link" onclick="showExplainHelp()">Tìm hiểu thêm</button></h2>
+                    <p class="hint">Robot chỉ gửi đúng phần giải thích đã chọn.</p>
+                    <div class="ai-pick three" id="explain_pick">
+                        <label data-for="off">
+                            <input type="radio" name="explain_level" value="minimal" checked onchange="saveExplainLevel()">
+                            <b>Ít</b>
+                            <small>nói mẫu, ít giảng</small>
+                        </label>
+                        <label data-for="basic">
+                            <input type="radio" name="explain_level" value="basic" onchange="saveExplainLevel()">
+                            <b>Cơ bản</b>
+                            <small>nghĩa ngắn VN + EN</small>
+                        </label>
+                        <label data-for="detailed">
+                            <input type="radio" name="explain_level" value="detailed" onchange="saveExplainLevel()">
+                            <b>Chi tiết</b>
+                            <small>nghĩa + ví dụ + cách dùng</small>
+                        </label>
+                    </div>
+                    <p class="ex-note" id="explain_pick_note" data-ex-note></p>
                 </div>
-                <div id="ndaily_xiaozhi_fields" class="ai-panel">
-                    <p class="hint">Không cần dán MAC. Robot tự lấy một Device-Id trong 20 MAC giao tiếp cũ và tạo Client-Id mới.</p>
-                    <input type="hidden" id="ndaily_mac" value="">
-                    <input type="hidden" id="ndaily_client_id_input" value="">
+                <div class="app-card">
+                    <h2>Màn hình khi học</h2>
+                    <label class="toggle-row"><input type="checkbox" id="sub_robot" onchange="saveSpeakSubtitles()"> Phụ đề robot</label>
+                    <label class="toggle-row"><input type="checkbox" id="sub_stt" onchange="saveSpeakSubtitles()"> Phụ đề bé nói</label>
                 </div>
-                <div id="ndaily_gemini_fields" class="ai-panel">
-                    <label>Gemini API key giao tiếp</label>
-                    <input type="password" id="ndaily_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
-                    <p class="hint" id="ndaily_key_hint"></p>
-                    <label>Model</label>
-                    <input type="text" id="ndaily_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
-                    <label>Giọng</label>
-                    <select id="ndaily_ai_voice">
-                        <option value="Kore">Kore</option>
-                        <option value="Puck">Puck</option>
-                        <option value="Zephyr">Zephyr</option>
-                        <option value="Aoede">Aoede</option>
-                        <option value="Leda">Leda</option>
-                        <option value="Charon">Charon</option>
-                    </select>
+            </div>
+
+            <div id="setup_sec_chat" class="setup-sec">
+                <div class="app-card">
+                    <h2>Giao tiếp hằng ngày</h2>
+                    <p class="hint">Tách với bài học. Xiaozhi random MAC trong pool 20. Gemini dùng key riêng.</p>
+                    <div class="ai-pick" id="daily_ai_pick">
+                        <label data-for="xiaozhi">
+                            <input type="radio" name="daily_ai_backend" value="xiaozhi" checked onchange="toggleDailyAiFields()">
+                            <b>Xiaozhi</b>
+                            <small>20 MAC sẵn</small>
+                        </label>
+                        <label data-for="gemini">
+                            <input type="radio" name="daily_ai_backend" value="gemini" onchange="toggleDailyAiFields()">
+                            <b>Gemini</b>
+                            <small>API key riêng</small>
+                        </label>
+                    </div>
+                    <div id="ndaily_xiaozhi_fields" class="ai-panel">
+                        <p class="hint">Không cần dán MAC. Robot tự lấy Device-Id trong pool giao tiếp.</p>
+                        <input type="hidden" id="ndaily_mac" value="">
+                        <input type="hidden" id="ndaily_client_id_input" value="">
+                    </div>
+                    <div id="ndaily_gemini_fields" class="ai-panel">
+                        <label>Gemini API key giao tiếp</label>
+                        <input type="password" id="ndaily_ai_key" placeholder="AIza… — để trống = giữ key đã lưu" autocomplete="off" spellcheck="false">
+                        <p class="hint" id="ndaily_key_hint"></p>
+                        <label>Model</label>
+                        <input type="text" id="ndaily_ai_model" placeholder="gemini-3.8-live" autocomplete="off" spellcheck="false">
+                        <label>Giọng</label>
+                        <select id="ndaily_ai_voice">
+                            <option value="Kore">Kore</option>
+                            <option value="Puck">Puck</option>
+                            <option value="Zephyr">Zephyr</option>
+                            <option value="Aoede">Aoede</option>
+                            <option value="Leda">Leda</option>
+                            <option value="Charon">Charon</option>
+                        </select>
+                    </div>
+                    <div class="device-id" id="ndaily_device_id">Device-Id: …</div>
+                    <p class="mac-hint" id="ndaily_client_id">Client-Id: …</p>
+                    <button type="button" class="btn btn-save" id="btn_activate_ndaily" onclick="saveDailyIdentity()">Lưu nhà cung cấp giao tiếp</button>
                 </div>
-                <div class="device-id" id="ndaily_device_id">Device-Id: …</div>
-                <p class="mac-hint" id="ndaily_client_id">Client-Id: …</p>
-                <button type="button" class="btn btn-save" id="btn_activate_ndaily" onclick="saveDailyIdentity()">Lưu nhà cung cấp giao tiếp</button>
-                <h2 style="margin-top:18px">Prompt Xiaozhi hằng ngày</h2>
-                <p class="hint">Dán vào agent Xiaozhi của <b>giao tiếp</b> (pool 20 MAC). Không dán prompt dạy học. Agent này chỉ trò chuyện; khi bé kêu học thì gọi start rồi dừng, robot mở Gemini dạy.</p>
-                <textarea id="xiaozhi_daily_prompt" class="ai-field" readonly style="min-height:160px;font-size:0.85em"></textarea>
-                <button type="button" class="btn btn-save" onclick="copyXiaozhiPrompt('xiaozhi_daily_prompt', 'Đã copy prompt giao tiếp')">📋 Copy prompt giao tiếp</button>
             </div>
-            <div class="app-card">
-                <h2>Xiaozhi tự cấu hình</h2>
-                <label>MAC ID</label>
-                <input type="text" id="ncustom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
-                <label>Client ID</label>
-                <input type="text" id="ncustom_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
-                <div class="device-id" id="ncustom_device_id">Device-Id đang dùng: …</div>
-                <button type="button" class="btn btn-save" onclick="saveNewCustom()">💾 Lưu và bật</button>
+
+            <div id="setup_sec_more" class="setup-sec">
+                <div class="app-card">
+                    <h2>Xiaozhi tự cấu hình</h2>
+                    <label>MAC ID</label>
+                    <input type="text" id="ncustom_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" spellcheck="false">
+                    <label>Client ID</label>
+                    <input type="text" id="ncustom_client_id" placeholder="Để trống = robot tự tạo" autocomplete="off" spellcheck="false">
+                    <div class="device-id" id="ncustom_device_id">Device-Id đang dùng: …</div>
+                    <button type="button" class="btn btn-save" onclick="saveNewCustom()">💾 Lưu và bật</button>
+                </div>
+                <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#e8f7ff">🎮</span><span><b>Điều khiển robot</b><small>Đi / nhạc / servo</small></span><span class="chev">›</span></button>
+                <button type="button" class="menu-row" onclick="switchApp('ota')"><span class="menu-ico" style="background:#fff4d6">🔄</span><span><b>Cập nhật firmware</b><small>OTA</small></span><span class="chev">›</span></button>
             </div>
-            <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#e8f7ff">🎮</span><span><b>Điều khiển robot</b><small>Đi / nhạc / servo</small></span><span class="chev">›</span></button>
-            <button type="button" class="menu-row" onclick="switchApp('ota')"><span class="menu-ico" style="background:#fff4d6">🔄</span><span><b>Cập nhật firmware</b><small>OTA</small></span><span class="chev">›</span></button>
         </div>
 
         <div id="app_control" class="app-panel">
@@ -973,27 +1082,17 @@
                 <h2>Âm lượng</h2>
                 <div class="slider-row">
                     <label><span>Loa</span><span id="rset_volume_val">70</span></label>
-                    <input type="range" id="rset_volume" min="0" max="100" value="70" oninput="onRsetVolume()">
+                    <input type="range" id="rset_volume" min="0" max="100" value="70" oninput="onRsetVolume()" onchange="scheduleRobotSave()">
                 </div>
             </div>
             <div class="app-card" id="rset_bri_card">
                 <h2>Độ sáng màn hình</h2>
                 <div class="slider-row">
                     <label><span>Backlight</span><span id="rset_bri_val">50</span></label>
-                    <input type="range" id="rset_brightness" min="0" max="100" value="50" oninput="onRsetBrightness()">
+                    <input type="range" id="rset_brightness" min="0" max="100" value="50" oninput="onRsetBrightness()" onchange="scheduleRobotSave()">
                 </div>
             </div>
-            <div class="app-card">
-                <h2>Khơi gợi khi im lặng</h2>
-                <p class="hint">Đang học mà bé không nói, robot nhắc lại sau:</p>
-                <div class="ex-btns" id="rset_silence_btns">
-                    <button type="button" data-slp="10" onclick="setSilenceSec(10)">10 giây</button>
-                    <button type="button" data-slp="20" onclick="setSilenceSec(20)">20 giây</button>
-                    <button type="button" data-slp="30" onclick="setSilenceSec(30)">30 giây</button>
-                </div>
-            </div>
-            <button type="button" class="btn btn-save" style="margin:0 16px 12px" onclick="saveRobotSettings()">Lưu âm lượng / sáng / khơi gợi</button>
-            <p class="hint" style="padding:0 20px">Cân chỉnh chân robot ở bên dưới.</p>
+            <p class="hint" style="padding:0 20px 8px">Kéo loa / sáng là lưu ngay. Cân chỉnh chân bên dưới — bấm Lưu gốc.</p>
             <div id="app_tools_host" class="app-tools-host"></div>
         </div>
 
@@ -1001,6 +1100,7 @@
             <button type="button" class="active" id="nav_home" onclick="switchApp('home')"><span>🏠</span>Trang chủ</button>
             <button type="button" id="nav_path" onclick="switchApp('path')"><span>🎒</span>Lộ trình</button>
             <button type="button" id="nav_buddy" onclick="switchApp('buddy')"><span>🧸</span>Buddy</button>
+            <button type="button" id="nav_ai" onclick="switchApp('ai')"><span>✨</span>Cá nhân</button>
             <button type="button" id="nav_help" onclick="switchApp('help')"><span>⏰</span>Bổ trợ</button>
             <button type="button" id="nav_rank" onclick="switchApp('rank')"><span>📊</span>Xếp hạng</button>
             <button type="button" id="nav_profile" onclick="switchApp('profile')"><span>👤</span>Hồ sơ</button>
@@ -1022,32 +1122,6 @@
         </div>
     </div>
 
-    <div id="act_player" class="act-player" onclick="if(event.target===this)closeActPlayer()">
-        <div class="act-box">
-            <div class="act-top">
-                <button type="button" class="btn" style="background:#eef1f4;color:#445;margin:0" onclick="closeActPlayer()">← Lộ trình</button>
-                <div>
-                    <b id="act_title">Hoạt động</b>
-                    <div class="hint" id="act_prog">0/0</div>
-                </div>
-            </div>
-            <img class="hero" id="act_img" alt="">
-            <div class="act-pattern" id="act_pattern"></div>
-            <div class="act-grid" id="act_grid" hidden></div>
-            <p class="act-guide" id="act_guide"></p>
-            <div class="act-hint" id="act_hint" hidden></div>
-            <input id="act_typein" placeholder="Gõ câu trên điện thoại (không phải STT robot)" autocomplete="off">
-            <p class="hint" id="act_stt_note">Robot nghe bằng Gemini/Xiaozhi. Không giả lập giọng nói trên web.</p>
-            <div class="act-nav">
-                <button type="button" style="background:#eef1f4" onclick="actReplay()">Nghe lại</button>
-                <button type="button" class="go" style="background:#6a4dff;color:#fff" onclick="actSubmitTyped()">Gửi câu</button>
-            </div>
-            <div class="act-nav">
-                <button type="button" style="background:#e7fbf7;color:#0f766e" onclick="actHeardPractice()">Đã nói với robot</button>
-                <button type="button" style="background:#eef1f4" onclick="actNext()">Câu tiếp</button>
-            </div>
-        </div>
-    </div>
     <div id="explain_help_modal" class="modal-backdrop" hidden onclick="if(event.target===this)hideExplainHelp()">
         <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="explain_help_title">
             <div class="modal-head">
@@ -1313,7 +1387,7 @@
 
     <div id="slot_robot">
     <div id="tab_robot" class="tab-panel">
-        <div class="card">
+        <div class="card robot-dup">
             <h2>🔊 Âm lượng</h2>
             <div class="slider-row">
                 <label><span>Loa</span><span id="volume_val">70</span></label>
@@ -1321,14 +1395,14 @@
             </div>
             <p class="hint">0–100. Lưu vào robot ngay khi bấm Lưu bên dưới.</p>
         </div>
-        <div class="card" id="brightness_card">
+        <div class="card robot-dup" id="brightness_card">
             <h2>💡 Độ sáng màn hình</h2>
             <div class="slider-row">
                 <label><span>Backlight</span><span id="brightness_val">50</span></label>
                 <input type="range" id="brightness" min="0" max="100" value="50" oninput="onBrightnessInput()">
             </div>
         </div>
-        <div class="card">
+        <div class="card robot-dup">
             <h2>🗣️ Khơi gợi khi im lặng</h2>
             <p class="hint">Đang học mà bé không nói, robot nhắc lại sau:</p>
             <div class="ex-btns" id="old_silence_btns">
@@ -1341,11 +1415,11 @@
             <h2>⚙️ Chế độ động cơ</h2>
             <p class="hint">Chọn cách servo lúc <b>khởi động</b>. Lưu xong nên tắt/bật lại máy để áp dụng. Đang đứng sẽ không nhả servo (tránh đổ / tắt ngang).</p>
             <label class="course-label" style="margin-top:8px">
-                <input type="radio" name="motor_mode" id="motor_always" value="0" checked>
+                <input type="radio" name="motor_mode" id="motor_always" value="0" checked onchange="saveMotorMode()">
                 <span><b>Luôn bật</b> — giữ cứng như hiện tại (Home lúc khởi động)</span>
             </label>
             <label class="course-label">
-                <input type="radio" name="motor_mode" id="motor_demand" value="1">
+                <input type="radio" name="motor_mode" id="motor_demand" value="1" onchange="saveMotorMode()">
                 <span><b>Nghỉ khi bật</b> — lần bật máy sau không cấp lực; khi bấm Đi/Home mới gắn động cơ</span>
             </label>
         </div>
@@ -2971,6 +3045,7 @@
             const b = document.getElementById('rset_volume_val');
             if (a) a.value = document.getElementById('volume').value;
             if (b) b.textContent = document.getElementById('volume').value;
+            scheduleRobotSave();
         }
         function onBrightnessInput() {
             document.getElementById('brightness_val').textContent = document.getElementById('brightness').value;
@@ -2978,23 +3053,26 @@
             const b = document.getElementById('rset_bri_val');
             if (a) a.value = document.getElementById('brightness').value;
             if (b) b.textContent = document.getElementById('brightness').value;
+            scheduleRobotSave();
         }
         function onRsetVolume() {
             const v = document.getElementById('rset_volume').value;
             document.getElementById('rset_volume_val').textContent = v;
             const o = document.getElementById('volume');
             if (o) { o.value = v; document.getElementById('volume_val').textContent = v; }
+            scheduleRobotSave();
         }
         function onRsetBrightness() {
             const v = document.getElementById('rset_brightness').value;
             document.getElementById('rset_bri_val').textContent = v;
             const o = document.getElementById('brightness');
             if (o) { o.value = v; document.getElementById('brightness_val').textContent = v; }
+            scheduleRobotSave();
         }
         let silenceSec = 20;
         function paintSilenceSec(sec) {
             silenceSec = (sec <= 15) ? 10 : (sec <= 25 ? 20 : 30);
-            document.querySelectorAll('#rset_silence_btns button, #old_silence_btns button').forEach(function (btn) {
+            document.querySelectorAll('#ai_silence_btns button, #rset_silence_btns button, #old_silence_btns button').forEach(function (btn) {
                 btn.classList.toggle('on', Number(btn.getAttribute('data-slp')) === silenceSec);
             });
         }
@@ -3047,19 +3125,35 @@
             }
         }
 
-        async function saveRobotSettings() {
+        let robotSaveTimer = 0;
+        function scheduleRobotSave() {
+            clearTimeout(robotSaveTimer);
+            robotSaveTimer = setTimeout(function () { saveRobotSettings({ quiet: true }); }, 280);
+        }
+        function saveMotorMode() {
+            return saveRobotSettings({ toast: 'Đã lưu chế độ động cơ' });
+        }
+        async function saveRobotSettings(opts) {
+            opts = opts || {};
             const btn = document.getElementById('btn_save_robot');
-            btn.disabled = true;
-            btn.textContent = 'Đang lưu...';
+            if (btn && !opts.quiet) {
+                btn.disabled = true;
+                btn.textContent = 'Đang lưu...';
+            }
             try {
+                const volEl = document.getElementById('rset_volume') || document.getElementById('volume');
+                const briEl = document.getElementById('rset_brightness') || document.getElementById('brightness');
                 const body = {
-                    volume: parseInt((document.getElementById('rset_volume') || document.getElementById('volume')).value, 10),
-                    motors_on_demand: document.getElementById('motor_demand').checked,
+                    volume: parseInt(volEl && volEl.value, 10),
+                    motors_on_demand: !!(document.getElementById('motor_demand') && document.getElementById('motor_demand').checked),
                     silence_sec: silenceSec
                 };
+                const rBriCard = document.getElementById('rset_bri_card');
                 const briCard = document.getElementById('brightness_card');
-                if (briCard.style.display !== 'none') {
-                    body.brightness = parseInt(document.getElementById('brightness').value, 10);
+                const briOn = (rBriCard && rBriCard.style.display !== 'none') ||
+                    (briCard && briCard.style.display !== 'none');
+                if (briOn && briEl) {
+                    body.brightness = parseInt(briEl.value, 10);
                 }
                 const resp = await fetch('/api/robot', {
                     method: 'POST',
@@ -3068,16 +3162,22 @@
                 });
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error || 'Lưu thất bại');
-                showToast('✅ Đã lưu cài đặt robot');
-                document.getElementById('robot_status').textContent =
-                    document.getElementById('motor_demand').checked
+                if (!opts.quiet) {
+                    showToast('✅ ' + (opts.toast || 'Đã lưu cài đặt robot'));
+                }
+                const st = document.getElementById('robot_status');
+                if (st) {
+                    st.textContent = document.getElementById('motor_demand') && document.getElementById('motor_demand').checked
                         ? 'Động cơ: nghỉ khi bật (tắt/bật máy để áp dụng)'
                         : 'Động cơ: luôn bật';
+                }
             } catch (err) {
-                showToast('❌ ' + err.message);
+                if (!opts.quiet) showToast('❌ ' + err.message);
             }
-            btn.disabled = false;
-            btn.textContent = '💾 Lưu cài đặt robot';
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '💾 Lưu cài đặt robot';
+            }
         }
 
         async function shiftUnit(delta) {
@@ -3423,18 +3523,34 @@
             renderA1Chips();
             toggleSpeakAiFields();
             toggleDailyAiFields();
+            const boot = parseAppHash();
+            boot.units.forEach(function (id) {
+                pathOpenUnits[id] = true;
+                browseUnit = id;
+            });
+            if (boot.app !== 'home') {
+                showNewApp();
+                switchApp(boot.app, { fromUrl: true });
+            }
             refreshSpeakStatus();
             loadConfig();
             loadSpeakUnit();
         });
+        window.addEventListener('hashchange', function () {
+            const route = parseAppHash();
+            route.units.forEach(function (id) { pathOpenUnits[id] = true; browseUnit = id; });
+            if (englishStyle === 'new') switchApp(route.app, { fromUrl: true, skipScroll: true });
+        });
 
         let speakUnit = null;
         let browseUnit = 'u01';
-        let pathOpenUnit = '';
+        const pathOpenUnits = {};
         let pathOpenAct = '';
+        function isPathOpen(id) { return !!(id && pathOpenUnits[id]); }
+        function pathOpenList() { return Object.keys(pathOpenUnits); }
         const unitCache = {};
         let pathTrack = 'a1';
-        let speakStatus = { on: false, base: 'http://192.168.100.161:8765', lan: 'http://192.168.100.161:8765', cloud: 'https://emun.pages.dev', source: 'auto', live: '', level: 'a1', unit: 'u01', index: 0, total: 0, words_done: 0, phrases_done: 0, age: 6, likes: '', xiaozhi_prompt: '' };
+        let speakStatus = { on: false, base: 'http://192.168.100.161:8765', lan: 'http://192.168.100.161:8765', cloud: 'https://emun.pages.dev', source: 'auto', live: '', level: 'a1', unit: 'u01', index: 0, total: 0, words_done: 0, phrases_done: 0, age: 6, likes: '', xiaozhi_prompt: '', stats: {} };
         let lastSpeakPathKey = '';
         let lessonIdx = 0;
         let quizHide = false;
@@ -3491,6 +3607,21 @@
             if (n < 1 || n > A1_UNITS.length) return '';
             return 'u' + String(n).padStart(2, '0');
         }
+        function pathScrollY() {
+            return window.scrollY || document.documentElement.scrollTop || 0;
+        }
+        function restorePathScroll(y) {
+            if (y == null) return;
+            window.scrollTo(0, y);
+            requestAnimationFrame(function () { window.scrollTo(0, y); });
+        }
+        function scrollPathTopicIntoView(uid) {
+            if (!uid) return;
+            requestAnimationFrame(function () {
+                const el = document.getElementById('path_topic_' + uid);
+                if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+            });
+        }
         function renderUnitStrip() {
             const strip = document.getElementById('unit_strip');
             if (!strip) return;
@@ -3500,14 +3631,16 @@
                 const id = u.id || u[0];
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.className = 'unit-pill' + (id === cur ? ' on' : '');
+                b.className = 'unit-pill' + (id === cur || isPathOpen(id) ? ' on' : '');
                 b.textContent = String(u.number || (i + 1));
                 b.title = u.title_en || u[1];
                 b.onclick = function () { selectA1Unit(id); };
                 strip.appendChild(b);
             });
             const on = strip.querySelector('.unit-pill.on');
-            if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+            if (on) {
+                strip.scrollLeft = Math.max(0, on.offsetLeft - (strip.clientWidth / 2) + (on.offsetWidth / 2));
+            }
         }
         async function startA1Unit(id) {
             if (id) browseUnit = id;
@@ -3578,7 +3711,7 @@
         }
         async function selectA1Unit(id) {
             pathTrack = 'a1';
-            await togglePathTopic(id);
+            await togglePathTopic(id, true);
         }
 
         function speakDoneIndex() {
@@ -3740,12 +3873,12 @@
                 t === 'complete_sentence' || t === 'unit_review' || t === 'ask_answer';
         }
         async function openActivityPreview(uid, actId) {
-            pathOpenUnit = uid;
-            pathOpenAct = (pathOpenAct === actId && pathOpenUnit === uid) ? '' : actId;
+            pathOpenUnits[uid] = true;
+            pathOpenAct = (pathOpenAct === actId && browseUnit === uid) ? '' : actId;
             browseUnit = uid;
-            renderSpeakPath();
+            renderSpeakPath({ keepScroll: true });
             await Promise.all([fetchUnitJson(uid), fetchActivities(uid)]);
-            if (pathOpenUnit === uid) renderSpeakPath();
+            if (isPathOpen(uid)) renderSpeakPath({ keepScroll: true });
         }
         function renderActivityWords(uid, act) {
             const box = document.createElement('div');
@@ -3973,20 +4106,26 @@
                 renderActPlayer();
             } catch (e) {}
         }
-        async function togglePathTopic(id) {
-            const next = (pathOpenUnit === id) ? '' : id;
-            pathOpenUnit = next;
-            if (!next) pathOpenAct = '';
-            if (next) browseUnit = next;
+        async function togglePathTopic(id, fromStrip) {
+            const opening = !isPathOpen(id);
+            if (opening) {
+                pathOpenUnits[id] = true;
+                browseUnit = id;
+            } else if (!fromStrip) {
+                delete pathOpenUnits[id];
+                if (pathOpenAct && browseUnit === id) pathOpenAct = '';
+            }
+            const how = (fromStrip && opening) ? { pinUnit: id } : { keepScroll: true };
             renderA1Chips();
             renderUnitStrip();
-            renderSpeakPath();
-            if (!next) return;
-            await Promise.all([fetchUnitJson(next), fetchActivities(next)]);
-            if (pathOpenUnit === next) renderSpeakPath();
+            renderSpeakPath(how);
+            syncAppUrl('path');
+            if (!opening) return;
+            await Promise.all([fetchUnitJson(id), fetchActivities(id)]);
+            if (isPathOpen(id)) renderSpeakPath(how);
         }
         async function startPathLearnNow() {
-            const id = pathOpenUnit || learningUnitId();
+            const id = (browseUnit && isPathOpen(browseUnit) ? browseUnit : pathOpenList()[0]) || learningUnitId();
             browseUnit = id;
             await startSpeak(0, id);
         }
@@ -4030,10 +4169,21 @@
             if (likesEl && document.activeElement !== likesEl && st.likes != null) likesEl.value = st.likes;
             const promptEl = document.getElementById('ai_xiaozhi_prompt');
             if (promptEl && st.xiaozhi_prompt) promptEl.value = st.xiaozhi_prompt;
+            const setupPrompt = document.getElementById('setup_xiaozhi_prompt');
+            if (setupPrompt && st.xiaozhi_prompt) setupPrompt.value = st.xiaozhi_prompt;
             const promptEn = document.getElementById('ai_xiaozhi_prompt_en');
             if (promptEn && st.xiaozhi_prompt_en) promptEn.value = st.xiaozhi_prompt_en;
-            const dailyPrompt = document.getElementById('xiaozhi_daily_prompt');
-            if (dailyPrompt && st.xiaozhi_daily_prompt) dailyPrompt.value = st.xiaozhi_daily_prompt;
+            if (st.on && st.unit && /^u\d{2}$/i.test(st.unit)) {
+                browseUnit = String(st.unit).toLowerCase();
+                pathOpenUnits[browseUnit] = true;
+                if (st.activity) pathOpenAct = st.activity;
+                const pathOn = document.getElementById('app_path');
+                if (pathOn && pathOn.classList.contains('active')) syncAppUrl('path');
+                const uid = browseUnit;
+                Promise.all([fetchUnitJson(uid), fetchActivities(uid)]).then(function () {
+                    if (pathOn && pathOn.classList.contains('active')) renderSpeakPath({ keepScroll: true });
+                });
+            }
             fillSpeakIdentity(st);
             fillDailyIdentity(st);
             const subR = document.getElementById('sub_robot');
@@ -4083,10 +4233,10 @@
                 ndBtn.textContent = onDaily ? '✅ Đang dùng — lưu lại để chào' : '💬 Lưu và bật giao tiếp hằng ngày';
             }
             renderSpeakHome();
-            const pathKey = [st.unit, st.on ? 1 : 0, st.progress_hex || '', st.student_slot].join('|');
+            const pathKey = [st.unit, st.activity || '', st.on ? 1 : 0, st.progress_hex || '', st.student_slot].join('|');
             if (pathKey !== lastSpeakPathKey) {
                 lastSpeakPathKey = pathKey;
-                renderSpeakPath();
+                renderSpeakPath({ keepScroll: true });
             }
             renderSpeakProfile();
         }
@@ -4096,7 +4246,27 @@
                 applySpeakStatus(await res.json());
             } catch (e) {}
         }
-        function switchApp(name) {
+        const APP_PAGES = ['home','path','buddy','ai','help','rank','profile','setup','control','ota','tools'];
+        function appRoute(name) {
+            return APP_PAGES.indexOf(name) >= 0 ? name : 'home';
+        }
+        function parseAppHash() {
+            const raw = String(location.hash || '').replace(/^#\/?/, '');
+            const parts = raw.split('/');
+            const app = appRoute((parts[0] || '').toLowerCase());
+            const units = String(parts[1] || '').split(/[,+]/).map(function (s) { return s.trim().toLowerCase(); })
+                .filter(function (s) { return /^u\d{2}$/.test(s); });
+            return { app: app, units: units };
+        }
+        function syncAppUrl(name) {
+            const units = name === 'path' ? pathOpenList().sort() : [];
+            const next = units.length ? '#' + name + '/' + units.join(',') : '#' + name;
+            if (location.hash === next) return;
+            history.replaceState(null, '', next);
+        }
+        function switchApp(name, opts) {
+            opts = opts || {};
+            name = appRoute(name);
             if (name === 'control') parkToolTab('control', 'app_control_host');
             if (name === 'ota') parkToolTab('ota', 'app_ota_host');
             if (name === 'tools') {
@@ -4111,7 +4281,7 @@
             if (name === 'ota') {
                 pollOtaStatus();
             }
-            ['home','path','buddy','help','rank','profile','setup','control','ota','tools'].forEach(function (n) {
+            ['home','path','buddy','ai','help','rank','profile','setup','control','ota','tools'].forEach(function (n) {
                 const panel = document.getElementById('app_' + n);
                 const nav = document.getElementById('nav_' + n);
                 if (panel) panel.classList.toggle('active', n === name);
@@ -4121,11 +4291,17 @@
                 renderA1Chips();
                 renderSpeakPath();
                 fetchCatalog().then(function () { renderSpeakPath(); });
-                if (pathOpenUnit) Promise.all([fetchUnitJson(pathOpenUnit), fetchActivities(pathOpenUnit)]).then(function () { renderSpeakPath(); });
+                const opened = pathOpenList();
+                if (opened.length) {
+                    Promise.all(opened.map(function (id) { return Promise.all([fetchUnitJson(id), fetchActivities(id)]); }))
+                        .then(function () { renderSpeakPath({ keepScroll: true }); });
+                }
             }
             if (name === 'rank') renderSpeakRank();
             if (name === 'home') renderSpeakHome();
-            window.scrollTo(0, 0);
+            if (name === 'setup') switchSetupTab('ai');
+            if (!opts.fromUrl) syncAppUrl(name);
+            if (!opts.skipScroll) window.scrollTo(0, 0);
         }
         function openRobot(tab) {
             if (englishStyle === 'new') {
@@ -4208,13 +4384,15 @@
             if (line) line.textContent = unitTitle;
             const goal = document.getElementById('speak_unit_goal');
             if (goal) goal.textContent = (speakUnit && speakUnit.goal_vi) || '';
-            const cards = (speakUnit && speakUnit.cards) || [];
-            const words = (speakStatus && speakStatus.words_done) || cards.filter(function (c, i) { return c.type === 'word' && speakCardDone(i); }).length;
-            const phrases = (speakStatus && speakStatus.phrases_done) || cards.filter(function (c, i) { return c.type === 'phrase' && speakCardDone(i); }).length;
-            document.getElementById('stat_words').textContent = words;
-            document.getElementById('stat_phrases').textContent = phrases;
+            const s = (speakStatus && speakStatus.stats) || {};
+            const words = Number(s.life_words) || 0;
+            const phrases = Number(s.life_phrases) || 0;
+            const wordsEl = document.getElementById('stat_words');
+            if (wordsEl) wordsEl.textContent = words;
+            const phrasesEl = document.getElementById('stat_phrases');
+            if (phrasesEl) phrasesEl.textContent = phrases;
             const mins = document.getElementById('stat_minutes');
-            if (mins) mins.textContent = Math.min(speakDoneIndex(), cards.length || speakDoneIndex());
+            if (mins) mins.textContent = Number(s.life_minutes) || 0;
             const acts = [
                 { tag: 'TRÒ CHUYỆN', cls: '', title: 'Lần đầu gặp gỡ — chào bạn', go: goDailyChat },
                 { tag: 'TRÒ CHUYỆN', cls: '', title: 'Giao tiếp hằng ngày', go: goDailyChat },
@@ -4240,7 +4418,10 @@
                 list.appendChild(div);
             });
         }
-        function renderSpeakPath() {
+        function renderSpeakPath(opts) {
+            opts = opts || {};
+            const pin = opts.pinUnit || '';
+            const keepY = pathScrollY();
             const learning = learningUnitId();
             const learnInfo = a1UnitInfo(learning);
             const learnN = Number(String(learning).replace(/\D/g, '')) || 1;
@@ -4266,7 +4447,6 @@
                 box.innerHTML = '<div class="app-card"><h2>STEM</h2><p class="hint">Sắp có hoạt động STEM trên robot. Hiện học lộ trình A1 trước.</p></div>';
                 return;
             }
-            const openId = pathOpenUnit;
             const units = a1UnitList();
             const doneActs = countCompletedActs();
             const pctEl = document.getElementById('track_a1_pct');
@@ -4281,8 +4461,9 @@
             units.forEach(function (u, i) {
                 const uid = u.id || u[0];
                 const wrap = document.createElement('div');
-                const isOpen = uid === openId;
+                const isOpen = isPathOpen(uid);
                 const isLearn = uid === learning;
+                wrap.id = 'path_topic_' + uid;
                 wrap.className = 'path-topic' + (isOpen ? ' open' : '') + (isLearn ? ' learning' : '');
                 const src = unitCoverUrl(uid, firstCoverId(uid));
                 const mark = isLearn ? ' · ĐANG HỌC' : '';
@@ -4328,28 +4509,34 @@
                 wrap.appendChild(words);
                 box.appendChild(wrap);
             });
+            if (pin) scrollPathTopicIntoView(pin);
+            else restorePathScroll(keepY);
         }
         function renderSpeakRank() {
-            const cards = (speakUnit && speakUnit.cards) || [];
-            const words = Number((document.getElementById('stat_words') || {}).textContent) || 0;
-            const phrases = Number((document.getElementById('stat_phrases') || {}).textContent) || 0;
-            const turns = Math.min(speakDoneIndex(), cards.length || speakDoneIndex());
+            const s = (speakStatus && speakStatus.stats) || {};
+            const turns = Number(s.life_turns) || 0;
+            const words = Number(s.life_words) || 0;
+            const phrases = Number(s.life_phrases) || 0;
+            const weekMins = Array.isArray(s.week_minutes) ? s.week_minutes : [0, 0, 0, 0, 0, 0, 0];
+            const weekTotal = Number(s.week_minutes_total);
             const setTxt = function (id, t) { const el = document.getElementById(id); if (el) el.textContent = t; };
             setTxt('rank_turns', turns);
             setTxt('rank_words', words);
             setTxt('rank_phrases', phrases);
-            setTxt('today_turns', '+' + turns + ' lượt');
-            setTxt('today_words', '+' + words + ' từ');
-            setTxt('today_phrases', '+' + phrases + ' câu');
-            setTxt('week_minutes', turns + ' phút');
+            setTxt('today_turns', '+' + (Number(s.today_turns) || 0) + ' lượt');
+            setTxt('today_words', '+' + (Number(s.today_words) || 0) + ' từ');
+            setTxt('today_phrases', '+' + (Number(s.today_phrases) || 0) + ' câu');
+            setTxt('week_minutes', ((weekTotal >= 0 ? weekTotal : weekMins.reduce(function (a, b) { return a + (Number(b) || 0); }, 0)) || 0) + ' phút');
             const bars = document.getElementById('week_bars');
             if (bars) {
                 bars.innerHTML = '';
                 const day = (new Date().getDay() + 6) % 7;
+                const maxM = Math.max(1, Math.max.apply(null, weekMins.map(Number)));
                 for (let i = 0; i < 7; i++) {
                     const b = document.createElement('i');
-                    if (i === day) { b.className = 'on'; b.style.height = Math.max(12, Math.min(80, 8 + turns * 4)) + 'px'; }
-                    else b.style.height = '8px';
+                    const m = Number(weekMins[i]) || 0;
+                    if (m > 0 || i === day) b.className = 'on';
+                    b.style.height = Math.max(8, Math.min(80, 8 + Math.round(72 * m / maxM))) + 'px';
                     bars.appendChild(b);
                 }
             }
@@ -4431,7 +4618,6 @@
                 if (data && data.error) throw new Error(data.error);
                 await refreshSpeakStatus();
                 showToast(activityId ? '✅ Robot đang vào hoạt động' : '✅ Robot đang vào bài học — đang kết nối AI dạy và chào');
-                if (activityId) openActPlayer();
             } catch (e) {
                 showToast('❌ ' + (e.message || 'Không bắt đầu được. Kiểm tra máy :8765 hoặc Pages'));
             } finally {
@@ -4512,7 +4698,13 @@
         };
         function explainLevelValue() {
             const r = document.querySelector('input[name="explain_level"]:checked');
-            return r ? r.value : 'off';
+            if (r) return r.value;
+            const on = document.querySelector('.ex-btns button[data-ex].on');
+            if (on) {
+                const v = on.getAttribute('data-ex');
+                return v === 'off' ? 'minimal' : v;
+            }
+            return 'minimal';
         }
         function paintExplainLevel(level) {
             const lv = EXPLAIN_LEVEL_INFO[level] ? (level === 'off' ? 'minimal' : level) : 'minimal';
@@ -4564,6 +4756,17 @@
             if (!pick) return;
             pick.querySelectorAll('label').forEach(function (lab) {
                 lab.classList.toggle('on', lab.getAttribute('data-for') === backend);
+            });
+        }
+        function switchSetupTab(name) {
+            const tabs = ['ai', 'lesson', 'chat', 'more'];
+            if (tabs.indexOf(name) < 0) name = 'ai';
+            tabs.forEach(function (id) {
+                const sec = document.getElementById('setup_sec_' + id);
+                if (sec) sec.classList.toggle('on', id === name);
+            });
+            document.querySelectorAll('#setup_tabs button').forEach(function (btn) {
+                btn.classList.toggle('on', btn.getAttribute('data-setup') === name);
             });
         }
         function toggleSpeakAiFields() {
@@ -4682,8 +4885,18 @@
             englishUiReady = true;
             if (next === 'new') {
                 showNewApp();
-                if (englishSlot === 'custom' && (changed || force)) switchApp('setup');
-                else if (changed || force) switchApp('home');
+                const route = parseAppHash();
+                route.units.forEach(function (id) {
+                    pathOpenUnits[id] = true;
+                    browseUnit = id;
+                });
+                if (route.app !== 'home' || location.hash) {
+                    switchApp(route.app, { fromUrl: true, skipScroll: !changed });
+                } else if (englishSlot === 'custom' && (changed || force)) {
+                    switchApp('setup');
+                } else if (changed || force) {
+                    switchApp('home', { fromUrl: true });
+                }
             } else {
                 showOldRobot();
                 switchTab('course', true);

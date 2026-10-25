@@ -127,12 +127,8 @@ void OttoEmojiDisplay::RefreshChatOverlay() {
 }
 
 bool OttoEmojiDisplay::KeepTeachingCardOnTop() {
-    if (qr_visible_ || !SpeakLesson::Get().IsOn() || preview_image_cached_ == nullptr ||
-        preview_image_ == nullptr) {
-        return false;
-    }
-    const auto state = Application::GetInstance().GetDeviceState();
-    if (state != kDeviceStateSpeaking && state != kDeviceStateListening) {
+    if (qr_visible_ || load_visible_ || !SpeakLesson::Get().IsOn() ||
+        preview_image_cached_ == nullptr || preview_image_ == nullptr) {
         return false;
     }
     if (gif_controller_) {
@@ -175,7 +171,8 @@ void OttoEmojiDisplay::ConfigureChatLayout() {
 
     if (load_visible_) {
         if (emoji_box_ != nullptr) {
-            lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(emoji_box_);
         }
         if (load_overlay_ != nullptr) {
             lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
@@ -268,7 +265,13 @@ void OttoEmojiDisplay::SetEmotion(const char* emotion) {
     }
 
     if (load_visible_) {
+        SpiLcdDisplay::SetEmotion(emotion);
+        ConfigureEmojiLayout();
         DisplayLockGuard lock(this);
+        if (emoji_box_ != nullptr) {
+            lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(emoji_box_);
+        }
         if (load_overlay_ != nullptr) {
             lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
             lv_obj_move_foreground(load_overlay_);
@@ -352,51 +355,120 @@ void OttoEmojiDisplay::SetStatus(const char* status) {
     lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
-void OttoEmojiDisplay::ShowCourseLoading(const char* text) {
-    DisplayLockGuard lock(this);
-    lv_obj_t* screen = lv_screen_active();
-    if (screen == nullptr) {
-        ESP_LOGW(TAG, "ShowCourseLoading: no screen");
+void OttoEmojiDisplay::PaintCourseLoadingDots() {
+    const int lit = (load_dot_ >= 3) ? 0 : static_cast<int>(load_dot_) + 1;
+    static const char* kTail[] = { " .", " ..", " ...", "" };
+    if (load_label_ != nullptr) {
+        std::string line = load_base_text_.empty() ? "Đang tải khóa học" : load_base_text_;
+        line += kTail[load_dot_ % 4];
+        lv_label_set_text(load_label_, line.c_str());
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (load_dots_[i] == nullptr) {
+            continue;
+        }
+        const bool on = i < lit;
+        lv_obj_set_style_bg_opa(load_dots_[i], on ? LV_OPA_COVER : LV_OPA_30, 0);
+        lv_obj_set_style_bg_color(load_dots_[i], lv_color_hex(on ? 0x5cf0e8 : 0x1aa7a1), 0);
+    }
+}
+
+void OttoEmojiDisplay::TickCourseLoading() {
+    // Called from lv_timer on the LVGL task — never from esp_timer (4KB stack overflow).
+    if (!load_visible_ || load_overlay_ == nullptr) {
         return;
     }
+    load_dot_ = static_cast<uint8_t>((load_dot_ + 1) % 4);
+    PaintCourseLoadingDots();
+}
 
-    if (load_overlay_ == nullptr) {
-        load_overlay_ = lv_obj_create(screen);
-        lv_obj_remove_style_all(load_overlay_);
-        lv_obj_set_size(load_overlay_, width_, height_);
-        lv_obj_set_style_bg_color(load_overlay_, lv_color_black(), 0);
-        lv_obj_set_style_bg_opa(load_overlay_, LV_OPA_COVER, 0);
-        lv_obj_align(load_overlay_, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_clear_flag(load_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+void OttoEmojiDisplay::PauseCourseLoadingTicks() {
+    DisplayLockGuard lock(this);
+    if (load_lv_timer_ != nullptr) {
+        lv_timer_pause(load_lv_timer_);
+    }
+}
 
-        load_label_ = lv_label_create(load_overlay_);
-        lv_obj_set_width(load_label_, width_ - 24);
-        lv_label_set_long_mode(load_label_, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_align(load_label_, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(load_label_, lv_color_white(), 0);
-        auto* theme = static_cast<LvglTheme*>(current_theme_);
-        if (theme != nullptr && theme->text_font() != nullptr) {
-            lv_obj_set_style_text_font(load_label_, theme->text_font()->font(), 0);
+void OttoEmojiDisplay::ShowCourseLoading(const char* text) {
+    load_base_text_ = (text && text[0]) ? text : "Đang tải khóa học";
+    load_dot_ = 0;
+    {
+        DisplayLockGuard lock(this);
+        lv_obj_t* screen = lv_screen_active();
+        if (screen == nullptr) {
+            ESP_LOGW(TAG, "ShowCourseLoading: no screen");
+            return;
         }
-        lv_obj_center(load_label_);
-    }
 
-    lv_label_set_text(load_label_, (text && text[0]) ? text : "Đang tải khóa học");
-    if (gif_controller_) {
-        gif_controller_->Stop();
+        if (load_overlay_ == nullptr) {
+            load_overlay_ = lv_obj_create(screen);
+            lv_obj_remove_style_all(load_overlay_);
+            lv_obj_set_size(load_overlay_, width_, height_);
+            lv_obj_set_style_bg_opa(load_overlay_, LV_OPA_TRANSP, 0);
+            lv_obj_align(load_overlay_, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_clear_flag(load_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_clear_flag(load_overlay_, LV_OBJ_FLAG_CLICKABLE);
+
+            for (int i = 0; i < 3; ++i) {
+                load_dots_[i] = lv_obj_create(load_overlay_);
+                lv_obj_remove_style_all(load_dots_[i]);
+                lv_obj_set_size(load_dots_[i], 14, 14);
+                lv_obj_set_style_radius(load_dots_[i], LV_RADIUS_CIRCLE, 0);
+                lv_obj_set_style_bg_color(load_dots_[i], lv_color_hex(0x1aa7a1), 0);
+                lv_obj_set_style_bg_opa(load_dots_[i], LV_OPA_40, 0);
+                lv_obj_align(load_dots_[i], LV_ALIGN_BOTTOM_MID, (i - 1) * 28, -72);
+                lv_obj_clear_flag(load_dots_[i], LV_OBJ_FLAG_SCROLLABLE);
+            }
+
+            lv_obj_t* bar = lv_obj_create(load_overlay_);
+            lv_obj_remove_style_all(bar);
+            lv_obj_set_size(bar, width_, 46);
+            lv_obj_set_style_bg_color(bar, lv_color_black(), 0);
+            lv_obj_set_style_bg_opa(bar, LV_OPA_70, 0);
+            lv_obj_align(bar, LV_ALIGN_BOTTOM_MID, 0, 0);
+            lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+
+            load_label_ = lv_label_create(bar);
+            lv_obj_set_width(load_label_, width_ - 16);
+            lv_label_set_long_mode(load_label_, LV_LABEL_LONG_WRAP);
+            lv_obj_set_style_text_align(load_label_, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_set_style_text_color(load_label_, lv_color_white(), 0);
+            auto* theme = static_cast<LvglTheme*>(current_theme_);
+            if (theme != nullptr && theme->text_font() != nullptr) {
+                lv_obj_set_style_text_font(load_label_, theme->text_font()->font(), 0);
+            }
+            lv_obj_center(load_label_);
+        }
+
+        PaintCourseLoadingDots();
+        if (preview_image_ != nullptr) {
+            lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (gif_controller_) {
+            gif_controller_->Stop();
+        }
+        if (emoji_box_ != nullptr) {
+            lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(emoji_box_);
+        }
+        lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(load_overlay_);
+        load_visible_ = true;
+        if (load_lv_timer_ == nullptr) {
+            load_lv_timer_ = lv_timer_create(
+                [](lv_timer_t* t) {
+                    auto* self = static_cast<OttoEmojiDisplay*>(lv_timer_get_user_data(t));
+                    if (self != nullptr) {
+                        self->TickCourseLoading();
+                    }
+                },
+                400, this);
+        } else {
+            lv_timer_resume(load_lv_timer_);
+            lv_timer_reset(load_lv_timer_);
+        }
     }
-    if (emoji_box_ != nullptr) {
-        lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (preview_image_ != nullptr) {
-        lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
-    }
-    lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_foreground(load_overlay_);
-    RaiseStatusChrome();
-    load_visible_ = true;
-    lv_refr_now(nullptr);
-    ESP_LOGI(TAG, "ShowCourseLoading: %s", (text && text[0]) ? text : "Đang tải khóa học");
+    ESP_LOGI(TAG, "ShowCourseLoading: %s", load_base_text_.c_str());
 }
 
 void OttoEmojiDisplay::HideCourseLoading() {
@@ -404,6 +476,9 @@ void OttoEmojiDisplay::HideCourseLoading() {
         return;
     }
     DisplayLockGuard lock(this);
+    if (load_lv_timer_ != nullptr) {
+        lv_timer_pause(load_lv_timer_);
+    }
     if (load_overlay_ != nullptr) {
         lv_obj_add_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
     }
@@ -582,10 +657,6 @@ void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
         return;
     }
     DisplayLockGuard lock(this);
-    if (load_visible_ && load_overlay_ != nullptr) {
-        lv_obj_add_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
-        load_visible_ = false;
-    }
     if (preview_image_ == nullptr) {
         ESP_LOGE(TAG, "Preview image is not initialized");
         return;
@@ -612,6 +683,20 @@ void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     lv_image_set_rotation(preview_image_, square_card ? 0 : 900);
     if (img_dsc->header.w > 0 && img_dsc->header.h > 0) {
         lv_image_set_scale(preview_image_, 256 * width_ / img_dsc->header.w);
+    }
+
+    if (load_visible_) {
+        lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        if (emoji_box_ != nullptr) {
+            lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(emoji_box_);
+        }
+        if (load_overlay_ != nullptr) {
+            lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(load_overlay_);
+        }
+        RaiseStatusChrome();
+        return;
     }
 
     // Hide emoji_box_

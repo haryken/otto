@@ -134,6 +134,8 @@ public:
     void FinishListeningMicSetup();
     /** Suppress mic-open chime when session ends (goodbye, disconnect, channel close). */
     void PrepareAudioChannelClose();
+    /** Abort + close chat so SpeakLesson can HTTPS-load a unit like the UI start button. */
+    void ParkVoiceForLessonStart();
     /** Close voice session and go idle while MP3 plays (wake word / boot still work). */
     void EnterMusicOnlyMode();
     void ResetMusicOnlySession();

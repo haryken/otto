@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #define SPEAK_PROG_NVS "speak"
 
@@ -219,25 +220,60 @@ std::string SpeakProgress::FoldVietnamese(const std::string& in) {
     return NormalizeText(s);
 }
 
+static bool HasWord(const std::string& hay, const std::string& w) {
+    if (w.empty()) {
+        return false;
+    }
+    size_t pos = 0;
+    while ((pos = hay.find(w, pos)) != std::string::npos) {
+        const bool left = (pos == 0) || hay[pos - 1] == ' ';
+        const size_t end = pos + w.size();
+        const bool right = (end >= hay.size()) || hay[end] == ' ';
+        if (left && right) {
+            return true;
+        }
+        pos = end;
+    }
+    return false;
+}
+
+static bool IsViStop(const std::string& t) {
+    return t == "day" || t == "la" || t == "mot" || t == "cua" || t == "va" || t == "cai" ||
+           t == "nay" || t == "kia" || t == "toi" || t == "minh" || t == "ban" || t == "con" ||
+           t == "be" || t == "nha" || t == "noi" || t == "di" || t == "da" || t == "de" ||
+           t == "ma" || t == "thi" || t == "se" || t == "cho" || t == "voi" || t == "cung";
+}
+
+static bool LooksProfane(const std::string& folded) {
+    return HasWord(folded, "cac") || HasWord(folded, "deo") || HasWord(folded, "dit") ||
+           folded.find("concac") != std::string::npos;
+}
+
 static bool MeaningNear(const std::string& heard, const std::string& meaning_vi) {
     const std::string a = SpeakProgress::FoldVietnamese(heard);
     const std::string b = SpeakProgress::FoldVietnamese(meaning_vi);
-    if (a.size() < 2 || b.size() < 2) {
+    if (a.size() < 2 || b.size() < 2 || LooksProfane(a)) {
         return false;
     }
     if (a == "ok" || a == "yes" || a == "con" || a == "ban") {
         return false;
     }
-    if (a == b || a.find(b) != std::string::npos || b.find(a) != std::string::npos) {
+    if (a == b || a.find(b) != std::string::npos) {
         return true;
     }
+    int need = 0;
+    int hits = 0;
     std::string tok;
     for (size_t i = 0; i <= b.size(); ++i) {
         const char c = (i < b.size()) ? b[i] : ' ';
         if (c == ' ' || c == '/' || c == ',' || c == '-' || c == ';') {
-            if (tok.size() >= 2 &&
-                (a == tok || a.find(tok) != std::string::npos ||
-                 SpeakProgress::EditDistance(a, tok) <= 1)) {
+            if (tok.size() >= 3 && !IsViStop(tok)) {
+                need++;
+                if (HasWord(a, tok) || (a == tok) ||
+                    (a.size() <= 6 && SpeakProgress::EditDistance(a, tok) <= 1)) {
+                    hits++;
+                }
+            } else if (tok.size() >= 2 && tok.size() < 3 && a == tok) {
                 return true;
             }
             tok.clear();
@@ -245,7 +281,10 @@ static bool MeaningNear(const std::string& heard, const std::string& meaning_vi)
             tok.push_back(c);
         }
     }
-    return false;
+    if (need == 0) {
+        return a.size() <= 6 && SpeakProgress::EditDistance(a, b) <= 1;
+    }
+    return hits > 0 && hits * 2 >= need;
 }
 
 static void ReplaceIn(std::string& s, const char* from, const char* to) {
@@ -316,6 +355,9 @@ SpeakProgress::MatchKind SpeakProgress::ClassifyMatch(const std::string& heard,
     const std::string a = NormalizeText(heard);
     const std::string b = NormalizeText(expected);
     if (a.empty()) {
+        return kMatchNone;
+    }
+    if (LooksProfane(FoldVietnamese(heard))) {
         return kMatchNone;
     }
     if (a == "ok" || a == "yes" || a == "dung" || a == "dung roi") {
@@ -401,9 +443,25 @@ void SpeakProgress::Load() {
                 }
             }
         }
+        size_t slen = 42;
+        uint8_t raw[42] = {};
+        if (nvs_get_blob(nvs, "stat", raw, &slen) == ESP_OK && slen >= 42) {
+            memcpy(&life_turns_, raw, 4);
+            memcpy(&life_words_, raw + 4, 4);
+            memcpy(&life_phrases_, raw + 8, 4);
+            memcpy(&life_seconds_, raw + 12, 4);
+            memcpy(&stats_day_, raw + 16, 2);
+            memcpy(&today_turns_, raw + 18, 2);
+            memcpy(&today_words_, raw + 20, 2);
+            memcpy(&today_phrases_, raw + 22, 2);
+            memcpy(&today_seconds_, raw + 24, 2);
+            memcpy(&week_id_, raw + 26, 2);
+            memcpy(week_sec_, raw + 28, 14);
+        }
         nvs_close(nvs);
     }
     loaded_ = true;
+    RollStatsDay();
 }
 
 void SpeakProgress::Save() {
@@ -419,6 +477,19 @@ void SpeakProgress::Save() {
         char nk[4] = {'s', 'n', static_cast<char>('0' + s), 0};
         nvs_set_str(nvs, nk, names_[s].c_str());
     }
+    uint8_t raw[42] = {};
+    memcpy(raw, &life_turns_, 4);
+    memcpy(raw + 4, &life_words_, 4);
+    memcpy(raw + 8, &life_phrases_, 4);
+    memcpy(raw + 12, &life_seconds_, 4);
+    memcpy(raw + 16, &stats_day_, 2);
+    memcpy(raw + 18, &today_turns_, 2);
+    memcpy(raw + 20, &today_words_, 2);
+    memcpy(raw + 22, &today_phrases_, 2);
+    memcpy(raw + 24, &today_seconds_, 2);
+    memcpy(raw + 26, &week_id_, 2);
+    memcpy(raw + 28, week_sec_, 14);
+    nvs_set_blob(nvs, "stat", raw, sizeof(raw));
     nvs_commit(nvs);
     nvs_close(nvs);
 }
@@ -559,6 +630,83 @@ int SpeakProgress::CompletedCount() const {
         }
     }
     return n;
+}
+
+void SpeakProgress::RollStatsDay() {
+    const time_t now = time(nullptr);
+    if (now < 1700000000) {
+        return;
+    }
+    const uint16_t day = static_cast<uint16_t>(now / 86400);
+    const uint16_t week = static_cast<uint16_t>(day / 7);
+    bool dirty = false;
+    if (week != week_id_) {
+        memset(week_sec_, 0, sizeof(week_sec_));
+        week_id_ = week;
+        dirty = true;
+    }
+    if (day != stats_day_) {
+        today_turns_ = 0;
+        today_words_ = 0;
+        today_phrases_ = 0;
+        today_seconds_ = 0;
+        stats_day_ = day;
+        dirty = true;
+    }
+    if (dirty) {
+        Save();
+    }
+}
+
+void SpeakProgress::AddSpeakTurn(bool passed, bool phrase) {
+    Load();
+    RollStatsDay();
+    life_turns_++;
+    if (today_turns_ < 0xFFFF) {
+        today_turns_++;
+    }
+    constexpr uint16_t kSec = 15;
+    life_seconds_ += kSec;
+    if (today_seconds_ < 0xFFFF - kSec) {
+        today_seconds_ = static_cast<uint16_t>(today_seconds_ + kSec);
+    }
+    const time_t now = time(nullptr);
+    int wd = 0;
+    if (now >= 1700000000) {
+        wd = static_cast<int>(((now / 86400) + 3) % 7);
+    }
+    if (wd >= 0 && wd < 7 && week_sec_[wd] < 0xFFFF - kSec) {
+        week_sec_[wd] = static_cast<uint16_t>(week_sec_[wd] + kSec);
+    }
+    if (passed) {
+        if (phrase) {
+            life_phrases_++;
+            if (today_phrases_ < 0xFFFF) {
+                today_phrases_++;
+            }
+        } else {
+            life_words_++;
+            if (today_words_ < 0xFFFF) {
+                today_words_++;
+            }
+        }
+    }
+    Save();
+}
+
+uint32_t SpeakProgress::LifeTurns() const { return life_turns_; }
+uint32_t SpeakProgress::LifeWords() const { return life_words_; }
+uint32_t SpeakProgress::LifePhrases() const { return life_phrases_; }
+uint32_t SpeakProgress::LifeSeconds() const { return life_seconds_; }
+uint16_t SpeakProgress::TodayTurns() const { return today_turns_; }
+uint16_t SpeakProgress::TodayWords() const { return today_words_; }
+uint16_t SpeakProgress::TodayPhrases() const { return today_phrases_; }
+uint16_t SpeakProgress::TodaySeconds() const { return today_seconds_; }
+uint16_t SpeakProgress::WeekSeconds(int monday0) const {
+    if (monday0 < 0 || monday0 > 6) {
+        return 0;
+    }
+    return week_sec_[monday0];
 }
 
 int SpeakProgress::MasteredCount() const {

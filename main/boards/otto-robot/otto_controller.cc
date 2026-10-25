@@ -1208,6 +1208,15 @@ public:
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                if (SpeakLesson::Get().IsDoneAsk()) {
+                    return std::string("Đang tải bài học Emun tiếp theo (không phải World Edu). "
+                                       "CẤM otto.next_unit nữa. CẤM nói tiếp. DỪNG.\n") +
+                           SpeakLesson::Get().ContinueNextLesson();
+                }
+                if (SpeakLesson::Get().IsOn()) {
+                    return "{\"ok\":false,\"rule\":\"Đang học Emun. CẤM self.otto.next_unit "
+                           "(đó là World Edu). Chỉ nói.\"}";
+                }
                 return WebSocketControlServer::ShiftActiveUnit(+1);
             });
 
@@ -1219,6 +1228,10 @@ public:
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                if (SpeakLesson::Get().IsOn()) {
+                    return "{\"ok\":false,\"rule\":\"Đang học Emun. CẤM self.otto.prev_unit "
+                           "(đó là World Edu).\"}";
+                }
                 return WebSocketControlServer::ShiftActiveUnit(-1);
             });
 
@@ -1367,7 +1380,7 @@ public:
                 int index = properties["index"].value<int>();
                 std::string backend = properties["backend"].value<std::string>();
                 std::string activity = properties["activity"].value<std::string>();
-                std::string out = SpeakLesson::Get().Start(level, unit, index, backend, false, activity);
+                std::string out = SpeakLesson::Get().Start(level, unit, index, backend, true, activity);
                 if (out.find("\"error\"") != std::string::npos) {
                     return out;
                 }
@@ -1376,11 +1389,10 @@ public:
                     if (!skip.empty() && out.find("skip") != std::string::npos) {
                         return skip;
                     }
-                    return std::string("Đang học. Ảnh+JSON robot đã có. Nói teacher. "
-                                       "CẤM start/heard/next. card tối đa 1 lần.\n") + out;
+                    return std::string("Đang tải khóa học rồi chào thẻ. CẤM nói thêm. CẤM bịa sân chơi. "
+                                       "CẤM start/heard/next.\n") + out;
                 }
-                return std::string("Đã bật chế độ học. Robot sẽ đóng phiên giao tiếp và mở đúng AI dạy học đã lưu (Gemini nếu đang chọn Gemini). "
-                                   "Chỉ nói: Mình chuyển sang học nhé! rồi DỪNG. Đừng gọi card/show trên phiên giao tiếp này.\n") + out;
+                return std::string("Đang tải khóa học như bấm Bắt đầu học. CẤM nói tiếp. CẤM bịa bài. DỪNG.\n") + out;
             });
 
         mcp_server.AddTool(

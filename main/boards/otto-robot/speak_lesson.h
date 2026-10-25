@@ -15,6 +15,12 @@ public:
     bool IsOn() const;
     /** Lesson running and not on the finished-ask screen. */
     bool IsTeaching() const;
+    /** Finished a lesson and waiting for học tiếp / nghỉ. */
+    bool IsDoneAsk() const;
+    /** Load next Emun activity or unit like the UI Bắt đầu học button. */
+    std::string ContinueNextLesson();
+    /** Spoken prompt when a lesson finishes. */
+    std::string DoneSay() const;
     /** Teaching on Xiaozhi MQTT/WS — separate from Gemini Direct AI. */
     bool UsesXiaozhiTeach() const;
     /** Slim MCP status for Xiaozhi teach (no prompt dump, one full reply per phase). */
@@ -161,6 +167,12 @@ private:
     void InheritDailyAiIfNeeded();
     std::string IntroJson() const;
     std::string DoneJson() const;
+    void HandleDoneChoice(const std::string& text);
+    std::string NextActivityId() const;
+    void KickXiaozhiAfterGrade(bool go_next);
+    void KickGeminiAfterGrade(bool go_next);
+    void OnXiaozhiTurnDone(bool auto_go);
+    void OnGeminiTurnDone(bool auto_go);
     void SwitchIdentity();
     bool InLiveVoiceSession() const;
     void RerollDailyXiaozhiIdentity();
@@ -232,6 +244,7 @@ private:
     std::string dins_;
     std::string cached_json_;
     std::string cached_key_;
+    std::string last_shown_url_;
     bool intro_pending_ = false;
     bool intro_hold_ = false;
     bool intro_ready_ = false;

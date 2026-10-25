@@ -76,16 +76,41 @@ public:
     int CompletedCount() const;
     int MasteredCount() const;
 
+    /** Count a real student utterance. passed = exact/near/pass_on (counts as word/phrase). */
+    void AddSpeakTurn(bool passed, bool phrase);
+    uint32_t LifeTurns() const;
+    uint32_t LifeWords() const;
+    uint32_t LifePhrases() const;
+    uint32_t LifeSeconds() const;
+    uint16_t TodayTurns() const;
+    uint16_t TodayWords() const;
+    uint16_t TodayPhrases() const;
+    uint16_t TodaySeconds() const;
+    uint16_t WeekSeconds(int monday0) const;
+
 private:
     SpeakProgress() = default;
     uint8_t* Blob();
     const uint8_t* Blob() const;
+
+    void RollStatsDay();
 
     bool loaded_ = false;
     uint8_t slot_ = 0;
     uint8_t assess_ = kGuided;
     uint8_t blob_[kMaxStudents][kBlobSize] = {};
     std::string names_[kMaxStudents];
+    uint32_t life_turns_ = 0;
+    uint32_t life_words_ = 0;
+    uint32_t life_phrases_ = 0;
+    uint32_t life_seconds_ = 0;
+    uint16_t stats_day_ = 0;
+    uint16_t today_turns_ = 0;
+    uint16_t today_words_ = 0;
+    uint16_t today_phrases_ = 0;
+    uint16_t today_seconds_ = 0;
+    uint16_t week_id_ = 0;
+    uint16_t week_sec_[7] = {};
 };
 
 #endif

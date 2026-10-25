@@ -23,9 +23,11 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
     virtual void ShowQrCode(const char* text) override;
     virtual void HideQrCode() override;
-    /** Full-screen face text while JSON/JPEG fetch; hide when the card image lands. */
+    /** Thinking GIF + moving dots while JSON/JPEG fetch; hide when the card image lands. */
     void ShowCourseLoading(const char* text);
     void HideCourseLoading();
+    /** Stop bounce ticks before JPEG decode so LVGL lock does not fight HTTPS. */
+    void PauseCourseLoadingTicks();
     virtual void SetupUI() override;
     virtual void RefreshChatOverlay() override;
     virtual void UpdateStatusBar(bool update_all = false) override;
@@ -38,6 +40,8 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     /** Keep subtitle at bottom; multiline text draws above the full-screen eye GIF. */
     void ConfigureChatLayout();
     void RaiseStatusChrome();
+    void TickCourseLoading();
+    void PaintCourseLoadingDots();
     void ShowTalkOnBattery(const char* utf8_icon);
     void RestoreBatteryIcon();
     bool WantSpeakSubtitle(const char* role) const;
@@ -48,6 +52,10 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     lv_obj_t* qr_image_ = nullptr;
     lv_obj_t* load_overlay_ = nullptr;
     lv_obj_t* load_label_ = nullptr;
+    lv_obj_t* load_dots_[3] = {};
+    lv_timer_t* load_lv_timer_ = nullptr;
+    std::string load_base_text_;
+    uint8_t load_dot_ = 0;
     std::unique_ptr<LvglImage> qr_image_holder_;
     esp_timer_handle_t qr_timer_ = nullptr;
     bool qr_visible_ = false;

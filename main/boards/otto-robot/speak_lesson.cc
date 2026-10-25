@@ -16,7 +16,9 @@
 #include <esp_random.h>
 
 #include "application.h"
+#include "audio_service.h"
 #include "board.h"
+#include "device_state.h"
 #include "otto_emoji_display.h"
 #include <http.h>
 #include "lvgl_display.h"
@@ -38,10 +40,10 @@ constexpr const char* kIntroSay =
     "Mình có nhiệm vụ dạy tiếng Anh cho bạn đây, mình bắt đầu học nhé!";
 
 constexpr const char* kDoneSay =
-    "Hôm nay mình hoàn thành chủ đề này rồi. Bạn muốn học lại từ đầu, học chủ đề tiếp theo, hay nghỉ nói chuyện?";
+    "Bạn học xong bài này rồi. Bạn muốn học bài tiếp theo hay nghỉ nói chuyện?";
 
 constexpr const char* kDoneSayLast =
-    "Hôm nay mình hoàn thành chủ đề cuối rồi. Bạn muốn học lại từ đầu hay nghỉ nói chuyện?";
+    "Bạn học xong chủ đề cuối rồi. Bạn muốn học lại từ đầu hay nghỉ nói chuyện?";
 
 constexpr const char* kCourseLoadingVi = "Đang tải khóa học";
 
@@ -68,51 +70,74 @@ void HideCourseLoadingFace() {
     }
 }
 
+struct PauseAfeForHttp {
+    PauseAfeForHttp() : audio_(Application::GetInstance().GetAudioService()) {
+        Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+        audio_.EnableVoiceProcessing(false);
+        audio_.EnableWakeWordDetection(false);
+    }
+    ~PauseAfeForHttp() {
+        if (SpeakLesson::Get().HoldMicForIntro()) {
+            return;
+        }
+        const DeviceState st = Application::GetInstance().GetDeviceState();
+        if (st == kDeviceStateListening) {
+            audio_.EnableVoiceProcessing(true);
+        } else if (st == kDeviceStateIdle || st == kDeviceStateStarting ||
+                   st == kDeviceStateActivating) {
+            audio_.EnableWakeWordDetection(true);
+        }
+    }
+    AudioService& audio_;
+};
+
 struct CourseLoadGuard {
     explicit CourseLoadGuard(bool on) : on_(on) {
         if (on_) {
+            Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
             ShowCourseLoadingFace();
         }
     }
     ~CourseLoadGuard() {
-        if (on_) {
+        if (on_ && hide_on_exit_) {
             HideCourseLoadingFace();
         }
     }
+    void KeepVisible() { hide_on_exit_ = false; }
     CourseLoadGuard(const CourseLoadGuard&) = delete;
     CourseLoadGuard& operator=(const CourseLoadGuard&) = delete;
 
     bool on_;
+    bool hide_on_exit_ = true;
 };
 
-constexpr const char* kAcceptKidSpeech =
-    "Bé nói tiếng Anh kiểu Việt là hợp lệ, KHÔNG cần phát âm bản ngữ 100%. "
-    "Ví dụ uncle: uncle / ăn cồ / un cồ / ăn cô / chú / chu — đều gọi heard ngay. "
-    "heard.text PHẢI là chính tả tiếng Anh của từ bài (uncle, father), không ghi ASR tiếng Việt. "
-    "Bé nói pha thơ / bố / bo → gửi father. CẤM gửi tiếng Việt tục tĩu khi đang luyện từ Anh. "
-    "CẤM bắt nói lại cho chuẩn, CẤM chê phát âm, CẤM bịa 'phát âm chuẩn'. "
-    "Firmware chấm gần đúng; lần 3 chưa khớp vẫn khen rồi TỰ sang từ mới. "
-    "CẤM next tay, CẤM mở mic lại cùng thẻ.\n";
-
 constexpr const char* kXiaozhiPrompt =
+    "CẤM STT YouTube: server hay trả ĐÚNG nguyên câu, không phải bé nói. "
+    "Nghe 1 câu này thì im, CẤM khen / tạm biệt / subscribe, nhắc từ đang học:\n"
+    "1) Cảm ơn các bạn đã theo dõi và hẹn gặp lại\n"
+    "2) Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn\n"
+    "3) Hãy đăng ký kênh để ủng hộ kênh của mình nhé!\n"
+    "4) Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ\n"
+    "5) Bye\n"
     "Khi on=true bạn chỉ NÓI. Robot Self-Control đã kéo JSON + ảnh. "
     "CẤM status/show/heard/next/start. card tối đa 1 lần lúc học ngay. Gọi tool lặp = lỗi 400 tool_call_id.\n"
     "Cue robot:\n"
     "- học ngay / thẻ mới: đọc speech[]/teacher, mời bạn nói, DỪNG. Ảnh đã hiện.\n"
     "- hãy khơi gợi: nhắc từ đang học. hết bài: CHỈ nói say.\n"
-    "Khi BẠN nghe bé nói (như giao tiếp hằng ngày): khen / khích lệ ngắn ngay. "
-    "Đúng hoặc gần đúng: Hay lắm. Sai: chưa phải từ này, đọc lại mẫu. "
-    "CẤM tool, CẤM bịa 'phát âm chuẩn'. Không tuyên bố phát âm hoàn hảo.\n"
+    "Khi BẠN nghe bé nói: đúng/gần đúng thì khen ngắn. Sai: CHƯA phải, đọc mẫu từ đang hiện 2 lần, "
+    "mời nói lại, DỪNG. CẤM khen đúng khi sai. CẤM card/show/heard/next. "
+    "CẤM bịa 'phát âm chuẩn'.\n"
     "CẤM nói giao tiếp hằng ngày / chưa mở bài / Mình chuyển sang học nhé.\n"
     "hide_answer=true: đừng đọc đáp án. phase=done: CHỈ nói say.\n"
     "Khi on=false: trò chuyện đời thường.";
 
-constexpr const char* kAcceptKidSpeechEn =
-    "Vietnamese-accent English is valid. Do not require native pronunciation. "
-    "Example uncle: uncle / ăn cồ / un cồ / chú. Always call heard with the exact words you heard. "
-    "Do not ask to repeat until perfect. Firmware grades near-matches; after 3 misses praise and move on.\n";
-
 constexpr const char* kXiaozhiPromptEn =
+    "BAN YouTube STT: server often returns these EXACT lines — not the child. Stay silent, do not praise/goodbye/subscribe:\n"
+    "1) Cảm ơn các bạn đã theo dõi và hẹn gặp lại\n"
+    "2) Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn\n"
+    "3) Hãy đăng ký kênh để ủng hộ kênh của mình nhé!\n"
+    "4) Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ\n"
+    "5) Bye\n"
     "When on=true only SPEAK. Robot already loaded JSON and the image. "
     "Do NOT call heard/next/status/show/start. card at most ONCE on học ngay.\n"
     "học ngay / thẻ mới: say speech[]/teacher, then wait.\n"
@@ -122,6 +147,13 @@ constexpr const char* kXiaozhiPromptEn =
     "When on=false: chat normally.";
 
 constexpr const char* kXiaozhiDailyPrompt =
+    "CẤM STT YouTube: server hay trả ĐÚNG nguyên câu, không phải bé nói. "
+    "Nghe 1 câu này thì im, CẤM khen / tạm biệt / subscribe:\n"
+    "1) Cảm ơn các bạn đã theo dõi và hẹn gặp lại\n"
+    "2) Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn\n"
+    "3) Hãy đăng ký kênh để ủng hộ kênh của mình nhé!\n"
+    "4) Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ\n"
+    "5) Bye\n"
     "Bạn là Emun. Xưng mình, gọi bé là bạn. Không tự xưng robot. Không gọi bạn là con.\n"
     "Nói chuyện hằng ngày: vui, ngắn, dễ hiểu.\n"
     "Nghe 'hãy khơi gợi' hoặc 'khơi gợi lại': tiếp tục trò chuyện / nhắc nhẹ, không hỏi dài, "
@@ -139,10 +171,11 @@ constexpr const char* kXiaozhiDailyPrompt =
     "B) on=true hoặc nghe 'học ngay' — ĐANG HỌC.\n"
     "Robot Self-Control đã kéo JSON + ảnh. CẤM heard/next/show/status/start.\n"
     "học ngay / thẻ mới: card MỘT LẦN nếu cần, đọc teacher, chờ bạn nói.\n"
-    "Nghe bé nói: khen / khích lệ như giao tiếp hằng ngày. CẤM tool.\n"
+    "Nghe bé nói: đúng thì khen. Sai: đọc mẫu từ đang hiện, mời nói lại. CẤM tool/card.\n"
     "hết bài: CHỈ nói say. Không tuyên bố phát âm hoàn hảo.\n"
     "CẤM đọc đáp án khi hide_answer=true.\n"
-    "Học lại: start index=0 cùng unit. Tiếp: start index=0 unit=next_unit. Nghỉ: self.speak.off hoặc self.speak.daily.\n"
+    "Học lại: start index=0 cùng unit. Học tiếp: firmware tự tải bài Emun kế. "
+    "CẤM self.otto.next_unit (World Edu). Nghỉ: self.speak.off hoặc self.speak.daily.\n"
     "Không chữa phát âm. Không bịa từ ngoài thẻ.";
 
 bool ContainsWord(const std::string& hay, const std::string& needle) {
@@ -201,9 +234,72 @@ bool IsFirmwareCue(const std::string& text) {
     return text == "bắt đầu học ngay" || text == "sang thẻ tiếp" || text == "nói feedback" ||
            text == "hết bài" || text == "nhắc học viên nói" || text == "khơi gợi lại" ||
            text == "hãy khơi gợi" || text == "thẻ mới" || text == "nói khen" ||
-           text == "khen rồi thẻ mới" ||
+           text == "khen rồi thẻ mới" || text == "chưa khớp" ||
            text == "học ngay" || text == "Hi,Jason" || text == "Hi Jason" ||
            text == "xin chào" || text == "Hi,ESP" || text == "Hi ESP";
+}
+
+bool IsLessonFiller(const std::string& text) {
+    return ContainsWord(text, "cảm ơn") || ContainsWord(text, "thanks") ||
+           ContainsWord(text, "thank you") || ContainsWord(text, "okay") ||
+           ContainsWord(text, "ok") || ContainsWord(text, "oke") ||
+           ContainsWord(text, "ừ") || ContainsWord(text, "rồi") ||
+           ContainsWord(text, "yeah") || ContainsWord(text, "không có chi");
+}
+
+std::string FoldLoose(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    bool space = true;
+    for (unsigned char c : s) {
+        if (c >= 'A' && c <= 'Z') {
+            c = static_cast<unsigned char>(c + 32);
+        }
+        if (c == '!' || c == '?' || c == '.' || c == ',' || c == ';' || c == ':' ||
+            c == '"' || c == '\'' || c == '(' || c == ')') {
+            c = ' ';
+        }
+        if (c <= ' ' ) {
+            if (!space && !out.empty()) {
+                out.push_back(' ');
+                space = true;
+            }
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+        space = false;
+    }
+    if (!out.empty() && out.back() == ' ') {
+        out.pop_back();
+    }
+    return out;
+}
+
+bool IsShortBye(const std::string& folded) {
+    return folded == "bye" || folded == "bye bye" || folded == "good bye" ||
+           folded == "goodbye";
+}
+
+bool IsSttYoutubeGhost(const std::string& text) {
+    const std::string f = FoldLoose(text);
+    if (f.empty()) {
+        return false;
+    }
+    if (IsShortBye(f)) {
+        return true;
+    }
+    static const char* kExact[] = {
+        "cảm ơn các bạn đã theo dõi và hẹn gặp lại",
+        "hãy subscribe cho kênh la la school để không bỏ lỡ những video hấp dẫn",
+        "hãy đăng ký kênh để ủng hộ kênh của mình nhé",
+        "hãy subscribe cho kênh ghiền mì gõ để không bỏ lỡ",
+    };
+    for (const char* p : kExact) {
+        if (f == FoldLoose(p)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 constexpr const char* kDirectPrompt =
@@ -211,8 +307,11 @@ constexpr const char* kDirectPrompt =
     "(card/show/heard/next/status/start). Firmware tự chấm STT và hiện ảnh.\n"
     "Cue có nguyên văn trong ngoặc kép: đọc HẾT một hơi, đúng từ thẻ, CẤM bịa từ khác, mời nói, DỪNG.\n"
     "Khi BẠN nghe bé nói (như chat thường): khen / khích lệ ngắn ngay. CẤM tool. "
+    "CẤM self.conversation.end. Cảm ơn / tạm biệt lúc học không phải hết bài, đừng tạm biệt. "
     "CẤM bịa phát âm chuẩn. Không tuyên bố phát âm hoàn hảo.\n"
-    "hãy khơi gợi / nhắc học viên nói: nhắc từ đang học. hết bài: CHỈ nói say.\n"
+    "chưa khớp: CẤM nói đúng rồi / phát âm chuẩn. Đọc mẫu từ đang hiện, mời nói lại. "
+    "hãy khơi gợi / nhắc học viên nói: nhắc từ đang học. "
+    "hết bài: đọc say, hỏi học tiếp hay nghỉ. CẤM self.otto.next_unit (đó là World Edu).\n"
     "CẤM đọc answer_en khi hide_answer=true. hide_answer=true: đừng đọc đáp án.\n";
 
 std::string NextUnitId(const std::string& unit) {
@@ -714,6 +813,79 @@ bool SpeakLesson::IsTeaching() const {
     auto& self = *const_cast<SpeakLesson*>(this);
     self.LoadNvs();
     return self.on_ && !self.done_ask_;
+}
+
+bool SpeakLesson::IsDoneAsk() const {
+    auto& self = *const_cast<SpeakLesson*>(this);
+    self.LoadNvs();
+    if (!self.on_) {
+        return false;
+    }
+    if (self.done_ask_) {
+        return true;
+    }
+    const int total = self.LessonTotal();
+    return total > 0 && self.index_ >= total;
+}
+
+std::string SpeakLesson::DoneSay() const {
+    return NextUnitId(unit_).empty() && NextActivityId().empty() ? kDoneSayLast : kDoneSay;
+}
+
+std::string SpeakLesson::NextActivityId() const {
+    auto& self = *const_cast<SpeakLesson*>(this);
+    self.LoadNvs();
+    if (self.cached_act_json_.empty()) {
+        return "";
+    }
+    cJSON* root = cJSON_Parse(self.cached_act_json_.c_str());
+    if (!root) {
+        return "";
+    }
+    cJSON* acts = cJSON_GetObjectItem(root, "activities");
+    std::string found;
+    if (cJSON_IsArray(acts)) {
+        const int n = cJSON_GetArraySize(acts);
+        int cur = -1;
+        for (int i = 0; i < n; ++i) {
+            if (self.activity_id_ == JsonStr(cJSON_GetArrayItem(acts, i), "id")) {
+                cur = i;
+                break;
+            }
+        }
+        for (int i = cur + 1; i < n; ++i) {
+            cJSON* act = cJSON_GetArrayItem(acts, i);
+            const char* id = JsonStr(act, "id");
+            const char* type = JsonStr(act, "type");
+            if (!id || !*id) {
+                continue;
+            }
+            if (type && strcmp(type, "unit_review") == 0 && !self.ReviewUnlocked()) {
+                continue;
+            }
+            found = id;
+            break;
+        }
+    }
+    cJSON_Delete(root);
+    return found;
+}
+
+std::string SpeakLesson::ContinueNextLesson() {
+    LoadNvs();
+    const std::string next_act = NextActivityId();
+    if (!next_act.empty()) {
+        ESP_LOGI(TAG, "Continue next activity %s/%s %s", level_.c_str(), unit_.c_str(),
+                 next_act.c_str());
+        return Start(level_, unit_, 0, "", true, next_act);
+    }
+    const std::string nxt = NextUnitId(unit_);
+    if (nxt.empty()) {
+        ESP_LOGI(TAG, "Continue: no next lesson after %s/%s", level_.c_str(), unit_.c_str());
+        return DoneJson();
+    }
+    ESP_LOGI(TAG, "Continue next unit %s/%s", level_.c_str(), nxt.c_str());
+    return Start(level_, nxt, 0, "", true, "");
 }
 
 bool SpeakLesson::UsesXiaozhiTeach() const {
@@ -1617,6 +1789,7 @@ std::string SpeakLesson::JoinUrl(const std::string& path) const {
 }
 
 std::string SpeakLesson::FetchText(const std::string& url) {
+    PauseAfeForHttp pause_afe;
     auto network = Board::GetInstance().GetNetwork();
     if (!network) {
         return "";
@@ -1988,11 +2161,16 @@ std::string SpeakLesson::Start(const std::string& level, const std::string& unit
     if (cached_key_ != want_key) {
         cached_json_.clear();
         cached_key_.clear();
+        last_shown_url_.clear();
     }
     const bool live = InLiveVoiceSession();
     const bool from_ui = force_reconnect || !live;
-    CourseLoadGuard loading(from_ui);
+    if (from_ui && live) {
+        ESP_LOGI(TAG, "Voice start: close chat, then load course like the UI button");
+        Application::GetInstance().ParkVoiceForLessonStart();
+    }
     if (from_ui) {
+        CourseLoadGuard loading(true);
         if (!EnsureUnitLoaded()) {
             return "{\"success\":false,\"error\":\"Khong tai JSON. Thu may LAN :8765 hoac https://emun.pages.dev.\"}";
         }
@@ -2015,22 +2193,41 @@ std::string SpeakLesson::Start(const std::string& level, const std::string& unit
         }
         briefing_ = BuildBriefing();
         briefing_pending_ = !briefing_.empty();
+        int total_pre = LessonTotal();
+        if (index >= 0) {
+            index_ = index;
+        } else if (done_ask_ || (!on_ && total_pre > 0 && index_ >= total_pre)) {
+            index_ = 0;
+        }
+        if (index_ < 0) {
+            index_ = 0;
+        }
+        if (total_pre > 0 && index_ > total_pre) {
+            index_ = total_pre;
+        }
+        // JSON only under the overlay. JPEG + reconnect together was watchdog-rebooting
+        // after "Đang tải khóa học" finished (voice start and UI start).
+        if (auto* otto = dynamic_cast<OttoEmojiDisplay*>(Board::GetInstance().GetDisplay())) {
+            otto->PauseCourseLoadingTicks();
+        }
+        loading.KeepVisible();
     } else {
         ESP_LOGI(TAG, "Start during live voice: JSON on next card/show");
     }
     int total = LessonTotal();
     const bool was_on = on_;
-    if (index >= 0) {
-        index_ = index;
-    } else if (done_ask_ || (!was_on && total > 0 && index_ >= total)) {
-        // Finished unit: học lại starts at card 0 of this topic.
-        index_ = 0;
-    }
-    if (index_ < 0) {
-        index_ = 0;
-    }
-    if (total > 0 && index_ > total) {
-        index_ = total;
+    if (!from_ui) {
+        if (index >= 0) {
+            index_ = index;
+        } else if (done_ask_ || (!was_on && total > 0 && index_ >= total)) {
+            index_ = 0;
+        }
+        if (index_ < 0) {
+            index_ = 0;
+        }
+        if (total > 0 && index_ > total) {
+            index_ = total;
+        }
     }
     const uint8_t prev_slot = new_slot_;
     const bool was_new = style_new_;
@@ -2047,9 +2244,18 @@ std::string SpeakLesson::Start(const std::string& level, const std::string& unit
     // UI :8080 always reconnects so the robot greets as teacher (same as Giao tiếp).
     // MCP during a live session must not kill the audio thread; apply identity on idle.
     if (force_reconnect || !live) {
-        if (force_reconnect || need_switch || want != have) {
+        if (need_switch || want != have) {
             ESP_LOGI(TAG, "Start: switch to teaching identity and greet");
             SwitchIdentity();
+        } else {
+            ShowCurrent();
+            HideCourseLoadingFace();
+            if (force_reconnect || live) {
+                ESP_LOGI(TAG, "Start: already teaching identity, greet without reconnect");
+                Application::GetInstance().Schedule([]() {
+                    Application::GetInstance().WakeWordInvoke("Hi,Jason");
+                });
+            }
         }
     } else if (need_switch || want != have) {
         identity_pending_ = true;
@@ -2059,7 +2265,8 @@ std::string SpeakLesson::Start(const std::string& level, const std::string& unit
     intro_hold_ = false;
     intro_ready_ = false;
     if (from_ui) {
-        ShowCurrent();
+        just_auto_advanced_ = true;
+        card_intro_heard_ = false;
         return CurrentCardJson();
     }
     if (dai_ == "xiaozhi") {
@@ -2316,10 +2523,13 @@ std::string SpeakLesson::StatusJson() {
     cJSON_AddBoolToObject(out, "finished", done || (total > 0 && index_ >= total));
     cJSON_AddStringToObject(out, "phase", done ? "done" : (need_intro ? "intro" : "card"));
     if (done) {
-        std::string nxt = NextUnitId(unit_);
-        const char* say = nxt.empty() ? kDoneSayLast : kDoneSay;
-        cJSON_AddStringToObject(out, "say", say);
-        if (!nxt.empty()) {
+        std::string nxt_act = NextActivityId();
+        std::string nxt = nxt_act.empty() ? NextUnitId(unit_) : unit_;
+        cJSON_AddStringToObject(out, "say", DoneSay().c_str());
+        if (!nxt_act.empty()) {
+            cJSON_AddStringToObject(out, "next_activity", nxt_act.c_str());
+        }
+        if (!nxt.empty() && nxt_act.empty()) {
             cJSON_AddStringToObject(out, "next_unit", nxt.c_str());
         }
     } else if (briefing_pending_ && !briefing_.empty()) {
@@ -2379,6 +2589,23 @@ std::string SpeakLesson::StatusJson() {
     cJSON_AddStringToObject(out, "progress_hex", prog.HexBlob().c_str());
     cJSON_AddNumberToObject(out, "acts_completed", prog.CompletedCount());
     cJSON_AddNumberToObject(out, "acts_mastered", prog.MasteredCount());
+    cJSON* stats = cJSON_AddObjectToObject(out, "stats");
+    cJSON_AddNumberToObject(stats, "life_turns", prog.LifeTurns());
+    cJSON_AddNumberToObject(stats, "life_words", prog.LifeWords());
+    cJSON_AddNumberToObject(stats, "life_phrases", prog.LifePhrases());
+    cJSON_AddNumberToObject(stats, "life_minutes", static_cast<int>(prog.LifeSeconds() / 60));
+    cJSON_AddNumberToObject(stats, "today_turns", prog.TodayTurns());
+    cJSON_AddNumberToObject(stats, "today_words", prog.TodayWords());
+    cJSON_AddNumberToObject(stats, "today_phrases", prog.TodayPhrases());
+    cJSON_AddNumberToObject(stats, "today_minutes", prog.TodaySeconds() / 60);
+    int week_min = 0;
+    cJSON* week = cJSON_AddArrayToObject(stats, "week_minutes");
+    for (int d = 0; d < 7; ++d) {
+        const int m = prog.WeekSeconds(d) / 60;
+        week_min += m;
+        cJSON_AddItemToArray(week, cJSON_CreateNumber(m));
+    }
+    cJSON_AddNumberToObject(stats, "week_minutes_total", week_min);
     cJSON* students = cJSON_AddArrayToObject(out, "students");
     cJSON* row = cJSON_CreateObject();
     cJSON_AddNumberToObject(row, "slot", 0);
@@ -2403,6 +2630,13 @@ std::string SpeakLesson::UnitJson() {
 }
 
 bool SpeakLesson::ShowImage(const std::string& url) {
+    if (url.empty()) {
+        return false;
+    }
+    if (url == last_shown_url_) {
+        ESP_LOGI(TAG, "ShowImage skip duplicate %s", url.c_str());
+        return true;
+    }
     if (ShowImageOnce(url)) {
         PinLiveFromUrl(url);
         return true;
@@ -2416,6 +2650,7 @@ bool SpeakLesson::ShowImage(const std::string& url) {
 }
 
 bool SpeakLesson::ShowImageOnce(const std::string& url) {
+    PauseAfeForHttp pause_afe;
     auto display = dynamic_cast<LvglDisplay*>(Board::GetInstance().GetDisplay());
     if (!display) {
         return false;
@@ -2516,6 +2751,7 @@ bool SpeakLesson::ShowImageOnce(const std::string& url) {
 
     try {
         display->SetPreviewImage(std::make_unique<LvglAllocatedImage>(data, jpeg_len));
+        last_shown_url_ = url;
         ESP_LOGI(TAG, "ShowImage ok %s (%u bytes)", url.c_str(), (unsigned)jpeg_len);
         return true;
     } catch (const std::exception& e) {
@@ -2566,26 +2802,30 @@ std::string SpeakLesson::IntroJson() const {
 }
 
 std::string SpeakLesson::DoneJson() const {
-    std::string nxt = NextUnitId(unit_);
-    const char* say = nxt.empty() ? kDoneSayLast : kDoneSay;
+    std::string nxt_act = NextActivityId();
+    std::string nxt = nxt_act.empty() ? NextUnitId(unit_) : "";
+    const std::string say = DoneSay();
     cJSON* out = cJSON_CreateObject();
     cJSON_AddBoolToObject(out, "on", true);
     cJSON_AddBoolToObject(out, "finished", true);
     cJSON_AddStringToObject(out, "phase", "done");
     cJSON_AddBoolToObject(out, "need_intro", false);
     cJSON_AddBoolToObject(out, "skip_image", true);
-    cJSON_AddStringToObject(out, "say", say);
-    cJSON_AddStringToObject(out, "teacher", say);
+    cJSON_AddStringToObject(out, "say", say.c_str());
+    cJSON_AddStringToObject(out, "teacher", say.c_str());
     cJSON_AddStringToObject(out, "level", level_.c_str());
     cJSON_AddStringToObject(out, "unit", unit_.c_str());
     cJSON_AddNumberToObject(out, "index", index_);
+    if (!nxt_act.empty()) {
+        cJSON_AddStringToObject(out, "next_activity", nxt_act.c_str());
+    }
     if (!nxt.empty()) {
         cJSON_AddStringToObject(out, "next_unit", nxt.c_str());
     }
     cJSON_AddStringToObject(out, "message",
-                            nxt.empty()
+                            nxt_act.empty() && nxt.empty()
                                 ? "Het chu de cuoi. Noi field say. Hoc lai: start index=0. Nghi: self.speak.off."
-                                : "Het chu de. Noi field say. Lai: start index=0. Tiep: start index=0 unit=next_unit. Nghi: self.speak.off.");
+                                : "Het bai. Noi field say. Hoc tiep: firmware tu tai bai Emun ke. CAM otto.next_unit. Nghi: self.speak.off.");
     char* printed = cJSON_PrintUnformatted(out);
     std::string result = printed ? printed : "{}";
     cJSON_free(printed);
@@ -2637,6 +2877,7 @@ void SpeakLesson::OnNewTalkSession() {
     speak_begin_us_ = 0;
     LoadSentenceItem(index_);
     ShowCurrent();
+    HideCourseLoadingFace();
     const char* en = !playlist_.empty() && index_ >= 0 && index_ < static_cast<int>(playlist_.size())
                          ? playlist_[index_].c_str()
                          : (answer_en_.empty() ? "?" : answer_en_.c_str());
@@ -2670,24 +2911,26 @@ void SpeakLesson::OnAssistantTurnDone() {
         FlipAdvancePreview();
         ShowCurrent();
     }
-    if (auto_go && combo_praise_.empty()) {
-        Application::GetInstance().Schedule([]() {
-            auto& lesson = SpeakLesson::Get();
-            if (!lesson.IsOn()) {
-                return;
-            }
-            lesson.ContinueAfterFeedback();
-            if (lesson.IsTeaching()) {
-                const char* cue = lesson.UsesXiaozhiTeach() ? "thẻ mới" : "sang thẻ tiếp";
-                Application::GetInstance().SendDirectCue(cue);
-            } else {
-                Application::GetInstance().SendDirectCue("hết bài");
-            }
-        });
+    if (UsesXiaozhiTeach()) {
+        OnXiaozhiTurnDone(auto_go);
+    } else {
+        OnGeminiTurnDone(auto_go);
+    }
+}
+
+void SpeakLesson::OnXiaozhiTurnDone(bool auto_go) {
+    if (auto_go) {
+        just_auto_advanced_ = true;
+        card_intro_heard_ = false;
+        ContinueAfterFeedback();
+        if (IsTeaching()) {
+            Application::GetInstance().SendDirectCue("thẻ mới");
+        } else {
+            Application::GetInstance().SendDirectCue("hết bài");
+        }
         return;
     }
-    if (UsesXiaozhiTeach() && xz_kick_teacher_ && !xz_got_card_ && !feedback_pending_ &&
-        !xz_wrong_word_) {
+    if (xz_kick_teacher_ && !xz_got_card_ && !feedback_pending_ && !xz_wrong_word_) {
         const int64_t spoke_ms =
             speak_begin_us_ > 0 ? (esp_timer_get_time() - speak_begin_us_) / 1000 : 0;
         if (spoke_ms > 0 && spoke_ms < 2500) {
@@ -2698,22 +2941,52 @@ void SpeakLesson::OnAssistantTurnDone() {
         }
     }
     if (on_ && just_auto_advanced_ && !feedback_pending_) {
-        if (UsesXiaozhiTeach() && !card_intro_heard_ && intro_recue_ < 2 && IsTeaching()) {
+        if (!card_intro_heard_ && intro_recue_ < 2 && IsTeaching()) {
             intro_recue_++;
             skip_turn_done_ = true;
             skip_turn_done_us_ = esp_timer_get_time();
-            ESP_LOGI(TAG, "New card not spoken yet, cue again (%u) expect=%s",
+            ESP_LOGI(TAG, "Xiaozhi card not spoken yet, cue thẻ mới (%u) expect=%s",
                      static_cast<unsigned>(intro_recue_), CurrentTeachEn().c_str());
             Application::GetInstance().SendDirectCue("thẻ mới");
             return;
         }
         just_auto_advanced_ = false;
         card_intro_heard_ = true;
-        combo_praise_.clear();
-        combo_script_.clear();
         xz_hold_tools_ = false;
         intro_recue_ = 0;
-        ESP_LOGI(TAG, "New card intro done, accept speech");
+        ESP_LOGI(TAG, "Xiaozhi intro done, accept speech");
+        if (pending_show_) {
+            Application::GetInstance().Schedule([]() {
+                SpeakLesson::Get().FlushPendingShow();
+            });
+        }
+    }
+}
+
+void SpeakLesson::OnGeminiTurnDone(bool auto_go) {
+    if (auto_go && combo_praise_.empty()) {
+        just_auto_advanced_ = true;
+        card_intro_heard_ = false;
+        ContinueAfterFeedback();
+        Application::GetInstance().SendDirectCue(IsTeaching() ? "sang thẻ tiếp" : "hết bài");
+        return;
+    }
+    if (on_ && just_auto_advanced_ && !feedback_pending_) {
+        if (!card_intro_heard_ && intro_recue_ < 2 && IsTeaching()) {
+            intro_recue_++;
+            skip_turn_done_ = true;
+            skip_turn_done_us_ = esp_timer_get_time();
+            ESP_LOGI(TAG, "Gemini card not spoken yet, cue lại (%u) expect=%s",
+                     static_cast<unsigned>(intro_recue_), CurrentTeachEn().c_str());
+            Application::GetInstance().SendDirectCue("sang thẻ tiếp");
+            return;
+        }
+        just_auto_advanced_ = false;
+        card_intro_heard_ = true;
+        combo_praise_.clear();
+        combo_script_.clear();
+        intro_recue_ = 0;
+        ESP_LOGI(TAG, "Gemini intro done, accept speech");
         if (pending_show_) {
             Application::GetInstance().Schedule([]() {
                 SpeakLesson::Get().FlushPendingShow();
@@ -2791,9 +3064,65 @@ void SpeakLesson::ContinueAfterFeedback() {
     just_auto_advanced_ = true;
 }
 
-void SpeakLesson::OnSttText(const std::string& text) {
-    if (!on_ || done_ask_ || text.empty()) {
+void SpeakLesson::HandleDoneChoice(const std::string& text) {
+    if (IsFirmwareCue(text)) {
         return;
+    }
+    const bool stop = ContainsWord(text, "nghỉ") || ContainsWord(text, "dừng") ||
+                      ContainsWord(text, "không học") || ContainsWord(text, "tạm biệt") ||
+                      ContainsWord(text, "giao tiếp") || ContainsWord(text, "stop") ||
+                      ContainsWord(text, "bye");
+    const bool restart = ContainsWord(text, "học lại") || ContainsWord(text, "từ đầu") ||
+                         ContainsWord(text, "làm lại");
+    const bool cont = ContainsWord(text, "học tiếp") || ContainsWord(text, "tiếp theo") ||
+                      ContainsWord(text, "tiếp tục") || ContainsWord(text, "bài tiếp") ||
+                      ContainsWord(text, "chủ đề tiếp") || ContainsWord(text, "qua bài") ||
+                      ContainsWord(text, "sang bài") || ContainsWord(text, "next") ||
+                      ContainsWord(text, "sẵn sàng") || ContainsWord(text, "unit tiếp") ||
+                      ContainsWord(text, "tiếp đi") || ContainsWord(text, "bài mới") ||
+                      ContainsWord(text, "học mới") || ContainsWord(text, "ok") ||
+                      ContainsWord(text, "okay") || ContainsWord(text, "oke") ||
+                      ContainsWord(text, "được") || ContainsWord(text, "yes") ||
+                      ContainsWord(text, "ừ") || ContainsWord(text, "tiếp");
+    if (stop && !restart) {
+        ESP_LOGI(TAG, "Done choice: stop / daily");
+        Stop();
+        return;
+    }
+    if (restart && !cont) {
+        ESP_LOGI(TAG, "Done choice: restart %s/%s %s", level_.c_str(), unit_.c_str(),
+                 activity_id_.c_str());
+        Start(level_, unit_, 0, "", true, activity_id_);
+        return;
+    }
+    if (cont) {
+        ESP_LOGI(TAG, "Done choice: next Emun lesson");
+        ContinueNextLesson();
+        return;
+    }
+    if (ContainsWord(text, "làm gì") || ContainsWord(text, "rồi sao")) {
+        Application::GetInstance().SendDirectCue("hết bài");
+    }
+}
+
+void SpeakLesson::OnSttText(const std::string& text) {
+    if (!on_ || text.empty()) {
+        return;
+    }
+    if (done_ask_) {
+        HandleDoneChoice(text);
+        return;
+    }
+    if (IsLessonFiller(text) || IsSttYoutubeGhost(text)) {
+        const std::string en = CurrentTeachEn();
+        const std::string fen = FoldEnglish(en);
+        const bool keep_ok = ContainsEnglish(text, en) || fen == "ok" || fen == "okay" ||
+                             fen == "yes";
+        const bool keep_bye = (fen == "bye" || fen == "goodbye") && IsShortBye(FoldLoose(text));
+        if (!keep_ok && !keep_bye) {
+            ESP_LOGI(TAG, "STT ignored: filler/ghost (%s)", text.c_str());
+            return;
+        }
     }
     if (IsFirmwareCue(text)) {
         ESP_LOGI(TAG, "STT ignored: firmware cue (%s)", text.c_str());
@@ -2834,23 +3163,51 @@ void SpeakLesson::KickAfterGrade() {
     if (!go_next && (!feedback_pending_ || last_feedback_.empty() || feedback_spoken_)) {
         return;
     }
-    xz_status_hits_ = 0;
-    last_xz_status_us_ = 0;
-    if (IsTeaching()) {
-        if (go_next && !just_auto_advanced_) {
-            ESP_LOGI(TAG, "Kick: AI praises from hearing, show next card after that turn");
-            pending_show_ = true;
-        } else if (!go_next) {
-            ESP_LOGI(TAG, "Kick: stay on card, AI encourages from hearing");
-        }
-        xz_hold_tools_ = true;
+    if (UsesXiaozhiTeach()) {
+        KickXiaozhiAfterGrade(go_next);
         return;
     }
-    xz_hold_tools_ = true;
+    if (IsTeaching()) {
+        KickGeminiAfterGrade(go_next);
+        return;
+    }
     skip_turn_done_ = true;
     skip_turn_done_us_ = esp_timer_get_time();
     Application::GetInstance().AbortSpeaking(kAbortReasonNone);
     Application::GetInstance().SendDirectCue("hết bài");
+}
+
+void SpeakLesson::KickXiaozhiAfterGrade(bool go_next) {
+    xz_status_hits_ = 0;
+    last_xz_status_us_ = 0;
+    xz_hold_tools_ = true;
+    if (go_next && !just_auto_advanced_) {
+        ESP_LOGI(TAG, "Xiaozhi kick: praise from hearing, next card after that turn");
+        just_auto_advanced_ = true;
+        card_intro_heard_ = false;
+        pending_show_ = true;
+        return;
+    }
+    if (!go_next) {
+        ESP_LOGI(TAG, "Xiaozhi kick: stay, no abort, model nudges from hearing");
+    }
+}
+
+void SpeakLesson::KickGeminiAfterGrade(bool go_next) {
+    if (go_next && !just_auto_advanced_) {
+        ESP_LOGI(TAG, "Gemini kick: praise from hearing, next card after that turn");
+        just_auto_advanced_ = true;
+        card_intro_heard_ = false;
+        pending_show_ = true;
+        return;
+    }
+    if (!go_next) {
+        ESP_LOGI(TAG, "Gemini kick: stay, cue chưa khớp");
+        skip_turn_done_ = true;
+        skip_turn_done_us_ = esp_timer_get_time();
+        Application::GetInstance().AbortSpeaking(kAbortReasonNone);
+        Application::GetInstance().SendDirectCue("chưa khớp");
+    }
 }
 
 void SpeakLesson::OnTalkIdle() {
@@ -3862,6 +4219,14 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
         advance_after_feedback_ = advance;
         praise_i_ = static_cast<uint8_t>(praise_i_ + 1);
     };
+    auto note_turn = [&](bool passed) {
+        const std::string en = CurrentTeachEn();
+        const bool phrase = en.find(' ') != std::string::npos ||
+                            activity_type_.find("phrase") != std::string::npos ||
+                            activity_type_.find("sentence") != std::string::npos ||
+                            activity_type_.find("ask") != std::string::npos;
+        SpeakProgress::Get().AddSpeakTurn(passed, phrase);
+    };
     if (!text.empty() && text == last_heard_ && feedback_pending_ && !feedback_spoken_ &&
         !last_feedback_.empty()) {
         auto finish_dup = [&](const char* next_action) {
@@ -4016,6 +4381,10 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
 
     const auto kind = SpeakProgress::ClassifyMatch(text, expect, meaning_vi);
     last_match_ = static_cast<uint8_t>(kind);
+    ESP_LOGI(TAG, "Match %s expect='%s' attempts=%u",
+             kind == SpeakProgress::kMatchExact ? "exact"
+                                                : (kind == SpeakProgress::kMatchNear ? "near" : "none"),
+             expect.c_str(), static_cast<unsigned>(attempts_));
 
     if (kind == SpeakProgress::kMatchNone && personal && !text.empty()) {
         last_verdict_ = "accepted";
@@ -4028,6 +4397,7 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
         items_correct_++;
         attempts_ = 0;
         SpeakProgress::Get().MarkOpened(unit_, CurrentActIndex(), static_cast<uint8_t>(index_));
+        note_turn(true);
         arm_feedback(true);
         return finish("wait");
     }
@@ -4044,6 +4414,7 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
         const bool first_try = (attempts_ == 0);
         attempts_ = 0;
         SpeakProgress::Get().MarkOpened(unit_, CurrentActIndex(), static_cast<uint8_t>(index_));
+        note_turn(true);
         arm_feedback(true);
         if (IsFlip()) {
             FlipResolveCurrent(true, first_try, false);
@@ -4061,6 +4432,7 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
         item_ok_ = true;
         wait_for_speech_ = false;
         SpeakProgress::Get().MarkOpened(unit_, CurrentActIndex(), static_cast<uint8_t>(index_));
+        note_turn(true);
         arm_feedback(true);
         if (IsFlip()) {
             FlipResolveCurrent(false, false, true);
@@ -4078,6 +4450,7 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
         last_reveal_ = false;
         wait_for_speech_ = true;
         item_phase_ = 4;
+        note_turn(false);
         arm_feedback(false);
         return finish("wait");
     }
@@ -4089,6 +4462,7 @@ std::string SpeakLesson::Evaluate(const std::string& text, const std::string& ve
     item_phase_ = 5;
     item_ok_ = true;
     wait_for_speech_ = false;
+    note_turn(true);
     arm_feedback(true);
     if (IsFlip()) {
         FlipResolveCurrent(false, false, true);

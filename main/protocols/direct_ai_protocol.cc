@@ -100,6 +100,12 @@ std::string McpToolName(const std::string& wire_name) {
     return ReplaceAll(wire_name, "__", ".");
 }
 
+// Gemini Live sometimes emits self.conversation_end instead of self.conversation.end.
+bool IsConversationEndTool(const std::string& name) {
+    return name == kEndTool || name == "self.conversation_end" ||
+           name == "self__conversation__end" || name == "self_conversation_end";
+}
+
 std::string Base64Encode(const void* data, size_t len) {
     std::string out(4 * ((len + 2) / 3) + 1, '\0');
     size_t olen = 0;
@@ -919,11 +925,51 @@ void DirectAiProtocol::SendWakeWordDetected(const std::string& wake_word) {
         text = "(Đọc HẾT nguyên văn, CẤM tool, CẤM bịa bản ngắn. Xong thì DỪNG, chờ bạn nói.)";
 #endif
     } else if (text == "hết bài") {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        text = "(Hết bài. CẤM self.otto.next_unit — đó là World Edu. CẤM conversation.end. "
+               "Đọc HẾT nguyên văn: \"";
+        text += SpeakLesson::Get().DoneSay();
+        text += "\" Firmware tự tải bài Emun tiếp nếu bạn muốn học tiếp. DỪNG.)";
+#else
         text = "(Hết bài. CHỈ nói field say. Không next, không hỏi xác nhận dài.)";
+#endif
     } else if (text == "nói feedback" || text == "khen rồi thẻ mới") {
-        text = "(Bạn vừa nói. Khen/khích lệ ngắn như chat thường. CẤM tool. Không dạy thẻ khác.)";
+        text = "(Bạn vừa nói. Khen/khích lệ ngắn như chat thường. CẤM tool. "
+               "CẤM conversation.end. Không tạm biệt. Không dạy thẻ khác.)";
+    } else if (text == "chưa khớp") {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        const std::string en = SpeakLesson::Get().CurrentTeachEn();
+        text = "(Bạn vừa nói CHƯA ĐÚNG. CẤM nói đúng rồi / phát âm chuẩn / tuyệt vời. "
+               "Nói ngắn: chưa phải từ này. Đọc mẫu \"";
+        text += en.empty() ? "từ trên hình" : en;
+        if (!en.empty()) {
+            text += ", ";
+            text += en;
+        }
+        text += "\". Mời nói lại. DỪNG.)";
+#else
+        text = "(Chưa đúng. Đọc mẫu từ đang học, mời nói lại. CẤM khen đúng.)";
+#endif
     } else if (text == "nhắc học viên nói") {
-        text = "(Bạn im lặng. Nhắc lại teacher, mời bạn nói. Không hỏi, không kết thúc bài.)";
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        const std::string en = SpeakLesson::Get().CurrentTeachEn();
+        text = "(Bạn im lặng. Nhắc từ đang hiện: ";
+        text += en.empty() ? "từ trên hình" : en;
+        text += ". Đọc mẫu ngắn \"";
+        if (!en.empty()) {
+            text += en;
+            text += ", ";
+            text += en;
+            text += ". Bạn nói ";
+            text += en;
+            text += " xem nào";
+        } else {
+            text += "Bạn nói theo mình đi";
+        }
+        text += "\". CẤM nói chữ teacher. CẤM bịa từ khác. CẤM hỏi dài. DỪNG.)";
+#else
+        text = "(Bạn im lặng. Nhắc từ đang học, mời bạn nói. Không hỏi, không kết thúc bài.)";
+#endif
         silence_prompts_ = 0;
     } else if (text == kSilencePromptText) {
         // Gemini often misses quiet speech and reports silence. Keep chatting.
@@ -1268,15 +1314,43 @@ void DirectAiProtocol::RunTool(const std::string& call_id, const std::string& wi
     std::string args_text = args ? PrintJson(args) : "{}";
     ESP_LOGI(TAG, "Tool call %s %s", name.c_str(), args_text.c_str());
 
-    if (name == kEndTool) {
-        end_requested_ = true;
-        const std::string ok = "{\"ok\":true}";
+    auto reply_now = [&](const std::string& output) {
         if (backend_ == DirectAiBackend::kGemini) {
-            gemini_results_.push_back(ToolResult{call_id, wire_name, ok});
+            gemini_results_.push_back(ToolResult{call_id, wire_name, output});
         } else {
-            SendRealtimeToolOutput(call_id, ok);
+            SendRealtimeToolOutput(call_id, output);
+        }
+    };
+
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    if (SpeakLesson::Get().IsTeaching()) {
+        std::string skip =
+            "Đang học. CẤM tool. CẤM kết thúc phiên. Cảm ơn/tạm biệt lúc học không phải hết bài. "
+            "Không tạm biệt. Chỉ khích lệ từ đang hiện rồi DỪNG.";
+        const std::string en = SpeakLesson::Get().CurrentTeachEn();
+        if (!en.empty()) {
+            skip += " Từ đang hiện: ";
+            skip += en;
+            skip += ".";
+        }
+        ESP_LOGW(TAG, "Skip tool during lesson: %s", name.c_str());
+        reply_now(skip);
+        return;
+    }
+    if (SpeakLesson::Get().IsDoneAsk() &&
+        (IsConversationEndTool(name) || IsConversationEndTool(wire_name))) {
+        ESP_LOGW(TAG, "Skip conversation.end after lesson");
+        reply_now("Đang hỏi học tiếp hay nghỉ. CẤM kết thúc phiên. CẤM tạm biệt. DỪNG.");
+        return;
+    }
+#endif
+
+    if (IsConversationEndTool(name) || IsConversationEndTool(wire_name)) {
+        end_requested_ = true;
+        reply_now("{\"ok\":true}");
+        if (backend_ != DirectAiBackend::kGemini && !speaking_) {
             // Goodbye is usually spoken before the call; only ask for it if not.
-            need_followup_ = !speaking_;
+            need_followup_ = true;
         }
         return;
     }
@@ -1497,21 +1571,12 @@ void DirectAiProtocol::PlayAudio(const char* b64, size_t len, int rate) {
 
 void DirectAiProtocol::BeginSpeaking() {
     speaking_ = true;
-    gate_ = kGateWaiting;
+    if (Application::GetInstance().GetDeviceState() == kDeviceStateSpeaking) {
+        gate_ = kGateOpen;
+        return;
+    }
+    gate_ = kGateOpen;
     EmitTts("start");
-    const uint32_t seq = ++speak_seq_;
-    std::weak_ptr<int> alive = alive_;
-    Application::GetInstance().Schedule([this, alive, seq]() {
-        // Second hop: runs after Application handled the Speaking state change
-        // (which clears the playback queue), so queued speech is not dropped.
-        Application::GetInstance().Schedule([this, alive, seq]() {
-            if (alive.expired() || seq != speak_seq_) {
-                return;
-            }
-            const bool speaking = Application::GetInstance().GetDeviceState() == kDeviceStateSpeaking;
-            gate_ = speaking ? kGateOpen : kGateFailed;
-        });
-    });
 }
 
 bool DirectAiProtocol::WaitGate() {

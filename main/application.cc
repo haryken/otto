@@ -692,7 +692,7 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                         display->SetChatMessage("user", message.c_str());
                     }
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
-                    if (SpeakLesson::Get().IsTeaching()) {
+                    if (SpeakLesson::Get().IsTeaching() || SpeakLesson::Get().IsDoneAsk()) {
                         SpeakLesson::Get().OnSttText(message);
                     }
 #endif
@@ -1130,10 +1130,23 @@ void Application::HandleStateChangedEvent() {
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            // Close the mic BEFORE turn-done HTTPS, or the tút wins the gap after praise.
+            bool hold_intro = SpeakLesson::Get().HoldMicForIntro();
+            if (hold_intro) {
+                suppress_listening_chime_ = true;
+                audio_service_.EnableVoiceProcessing(false);
+            }
             // Only after real TTS. connecting→listening must not clear the intro hold.
             if (prev_state == kDeviceStateSpeaking) {
                 SpeakLesson::Get().OnAssistantTurnDone();
             }
+            hold_intro = SpeakLesson::Get().HoldMicForIntro();
+            if (hold_intro) {
+                suppress_listening_chime_ = true;
+                audio_service_.EnableVoiceProcessing(false);
+            }
+#else
+            const bool hold_intro = false;
 #endif
             board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
@@ -1146,13 +1159,10 @@ void Application::HandleStateChangedEvent() {
             }
 
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
-            const bool hold_intro = SpeakLesson::Get().HoldMicForIntro();
             if (hold_intro) {
                 suppress_listening_chime_ = true;
                 audio_service_.EnableVoiceProcessing(false);
             }
-#else
-            const bool hold_intro = false;
 #endif
             if (!hold_intro && !audio_service_.IsCaptureSuspended() &&
                 !audio_service_.IsAudioProcessorRunning()) {
@@ -1190,7 +1200,10 @@ void Application::HandleStateChangedEvent() {
                 // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
-            audio_service_.ResetDecoder();
+            // Direct AI already queued PCM. ResetDecoder here chops the start of every sentence.
+            if (DirectAiConfig::RunningBackend() == DirectAiBackend::kOff) {
+                audio_service_.ResetDecoder();
+            }
             break;
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
@@ -1351,6 +1364,25 @@ void Application::FinishListeningMicSetup() {
 
 ListeningMode Application::GetDefaultListeningMode() const {
     return aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime;
+}
+
+void Application::ParkVoiceForLessonStart() {
+    aborted_ = true;
+    suppress_channel_closed_idle_ = true;
+    audio_service_.EnableVoiceProcessing(false);
+    if (protocol_) {
+        AbortSpeaking(kAbortReasonNone);
+        if (protocol_->IsAudioChannelOpened()) {
+            PrepareAudioChannelClose();
+            protocol_->CloseAudioChannel();
+        }
+    }
+    const auto state = GetDeviceState();
+    if (state == kDeviceStateListening || state == kDeviceStateSpeaking ||
+        state == kDeviceStateConnecting) {
+        SetDeviceState(kDeviceStateIdle);
+    }
+    ESP_LOGI(TAG, "Parked voice session for lesson start");
 }
 
 void Application::PrepareAudioChannelClose() {
@@ -1609,6 +1641,10 @@ void Application::SendMcpMessage(const std::string& payload) {
 }
 
 void Application::SendDirectCue(const std::string& cue) {
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        protocol_->SendWakeWordDetected(cue);
+        return;
+    }
     Schedule([this, cue]() {
         if (protocol_ && protocol_->IsAudioChannelOpened()) {
             protocol_->SendWakeWordDetected(cue);
