@@ -121,7 +121,12 @@ public:
     std::string GetWebOtaStatusJson();
     bool IsWebOtaBusy() const;
     bool CanEnterSleepMode();
+    /** Silence nudge interval while listening: 10, 20, or 30 seconds. */
+    int SilencePromptSec();
+    void SetSilencePromptSec(int sec);
     void SendMcpMessage(const std::string& payload);
+    /** Inject a short cue into the live Direct AI session (no new wake/reconnect). */
+    void SendDirectCue(const std::string& cue);
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
@@ -178,6 +183,7 @@ private:
     EventGroupHandle_t event_group_ = nullptr;
     esp_timer_handle_t clock_timer_handle_ = nullptr;
     DeviceStateMachine state_machine_;
+    DeviceState last_state_ = kDeviceStateUnknown;
     ListeningMode listening_mode_ = kListeningModeAutoStop;
     AecMode aec_mode_ = kAecOff;
     std::string last_error_message_;
@@ -191,6 +197,8 @@ private:
     bool assets_version_checked_ = false;
     bool suppress_listening_chime_ = false;  // Skip popup.ogg on next listening (goodbye/disconnect)
     bool suppress_channel_closed_idle_ = false;  // Ignore stale OnAudioChannelClosed during course switch
+    uint8_t teach_ws_retries_ = 0;
+    void ReopenTeachingChannel();
     bool music_only_mode_entered_ = false;
     bool music_playing_display_active_ = false;
     int clock_ticks_ = 0;
@@ -211,6 +219,9 @@ private:
                         const std::string& error = "");
     void SetWebOtaProgress(int progress, size_t speed);
 
+    int silence_prompt_sec_ = 20;
+    bool silence_prompt_loaded_ = false;
+    void LoadSilencePromptSec();
 #if CONFIG_SILENCE_PROMPT_ENABLE
     std::chrono::steady_clock::time_point last_server_speech_activity_time_;
     std::chrono::steady_clock::time_point last_silence_prompt_send_time_;

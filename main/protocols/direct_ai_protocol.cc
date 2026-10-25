@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -15,13 +16,17 @@
 #include <freertos/idf_additions.h>
 #include <mbedtls/base64.h>
 
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+#include "speak_lesson.h"
+#endif
+
 #define TAG "DirectAI"
 
 namespace {
 
 constexpr int kRealtimeRate = 24000;
 constexpr int kMicRate = 16000;
-constexpr int kSilenceMs = 700;
+constexpr int kSilenceMs = 1200;
 constexpr int kSetupTimeoutMs = 10000;
 constexpr int kPlaybackChunkMs = 60;
 constexpr int64_t kGateWaitUs = 3000LL * 1000;
@@ -39,19 +44,19 @@ constexpr const char* kEndTool = "self.conversation.end";
 // Application::SendSilencePromptText sends this after 30 s of silence.
 constexpr const char* kSilencePromptText = "khơi gợi lại";
 constexpr const char* kNudgeText =
-    "(Người dùng im lặng nãy giờ. Hãy hỏi han hoặc gợi chuyện bằng một câu thật ngắn.)";
+    "(Bạn im lặng nãy giờ. Mình hỏi han hoặc gợi chuyện bằng một câu thật ngắn. Đừng kết thúc.)";
 
 constexpr const char* kBaseInstructions =
-    "Bạn là chú robot nhỏ thông minh, tinh nghịch và tốt bụng của người dùng.\n"
-    "Mặc định trả lời bằng tiếng Việt; nếu người dùng nói ngôn ngữ khác thì trả lời bằng ngôn ngữ đó.\n"
+    "Bạn là Emun, bạn học của bé. Xưng mình, gọi bé là bạn. Không tự xưng robot. Không gọi bạn là con.\n"
+    "Mặc định trả lời bằng tiếng Việt; nếu bạn nói ngôn ngữ khác thì trả lời bằng ngôn ngữ đó.\n"
     "Câu trả lời sẽ được đọc thành tiếng: nói tự nhiên, ngắn gọn (thường 1-3 câu), không emoji, "
     "không markdown, không gạch đầu dòng.\n"
-    "Bạn có các công cụ (function) điều khiển thân robot và đọc thông tin robot. Khi người dùng muốn "
-    "robot LÀM gì đó (đi, nhảy, vẫy tay, đổi âm lượng, độ sáng, kiểm tra pin, ...), hãy hiểu theo ý "
+    "Bạn có các công cụ (function) điều khiển thân máy và đọc thông tin máy. Khi bạn muốn "
+    "máy LÀM gì đó (đi, nhảy, vẫy tay, đổi âm lượng, độ sáng, kiểm tra pin, ...), hãy hiểu theo ý "
     "nghĩa câu nói chứ không cần đúng từ khóa, BẮT BUỘC gọi công cụ phù hợp, rồi nói một câu xác nhận "
     "ngắn. Không được nói là đã làm nếu chưa gọi công cụ.\n"
     "Không bịa thông tin mà công cụ có thể cung cấp (pin, trạng thái, âm lượng).\n"
-    "Khi người dùng chào tạm biệt hoặc muốn dừng nói chuyện, nói lời tạm biệt ngắn và gọi công cụ "
+    "Khi bạn chào tạm biệt hoặc muốn dừng nói chuyện, nói lời tạm biệt ngắn và gọi công cụ "
     "self__conversation__end.";
 
 constexpr const char* kEndToolDescription =
@@ -502,7 +507,7 @@ std::string DirectAiProtocol::BuildInstructions() const {
         text += "\nNgôn ngữ mặc định của người dùng: " + lang + ".";
     }
     if (!config_.instructions.empty()) {
-        text += "\n\nYêu cầu thêm của chủ robot:\n" + config_.instructions;
+        text += "\n\nYêu cầu thêm của phụ huynh:\n" + config_.instructions;
     }
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
     {
@@ -520,6 +525,29 @@ std::string DirectAiProtocol::BuildInstructions() const {
 std::string DirectAiProtocol::TranscribeLanguage() const {
     return config_.language == "auto" ? "" : config_.language;
 }
+
+namespace {
+std::vector<std::string> SessionTranscriptionCodes(const DirectAiConfig& config) {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    std::vector<std::string> teach = OttoSpeakTeachSttCodes();
+    if (!teach.empty()) {
+        return teach;
+    }
+#endif
+    if (!config.language.empty() && config.language != "auto") {
+        return {config.language};
+    }
+    return {};
+}
+
+std::string FirstLangHint(const std::vector<std::string>& codes) {
+    if (codes.empty()) {
+        return "";
+    }
+    const auto dash = codes[0].find('-');
+    return dash == std::string::npos ? codes[0] : codes[0].substr(0, dash);
+}
+}  // namespace
 
 cJSON* DirectAiProtocol::BuildTools(bool gemini) const {
     cJSON* list = cJSON_CreateArray();
@@ -574,7 +602,7 @@ std::string DirectAiProtocol::BuildOpenAISetup(bool beta) const {
 
     cJSON* transcription = cJSON_CreateObject();
     cJSON_AddStringToObject(transcription, "model", "gpt-4o-mini-transcribe");
-    std::string lang = TranscribeLanguage();
+    std::string lang = FirstLangHint(SessionTranscriptionCodes(config_));
     if (!lang.empty()) {
         cJSON_AddStringToObject(transcription, "language", lang.c_str());
     }
@@ -656,7 +684,7 @@ std::string DirectAiProtocol::BuildGrokSetup(bool search) const {
 
     cJSON* input = cJSON_CreateObject();
     cJSON_AddItemToObject(input, "format", format());
-    std::string lang = TranscribeLanguage();
+    std::string lang = FirstLangHint(SessionTranscriptionCodes(config_));
     if (!lang.empty()) {
         cJSON* transcription = cJSON_CreateObject();
         cJSON_AddStringToObject(transcription, "language_hint", lang.c_str());
@@ -740,12 +768,38 @@ std::string DirectAiProtocol::BuildGeminiSetup(bool search) {
     cJSON_AddItemToObject(setup, "realtimeInputConfig", realtime);
 
     cJSON* input_transcription = cJSON_CreateObject();
-    std::string lang = TranscribeLanguage();
-    if (!lang.empty()) {
+    std::vector<std::string> langs = SessionTranscriptionCodes(config_);
+    if (!langs.empty()) {
         cJSON* codes = cJSON_CreateArray();
-        cJSON_AddItemToArray(codes, cJSON_CreateString(lang.c_str()));
+        std::string joined;
+        for (const auto& code : langs) {
+            cJSON_AddItemToArray(codes, cJSON_CreateString(code.c_str()));
+            if (!joined.empty()) {
+                joined += ',';
+            }
+            joined += code;
+        }
         cJSON_AddItemToObject(input_transcription, "languageCodes", codes);
+        ESP_LOGI(TAG, "Gemini STT languageCodes=%s", joined.c_str());
     }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    {
+        std::vector<std::string> vocab = OttoSpeakTeachSttVocab();
+        if (!vocab.empty()) {
+            cJSON* words = cJSON_CreateArray();
+            std::string joined;
+            for (const auto& word : vocab) {
+                cJSON_AddItemToArray(words, cJSON_CreateString(word.c_str()));
+                if (!joined.empty()) {
+                    joined += ',';
+                }
+                joined += word;
+            }
+            cJSON_AddItemToObject(input_transcription, "customVocabulary", words);
+            ESP_LOGI(TAG, "Gemini STT customVocabulary=%s", joined.c_str());
+        }
+    }
+#endif
     cJSON_AddItemToObject(setup, "inputAudioTranscription", input_transcription);
     cJSON_AddItemToObject(setup, "outputAudioTranscription", cJSON_CreateObject());
 
@@ -851,13 +905,29 @@ void DirectAiProtocol::SendWakeWordDetected(const std::string& wake_word) {
         return;
     }
     std::string text = wake_word;
-    if (text == kSilencePromptText) {
-        // First silence: let the AI re-engage. Second one in a row: end the session.
-        if (++silence_prompts_ >= 2) {
-            ESP_LOGI(TAG, "User stayed silent, closing the session");
-            RequestClose();
-            return;
-        }
+    if (text == "bắt đầu học ngay" || text == "học ngay" || text == "sang thẻ tiếp" ||
+        text == "thẻ mới") {
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+        const std::string en = SpeakLesson::Get().CurrentTeachEn();
+        const std::string script = SpeakLesson::Get().CurrentTeachScript();
+        text = "(Thẻ đang hiện: ";
+        text += en.empty() ? "thẻ trên hình" : en;
+        text += ". CẤM tool. CẤM bịa từ khác. Đọc HẾT nguyên văn: \"";
+        text += script;
+        text += "\" Xong mời bạn nói, DỪNG.)";
+#else
+        text = "(Đọc HẾT nguyên văn, CẤM tool, CẤM bịa bản ngắn. Xong thì DỪNG, chờ bạn nói.)";
+#endif
+    } else if (text == "hết bài") {
+        text = "(Hết bài. CHỈ nói field say. Không next, không hỏi xác nhận dài.)";
+    } else if (text == "nói feedback" || text == "khen rồi thẻ mới") {
+        text = "(Bạn vừa nói. Khen/khích lệ ngắn như chat thường. CẤM tool. Không dạy thẻ khác.)";
+    } else if (text == "nhắc học viên nói") {
+        text = "(Bạn im lặng. Nhắc lại teacher, mời bạn nói. Không hỏi, không kết thúc bài.)";
+        silence_prompts_ = 0;
+    } else if (text == kSilencePromptText) {
+        // Gemini often misses quiet speech and reports silence. Keep chatting.
+        silence_prompts_ = 0;
         text = kNudgeText;
     }
     last_activity_us_ = NowUs();

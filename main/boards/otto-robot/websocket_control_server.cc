@@ -885,6 +885,7 @@ esp_err_t WebSocketControlServer::api_robot_get_handler(httpd_req_t *req) {
         cJSON_AddBoolToObject(root, "has_brightness", false);
     }
     cJSON_AddBoolToObject(root, "motors_on_demand", OttoWebGetMotorsOnDemand());
+    cJSON_AddNumberToObject(root, "silence_sec", Application::GetInstance().SilencePromptSec());
 
     char* json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -954,6 +955,10 @@ esp_err_t WebSocketControlServer::api_robot_post_handler(httpd_req_t *req) {
     if (motor && (cJSON_IsBool(motor) || cJSON_IsNumber(motor))) {
         bool on_demand = cJSON_IsTrue(motor) || (cJSON_IsNumber(motor) && motor->valueint != 0);
         OttoWebSetMotorsOnDemand(on_demand);
+    }
+    cJSON* slp = cJSON_GetObjectItem(root, "silence_sec");
+    if (slp && cJSON_IsNumber(slp)) {
+        Application::GetInstance().SetSilencePromptSec(slp->valueint);
     }
     cJSON_Delete(root);
 
@@ -1523,7 +1528,7 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "application/json");
     OttoHttpCommonHeaders(req);
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len > 2048) {
+    if (total_len <= 0 || total_len > 4096) {
         httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Bad body\"}");
         return ESP_OK;
     }
@@ -1549,7 +1554,15 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
     auto& lesson = SpeakLesson::Get();
     std::string out;
     if (action == "base") {
-        lesson.SetBaseUrl(str("base", ""));
+        const std::string lan = str("lan", "");
+        const std::string cloud = str("cloud", "");
+        const std::string source = str("source", "");
+        const std::string base = str("base", "");
+        if (!base.empty()) {
+            lesson.SetBaseUrl(base);
+        } else if (!lan.empty() || !cloud.empty() || !source.empty()) {
+            lesson.SetCourseSources(lan, cloud, source);
+        }
         out = lesson.StatusJson();
     } else if (action == "start") {
         int idx = -1;
@@ -1557,13 +1570,15 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
         if (cJSON_IsNumber(i)) {
             idx = i->valueint;
         }
-        out = lesson.Start(str("level", "a1"), str("unit", "u01"), idx, str("backend", ""), true);
+        out = lesson.Start(str("level", "a1"), str("unit", "u01"), idx, str("backend", ""), true,
+                           str("activity", ""));
     } else if (action == "stop") {
         out = lesson.Stop();
     } else if (action == "reset") {
         out = lesson.ResetUnit();
     } else if (action == "next") {
-        out = lesson.Next();
+        const bool skip = cJSON_IsTrue(cJSON_GetObjectItem(root, "skip"));
+        out = lesson.Next(skip);
     } else if (action == "show") {
         out = lesson.ShowCurrent();
     } else if (action == "unit") {
@@ -1595,6 +1610,17 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
             str("model", ""),
             str("voice", ""),
             instr);
+        if (cJSON_GetObjectItem(root, "stt_english") || cJSON_GetObjectItem(root, "stt_codes")) {
+            bool english = lesson.SttEnglishOnly();
+            cJSON* en = cJSON_GetObjectItem(root, "stt_english");
+            if (cJSON_IsBool(en)) {
+                english = cJSON_IsTrue(en);
+            } else if (cJSON_IsNumber(en)) {
+                english = en->valuedouble != 0;
+            }
+            const std::string keep_codes = lesson.SttCodes();
+            out = lesson.SetTeachStt(english, str("stt_codes", keep_codes.c_str()));
+        }
     } else if (action == "style") {
         bool is_new = strcmp(str("style", "old"), "new") == 0;
         int slot = -1;
@@ -1641,7 +1667,7 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
             level = 1;
         } else if (lv == "detailed") {
             level = 2;
-        } else if (lv == "off" || lv == "speak") {
+        } else if (lv == "off" || lv == "speak" || lv == "minimal") {
             level = 0;
         } else {
             cJSON* n = cJSON_GetObjectItem(root, "level");
@@ -1650,6 +1676,24 @@ esp_err_t WebSocketControlServer::api_speak_post_handler(httpd_req_t *req) {
             }
         }
         out = lesson.SetExplainLevel(level);
+    } else if (action == "assessment") {
+        out = lesson.SetAssessment(str("mode", str("assessment", "guided")));
+    } else if (action == "student") {
+        int slot = 0;
+        cJSON* sl = cJSON_GetObjectItem(root, "slot");
+        if (cJSON_IsNumber(sl)) {
+            slot = sl->valueint;
+        }
+        out = lesson.SetStudent(slot, str("name", ""));
+    } else if (action == "phase") {
+        out = lesson.SetItemPhase(str("phase", "show"), str("card_id", ""), str("client_event_id", ""));
+    } else if (action == "flip_select") {
+        out = lesson.FlipSelect(str("card_id", ""), str("client_event_id", ""),
+                                str("session_id", ""), str("round_id", ""));
+    } else if (action == "evaluate" || action == "heard") {
+        out = lesson.Evaluate(str("text", ""), str("verdict", ""), str("source", "ui"));
+    } else if (action == "progress") {
+        out = lesson.ProgressJson();
     } else {
         out = "{\"success\":false,\"error\":\"action\"}";
     }
@@ -1672,6 +1716,9 @@ bool WebSocketControlServer::Start(int port) {
     config.ctrl_port = 32769;
     config.max_uri_handlers = 32;
     config.uri_match_fn = httpd_uri_match_wildcard;
+    // Start() fetches HTTPS JSON/JPEG from Pages on this task — default 4KB dies in mbedtls.
+    config.stack_size = 24 * 1024;
+    config.lru_purge_enable = true;
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",

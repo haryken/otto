@@ -173,6 +173,18 @@ void OttoEmojiDisplay::ConfigureChatLayout() {
     lv_label_set_long_mode(chat_message_label_, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(chat_message_label_, LV_TEXT_ALIGN_CENTER, 0);
 
+    if (load_visible_) {
+        if (emoji_box_ != nullptr) {
+            lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (load_overlay_ != nullptr) {
+            lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(load_overlay_);
+        }
+        RaiseStatusChrome();
+        return;
+    }
+
     if (qr_visible_) {
         if (emoji_box_ != nullptr) {
             lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
@@ -255,6 +267,16 @@ void OttoEmojiDisplay::SetEmotion(const char* emotion) {
         emotion = "staticstate";
     }
 
+    if (load_visible_) {
+        DisplayLockGuard lock(this);
+        if (load_overlay_ != nullptr) {
+            lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(load_overlay_);
+        }
+        RaiseStatusChrome();
+        return;
+    }
+
     // While QR is up, keep overlay on top and do not leave a stopped GIF visible.
     if (qr_visible_) {
         SpiLcdDisplay::SetEmotion(emotion);
@@ -330,6 +352,77 @@ void OttoEmojiDisplay::SetStatus(const char* status) {
     lv_obj_clear_flag(status_label_, LV_OBJ_FLAG_HIDDEN);
 }
 
+void OttoEmojiDisplay::ShowCourseLoading(const char* text) {
+    DisplayLockGuard lock(this);
+    lv_obj_t* screen = lv_screen_active();
+    if (screen == nullptr) {
+        ESP_LOGW(TAG, "ShowCourseLoading: no screen");
+        return;
+    }
+
+    if (load_overlay_ == nullptr) {
+        load_overlay_ = lv_obj_create(screen);
+        lv_obj_remove_style_all(load_overlay_);
+        lv_obj_set_size(load_overlay_, width_, height_);
+        lv_obj_set_style_bg_color(load_overlay_, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(load_overlay_, LV_OPA_COVER, 0);
+        lv_obj_align(load_overlay_, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_clear_flag(load_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+
+        load_label_ = lv_label_create(load_overlay_);
+        lv_obj_set_width(load_label_, width_ - 24);
+        lv_label_set_long_mode(load_label_, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(load_label_, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(load_label_, lv_color_white(), 0);
+        auto* theme = static_cast<LvglTheme*>(current_theme_);
+        if (theme != nullptr && theme->text_font() != nullptr) {
+            lv_obj_set_style_text_font(load_label_, theme->text_font()->font(), 0);
+        }
+        lv_obj_center(load_label_);
+    }
+
+    lv_label_set_text(load_label_, (text && text[0]) ? text : "Đang tải khóa học");
+    if (gif_controller_) {
+        gif_controller_->Stop();
+    }
+    if (emoji_box_ != nullptr) {
+        lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (preview_image_ != nullptr) {
+        lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_remove_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(load_overlay_);
+    RaiseStatusChrome();
+    load_visible_ = true;
+    lv_refr_now(nullptr);
+    ESP_LOGI(TAG, "ShowCourseLoading: %s", (text && text[0]) ? text : "Đang tải khóa học");
+}
+
+void OttoEmojiDisplay::HideCourseLoading() {
+    if (!load_visible_ && (load_overlay_ == nullptr || lv_obj_has_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN))) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    if (load_overlay_ != nullptr) {
+        lv_obj_add_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+    }
+    load_visible_ = false;
+    if (preview_image_ != nullptr && preview_image_cached_ != nullptr) {
+        lv_obj_remove_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(preview_image_);
+        RaiseStatusChrome();
+        return;
+    }
+    if (emoji_box_ != nullptr) {
+        lv_obj_remove_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+        if (gif_controller_) {
+            gif_controller_->Start();
+        }
+    }
+    RaiseStatusChrome();
+}
+
 void OttoEmojiDisplay::ShowQrCode(const char* text) {
     if (text == nullptr || text[0] == '\0') {
         ESP_LOGW(TAG, "ShowQrCode: empty text");
@@ -390,6 +483,10 @@ void OttoEmojiDisplay::ShowQrCode(const char* text) {
     }
 
     DisplayLockGuard lock(this);
+    if (load_visible_ && load_overlay_ != nullptr) {
+        lv_obj_add_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+        load_visible_ = false;
+    }
     lv_obj_t* screen = lv_screen_active();
     if (screen == nullptr) {
         heap_caps_free(pixels);
@@ -485,6 +582,10 @@ void OttoEmojiDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
         return;
     }
     DisplayLockGuard lock(this);
+    if (load_visible_ && load_overlay_ != nullptr) {
+        lv_obj_add_flag(load_overlay_, LV_OBJ_FLAG_HIDDEN);
+        load_visible_ = false;
+    }
     if (preview_image_ == nullptr) {
         ESP_LOGE(TAG, "Preview image is not initialized");
         return;

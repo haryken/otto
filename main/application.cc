@@ -108,6 +108,7 @@ void Application::Initialize() {
 
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
+        last_state_ = old_state;
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
     });
 
@@ -595,6 +596,16 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                 ESP_LOGI(TAG, "Audio channel closed for music-only mode (playback continues)");
                 return;
             }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            if (SpeakLesson::Get().IsTeaching() && teach_ws_retries_ < 2) {
+                teach_ws_retries_++;
+                ESP_LOGW(TAG, "WS closed during lesson, reopen %u/2",
+                         static_cast<unsigned>(teach_ws_retries_));
+                ReopenTeachingChannel();
+                return;
+            }
+            teach_ws_retries_ = 0;
+#endif
             audio_service_.StopLocalPlaybackIfActive();
             audio_service_.RestoreAudioHardwareAfterLocalPlayback();
             auto display = Board::GetInstance().GetDisplay();
@@ -632,15 +643,21 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                 auto text = cJSON_GetObjectItem(root, "text");
                 if (cJSON_IsString(text)) {
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+                    SpeakLesson::Get().OnTtsText(text->valuestring);
+#endif
                     // Giống Android Mini: không đọc URL / IP / :8080 khi hiện QR Self-Control.
                     const char* t = text->valuestring;
                     const bool looks_like_url =
                         strstr(t, "http://") != nullptr || strstr(t, "https://") != nullptr ||
                         strstr(t, ":8080") != nullptr ||
                         (strstr(t, "192.168.") != nullptr && strstr(t, "self.otto") == nullptr);
-                    mute_url_tts_.store(looks_like_url);
+                    const bool tool_leak = strstr(t, "%") == t || strstr(t, "self.speak.") != nullptr;
+                    mute_url_tts_.store(looks_like_url || tool_leak);
                     if (looks_like_url) {
                         ESP_LOGW(TAG, "Mute TTS (URL/IP leak): %s", t);
+                    } else if (tool_leak) {
+                        ESP_LOGW(TAG, "Mute TTS (tool leak): %s", t);
                     }
                     const bool music_play =
                         strstr(text->valuestring, "self.otto.music.play") != nullptr;
@@ -666,6 +683,11 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                     if (!audio_service_.IsLocalPlaybackActive()) {
                         display->SetChatMessage("user", message.c_str());
                     }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+                    if (SpeakLesson::Get().IsTeaching()) {
+                        SpeakLesson::Get().OnSttText(message);
+                    }
+#endif
                 });
             }
         } else if (strcmp(type->valuestring, "llm") == 0) {
@@ -693,6 +715,13 @@ void Application::InitializeProtocol(bool prefer_websocket) {
                     ESP_LOGW(TAG, "Unknown system command: %s", command->valuestring);
                 }
             }
+        } else if (strcmp(type->valuestring, "error") == 0) {
+            auto msg = cJSON_GetObjectItem(root, "message");
+            if (!cJSON_IsString(msg)) {
+                msg = cJSON_GetObjectItem(root, "error");
+            }
+            ESP_LOGE(TAG, "Server error: %s",
+                     cJSON_IsString(msg) && msg->valuestring ? msg->valuestring : "(no message)");
         } else if (strcmp(type->valuestring, "alert") == 0) {
             auto status = cJSON_GetObjectItem(root, "status");
             auto message = cJSON_GetObjectItem(root, "message");
@@ -853,10 +882,37 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
         }
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
         SpeakLesson::Get().OnNewTalkSession();
+        teach_ws_retries_ = 0;
+        if (SpeakLesson::Get().IsTeaching()) {
+            protocol_->SendWakeWordDetected(SpeakLesson::Get().StartDetectCue());
+        }
 #endif
     }
 
     SetListeningMode(mode);
+}
+
+void Application::ReopenTeachingChannel() {
+    Schedule([this]() {
+        if (!SpeakLesson::Get().IsTeaching()) {
+            return;
+        }
+        if (!protocol_) {
+            ESP_LOGE(TAG, "Reopen teaching: no protocol");
+            return;
+        }
+        SetDeviceState(kDeviceStateConnecting);
+        if (!protocol_->IsAudioChannelOpened()) {
+            if (!protocol_->OpenAudioChannel()) {
+                ESP_LOGE(TAG, "Reopen teaching: OpenAudioChannel failed");
+                SetDeviceState(kDeviceStateIdle);
+                return;
+            }
+        }
+        protocol_->SendWakeWordDetected(SpeakLesson::Get().StartDetectCue());
+        SetListeningMode(kListeningModeAutoStop);
+        ESP_LOGI(TAG, "Reopen teaching: channel up, cue học ngay");
+    });
 }
 
 void Application::HandleStartListeningEvent() {
@@ -988,6 +1044,10 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
         }
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
         SpeakLesson::Get().OnNewTalkSession();
+        teach_ws_retries_ = 0;
+        if (SpeakLesson::Get().IsTeaching() && !SpeakLesson::Get().UsesXiaozhiTeach()) {
+            protocol_->SendWakeWordDetected(SpeakLesson::Get().StartDetectCue());
+        }
 #endif
     }
 
@@ -1007,6 +1067,12 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
     if (lower == "hi,jason" || lower == "hi,esp" || lower == "hi jason" || lower == "hi esp") {
         detect_text = "xin chào";
     }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    // Xiaozhi reject long detect text. One short cue only — do not also send "xin chào".
+    if (SpeakLesson::Get().UsesXiaozhiTeach()) {
+        detect_text = SpeakLesson::Get().StartDetectCue();
+    }
+#endif
     protocol_->SendWakeWordDetected(detect_text);
     SetListeningMode(GetDefaultListeningMode());
 #else
@@ -1016,6 +1082,7 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 
 void Application::HandleStateChangedEvent() {
     DeviceState new_state = state_machine_.GetState();
+    const DeviceState prev_state = last_state_;
     clock_ticks_ = 0;
 
     auto& board = Board::GetInstance();
@@ -1027,7 +1094,10 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
-            SpeakLesson::Get().OnTalkIdle();
+            // ApplyDeviceIdentity sets Idle while switching — do not park to daily there.
+            if (!identity_applying_) {
+                SpeakLesson::Get().OnTalkIdle();
+            }
 #endif
             display->DismissNotification();
             display->SetStatus(Lang::Strings::STANDBY);
@@ -1052,7 +1122,10 @@ void Application::HandleStateChangedEvent() {
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
-            SpeakLesson::Get().OnAssistantTurnDone();
+            // Only after real TTS. connecting→listening must not clear the intro hold.
+            if (prev_state == kDeviceStateSpeaking) {
+                SpeakLesson::Get().OnAssistantTurnDone();
+            }
 #endif
             board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
@@ -1064,7 +1137,16 @@ void Application::HandleStateChangedEvent() {
                 audio_service_.RestoreAudioHardwareAfterLocalPlayback();
             }
 
-            if (!audio_service_.IsCaptureSuspended() &&
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            const bool hold_intro = SpeakLesson::Get().HoldMicForIntro();
+            if (hold_intro) {
+                suppress_listening_chime_ = true;
+                audio_service_.EnableVoiceProcessing(false);
+            }
+#else
+            const bool hold_intro = false;
+#endif
+            if (!hold_intro && !audio_service_.IsCaptureSuspended() &&
                 !audio_service_.IsAudioProcessorRunning()) {
                 if (listening_mode_ == kListeningModeAutoStop) {
                     audio_service_.WaitForPlaybackQueueEmpty();
@@ -1076,7 +1158,7 @@ void Application::HandleStateChangedEvent() {
             }
 
             // Otto: tút khi icon micro (trừ goodbye/ngắt kết nối). Mic đã bật ở trên (giống v3).
-            if (!suppress_listening_chime_ && !audio_service_.IsLocalPlaybackActive() && protocol_) {
+            if (!hold_intro && !suppress_listening_chime_ && !audio_service_.IsLocalPlaybackActive() && protocol_) {
                 audio_service_.PlayNotificationSound(Lang::Sounds::OGG_POPUP);
             }
             suppress_listening_chime_ = false;
@@ -1089,6 +1171,9 @@ void Application::HandleStateChangedEvent() {
             break;
         }
         case kDeviceStateSpeaking:
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+            SpeakLesson::Get().OnSpeakBegin();
+#endif
             display->SetStatus(Lang::Strings::SPEAKING);
             board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
@@ -1502,6 +1587,14 @@ void Application::SendMcpMessage(const std::string& payload) {
     });
 }
 
+void Application::SendDirectCue(const std::string& cue) {
+    Schedule([this, cue]() {
+        if (protocol_ && protocol_->IsAudioChannelOpened()) {
+            protocol_->SendWakeWordDetected(cue);
+        }
+    });
+}
+
 void Application::SetAecMode(AecMode mode) {
     aec_mode_ = mode;
     Schedule([this]() {
@@ -1712,6 +1805,40 @@ void Application::ApplyDeviceIdentity() {
     });
 }
 
+namespace {
+int ClampSilenceSec(int sec) {
+    if (sec <= 15) {
+        return 10;
+    }
+    if (sec <= 25) {
+        return 20;
+    }
+    return 30;
+}
+}  // namespace
+
+void Application::LoadSilencePromptSec() {
+    if (silence_prompt_loaded_) {
+        return;
+    }
+    Settings settings("app", false);
+    int v = settings.GetInt("slp", 20);
+    silence_prompt_sec_ = ClampSilenceSec(v);
+    silence_prompt_loaded_ = true;
+}
+
+int Application::SilencePromptSec() {
+    LoadSilencePromptSec();
+    return silence_prompt_sec_;
+}
+
+void Application::SetSilencePromptSec(int sec) {
+    silence_prompt_sec_ = ClampSilenceSec(sec);
+    silence_prompt_loaded_ = true;
+    Settings settings("app", true);
+    settings.SetInt("slp", silence_prompt_sec_);
+}
+
 #if CONFIG_SILENCE_PROMPT_ENABLE
 void Application::ResetSilencePromptTracking() {
     const auto now = std::chrono::steady_clock::now();
@@ -1738,7 +1865,7 @@ void Application::CheckSilencePrompt() {
     const auto now = std::chrono::steady_clock::now();
     const auto server_idle_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - last_server_speech_activity_time_).count();
-    const int timeout_ms = CONFIG_SILENCE_PROMPT_TIMEOUT_SEC * 1000;
+    const int timeout_ms = SilencePromptSec() * 1000;
 
     if (server_idle_ms < timeout_ms) {
         return;
@@ -1756,14 +1883,19 @@ void Application::CheckSilencePrompt() {
 }
 
 void Application::SendSilencePromptText() {
-    // Short listen/detect text — server rejects long detect payloads / OGG uplink polluted STT.
+    // Xiaozhi listen/detect only accepts short wake-like text. Gemini expands the cue.
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    const char* text = SpeakLesson::Get().SilenceDetectCue();
+#else
     static constexpr const char* kSilencePromptText = "khơi gợi lại";
+    const char* text = kSilencePromptText;
+#endif
 
     last_silence_prompt_send_time_ = std::chrono::steady_clock::now();
     last_silence_prompt_send_valid_ = true;
-    protocol_->SendWakeWordDetected(kSilencePromptText);
+    protocol_->SendWakeWordDetected(text);
     ESP_LOGI(TAG, "Silence prompt detect text: \"%s\" (idle >= %d s)",
-             kSilencePromptText, CONFIG_SILENCE_PROMPT_TIMEOUT_SEC);
+             text, SilencePromptSec());
 }
 #endif
 

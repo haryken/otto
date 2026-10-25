@@ -46,6 +46,13 @@
         .btn-save:disabled { background: #ccc; cursor: not-allowed; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: opacity 0.3s; z-index: 999; }
         .toast.show { opacity: 1; }
+        .course-loading { position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(16, 24, 36, 0.62); }
+        .course-loading[hidden] { display: none !important; }
+        .course-loading-box { width: min(360px, 92vw); background: #fff; border-radius: 16px; padding: 28px 22px 24px; text-align: center; box-shadow: 0 18px 44px rgba(0,0,0,0.28); }
+        .course-loading-spin { width: 42px; height: 42px; margin: 0 auto 14px; border: 4px solid #dfe7ee; border-top-color: #1aa7a1; border-radius: 50%; animation: course-spin 0.75s linear infinite; }
+        .course-loading-box b { display: block; font-size: 1.15em; color: #1a3a4a; }
+        .course-loading-box small { display: block; margin-top: 8px; color: #667; line-height: 1.4; }
+        @keyframes course-spin { to { transform: rotate(360deg); } }
         .status { text-align: center; font-size: 0.9em; color: #888; margin-top: 8px; }
         .no-units { color: #999; font-style: italic; padding: 10px 0; }
         .course-mac { color: #888; font-weight: normal; font-size: 0.9em; margin-left: 6px; }
@@ -367,6 +374,10 @@
         .ai-pick input { display: none; }
         .ai-panel { display: none; }
         .ai-panel.show { display: block; }
+        .stt-codes { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+        .stt-codes label { margin: 0 !important; display: flex; align-items: center; gap: 6px; border: 2px solid #e4e8ee; border-radius: 12px; padding: 8px 10px; cursor: pointer; background: #fff; color: #222831; font-weight: 800; font-size: 0.8em; }
+        .stt-codes label.on { border-color: #6a4dff; background: #f4f0ff; }
+        .stt-codes input { width: 16px; height: 16px; flex-shrink: 0; }
         .speak-actions { display: flex; gap: 8px; margin: 0 16px 12px; }
         .speak-actions .btn { margin: 0; flex: 1; width: auto; font-size: 0.95em; padding: 12px 8px; }
         .app-nav button.active { color: #1aa7a1; }
@@ -444,6 +455,24 @@
         .unit-nav { display: flex; gap: 8px; margin: 0 16px 12px; }
         .unit-nav button { flex: 1; margin: 0; border: none; border-radius: 14px; padding: 10px 8px; font-weight: 800; cursor: pointer; background: #fff; color: #3d2a8a; box-shadow: 0 2px 8px rgba(31,42,55,0.05); }
         .topic-row.current { outline: 2px solid #6a4dff; }
+        .path-topic { margin: 0 16px 10px; background: #fff; border-radius: 22px; box-shadow: 0 2px 10px rgba(31,42,55,0.04); overflow: hidden; }
+        .path-topic.open { outline: 2px solid #6a4dff; }
+        .path-topic.learning { outline: 2px solid #1aa7a1; }
+        .path-topic.learning.open { outline: 2px solid #6a4dff; }
+        .path-topic-h { display: flex; gap: 12px; align-items: center; width: 100%; border: none; background: none; padding: 14px; text-align: left; cursor: pointer; font-family: inherit; }
+        .path-topic-h img, .path-topic-h .path-thumb { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; background: #f3f0ff; flex-shrink: 0; display: inline-block; }
+        .path-topic-h .t { flex: 1; min-width: 0; }
+        .path-topic-h .t b { display: block; color: #222831; font-size: 1.05em; }
+        .path-topic-h .t small { color: #8b949e; font-weight: 800; font-size: 0.72em; letter-spacing: 0.04em; }
+        .path-topic-h .chev { color: #c5cad1; font-size: 1.2em; transition: transform 0.15s; }
+        .path-topic.open .path-topic-h .chev { transform: rotate(90deg); color: #6a4dff; }
+        .path-words { display: none; padding: 0 12px 8px; }
+        .path-topic.open .path-words { display: block; }
+        .path-word { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-top: 1px solid #f0f2f5; }
+        .path-word img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: #f3f0ff; flex-shrink: 0; }
+        .path-word b { display: block; font-size: 0.95em; color: #222; }
+        .path-word small { color: #8b949e; font-weight: 700; }
+        .path-learn-now { margin: 4px 16px 20px; width: calc(100% - 32px); border: none; border-radius: 18px; padding: 16px; background: #6a4dff; color: #fff; font-weight: 800; font-size: 1.05em; cursor: pointer; font-family: inherit; }
         .ex-bar { margin: 0 16px 12px; }
         .ex-bar-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
         .ex-bar-h small { display: block; font-weight: 800; font-size: 0.72em; color: #8b949e; letter-spacing: 0.03em; }
@@ -507,10 +536,55 @@
             margin: 0 16px 12px;
         }
         .app-tools-host .card h2 { border: none; padding: 0; color: #222831; }
+        .as-bar { margin: 0 16px 12px; }
+        .stu-bar { display: none; }
+        .path-word-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 12px; }
+        .path-word { width: calc(33.33% - 6px); min-height: 56px; border: none; background: #f4f6f8; border-radius: 16px; padding: 10px 8px; text-align: center; font-family: inherit; }
+        .path-word b { display: block; font-size: 0.88em; color: #222831; font-weight: 800; }
+        .path-word small { display: block; margin-top: 2px; color: #8b949e; font-size: 0.72em; font-weight: 600; }
+        .path-act.on { outline: 2px solid #6a4dff; background: #f3efff; }
+        .path-learn-bot { width: 100%; border: none; border-radius: 16px; padding: 12px; background: #1aa7a1; color: #fff; font-weight: 800; font-family: inherit; cursor: pointer; }
+        .path-act { display: flex; gap: 10px; align-items: center; width: 100%; border: none; background: #f7f8fb; border-radius: 14px; padding: 10px; margin: 8px 0; text-align: left; cursor: pointer; font-family: inherit; }
+        .path-act[disabled] { opacity: 0.55; cursor: not-allowed; }
+        .path-act .ico { width: 40px; height: 40px; border-radius: 12px; background: #efe8ff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .path-act b { display: block; color: #222; font-size: 0.92em; }
+        .path-act small { color: #8b949e; font-weight: 700; }
+        .path-act .st { font-size: 0.72em; font-weight: 800; color: #1aa7a1; white-space: nowrap; }
+        .path-act .st.need { color: #d97706; }
+        .path-act .st.wait { color: #8b949e; }
+        .path-words .goal { color: #556; font-size: 0.85em; padding: 4px 4px 8px; }
+        .act-player { position: fixed; inset: 0; background: rgba(20,24,32,0.45); z-index: 80; display: none; align-items: flex-end; justify-content: center; }
+        .act-player.show { display: flex; }
+        .act-box { background: #fff; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; border-radius: 24px 24px 0 0; padding: 16px 16px 28px; }
+        .act-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .act-box img.hero { width: 240px; height: 240px; object-fit: cover; border-radius: 20px; display: block; margin: 0 auto 12px; background: #f3f0ff; }
+        .act-pattern { text-align: center; font-size: 1.35em; font-weight: 800; color: #3d2a8a; margin: 8px 0; }
+        .act-guide { text-align: center; color: #445; margin: 8px 0 12px; }
+        .act-hint { background: #fff6e5; color: #8a5800; border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-weight: 700; }
+        .act-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+        .act-grid button { border: none; background: #efe8ff; border-radius: 16px; padding: 0; overflow: hidden; cursor: pointer; aspect-ratio: 1; }
+        .act-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .act-grid button.down { background: #3d2a8a; color: #fff; font-size: 1.6em; }
+        .act-grid button.down img { visibility: hidden; }
+        .act-grid button.gone img { visibility: hidden; }
+        .act-grid button.gone { background: #dce3ea; }
+        .act-grid button.done { opacity: 0.45; cursor: default; }
+        .act-grid button.on { outline: 3px solid #6a4dff; }
+        .act-grid button.down span { display: flex; align-items: center; justify-content: center; height: 100%; }
+        .act-nav { display: flex; gap: 8px; margin-top: 12px; }
+        .act-nav button, .act-box .go { flex: 1; border: none; border-radius: 14px; padding: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+        .act-box input { width: 100%; padding: 10px; border: 1px solid #e4e8ee; border-radius: 12px; margin: 8px 0; box-sizing: border-box; font: inherit; }
     </style>
 </head>
 <body class="robot-mode english-old">
     <div id="toast" class="toast"></div>
+    <div id="course_loading" class="course-loading" hidden>
+        <div class="course-loading-box" role="status" aria-live="polite">
+            <div class="course-loading-spin" aria-hidden="true"></div>
+            <b id="course_loading_title">Đang tải khóa học</b>
+            <small id="course_loading_sub">Robot đang kéo bài và hình từ server…</small>
+        </div>
+    </div>
     <div id="english_switch" class="english-switch">
         <button type="button" class="mode-spin" id="mode_spin" onclick="toggleEnglishStyle()" title="Đổi tiếng Anh cũ / mới">
             <span class="disc" id="mode_spin_disc">CŨ</span>
@@ -556,11 +630,20 @@
                     <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
                 </div>
                 <div class="ex-btns">
-                    <button type="button" data-ex="off" onclick="saveExplainLevel('off')">Chỉ nói</button>
+                    <button type="button" data-ex="off" onclick="saveExplainLevel('minimal')">Ít</button>
                     <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
                     <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
                 </div>
                 <p class="ex-note" data-ex-note></p>
+            </div>
+            <div class="as-bar">
+                <div class="ex-bar-h"><small>MỨC KIỂM TRA</small></div>
+                <div class="ex-btns">
+                    <button type="button" data-as="encourage" onclick="saveAssessment('encourage')">Khích lệ</button>
+                    <button type="button" data-as="guided" onclick="saveAssessment('guided')">Có hướng dẫn</button>
+                    <button type="button" data-as="challenge" onclick="saveAssessment('challenge')">Thử thách</button>
+                </div>
+                <p class="ex-note" data-as-note></p>
             </div>
             <button type="button" class="bank" onclick="switchApp('rank')">
                 <small style="color:#8b949e;font-weight:800">NGÂN HÀNG PHẢN XẠ</small>
@@ -591,26 +674,35 @@
                     <button type="button" class="path-chip" id="track_stem" onclick="selectPathTrack('stem')"><small>STEM</small>Sắp có<span class="pct">0%</span></button>
                 </div>
                 <div class="unit-strip" id="unit_strip"></div>
-                <button type="button" class="now-learn" onclick="startSpeak(0)">
+                <button type="button" class="now-learn" onclick="startSpeak(0, learningUnitId())">
                     <div>
                         <small id="path_level">CON ĐANG HỌC · A1</small>
                         <strong id="path_theme">Animals</strong>
                     </div>
                     <div class="illu">🦒</div>
                 </button>
-                <div class="ex-bar">
-                    <div class="ex-bar-h">
-                        <small>MỨC GIẢNG BÀI</small>
-                        <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
-                    </div>
-                    <div class="ex-btns">
-                        <button type="button" data-ex="off" onclick="saveExplainLevel('off')">Chỉ nói</button>
-                        <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
-                        <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
-                    </div>
-                    <p class="ex-note" data-ex-note></p>
+            </div>
+            <div class="ex-bar">
+                <div class="ex-bar-h">
+                    <small>MỨC GIẢNG BÀI</small>
+                    <button type="button" class="ex-help" onclick="showExplainHelp()" aria-label="Tìm hiểu mức giảng bài">?</button>
+                </div>
+                <div class="ex-btns">
+                    <button type="button" data-ex="off" onclick="saveExplainLevel('minimal')">Ít</button>
+                    <button type="button" data-ex="basic" onclick="saveExplainLevel('basic')">Cơ bản</button>
+                    <button type="button" data-ex="detailed" onclick="saveExplainLevel('detailed')">Chi tiết</button>
+                </div>
+                <p class="ex-note" data-ex-note></p>
+            </div>
+            <div class="as-bar">
+                <div class="ex-bar-h"><small>MỨC KIỂM TRA</small></div>
+                <div class="ex-btns">
+                    <button type="button" data-as="encourage" onclick="saveAssessment('encourage')">Khích lệ</button>
+                    <button type="button" data-as="guided" onclick="saveAssessment('guided')">Có hướng dẫn</button>
+                    <button type="button" data-as="challenge" onclick="saveAssessment('challenge')">Thử thách</button>
                 </div>
             </div>
+            <div class="stu-bar" id="path_students" hidden></div>
             <div id="path_cards"></div>
         </div>
 
@@ -631,7 +723,7 @@
         <div id="app_help" class="app-panel">
             <div class="page-title">Các dạng hoạt động</div>
             <button type="button" class="menu-row" onclick="openLesson(0)"><span class="menu-ico" style="background:#ffe8ee">📷</span><span><b>Xem thẻ bài học</b><small>Lật thẻ, không cần chờ robot</small></span></button>
-            <button type="button" class="menu-row" onclick="startSpeak()"><span class="menu-ico" style="background:#fff4d6">⭐</span><span><b>Học từ vựng A1</b><small>36 unit, ảnh từ máy :8765</small></span></button>
+            <button type="button" class="menu-row" onclick="switchApp('path')"><span class="menu-ico" style="background:#fff4d6">⭐</span><span><b>Học từ vựng A1</b><small>43 unit, 8 hoạt động / chủ đề</small></span></button>
             <button type="button" class="menu-row" onclick="switchApp('home')"><span class="menu-ico" style="background:#e8f0ff">⏰</span><span><b>Hoạt động hôm nay</b><small>Lịch trình nói mỗi ngày</small></span></button>
             <button type="button" class="menu-row" onclick="switchApp('setup')"><span class="menu-ico" style="background:#efe8ff">🔊</span><span><b>Bổ trợ phát âm</b><small>Phụ đề robot / bé nói</small></span></button>
             <button type="button" class="menu-row" onclick="openQuiz()"><span class="menu-ico" style="background:#e8fff4">🎮</span><span><b>Kho trò chơi</b><small>Đố vui nhìn hình đoán từ</small></span></button>
@@ -712,9 +804,10 @@
             </div>
             <div class="app-card">
                 <h2>Địa chỉ bài học</h2>
-                <input type="text" id="speak_base" placeholder="http://192.168.100.161:8765">
+                <label>Link bài (một địa chỉ)</label>
+                <input type="text" id="speak_base" placeholder="http://192.168.100.161:8765 hoặc https://emun.pages.dev" oninput="paintSpeakSource()">
                 <button type="button" class="btn btn-save" onclick="saveSpeakBase()">Lưu địa chỉ</button>
-                <p class="hint">Máy chạy python :8765, thư mục có folder speak/.</p>
+                <p class="hint" id="speak_src_hint">Một link. Bắt đầu bằng http:// thì robot kéo HTTP. https:// thì HTTPS. Không dự phòng link kia.</p>
             </div>
             <div class="app-card">
                 <h2>Khi học bài</h2>
@@ -755,6 +848,15 @@
                         <option value="Leda">Leda</option>
                         <option value="Charon">Charon</option>
                     </select>
+                    <label class="toggle-row"><input type="checkbox" id="speak_stt_en" checked onchange="paintSpeakSttCodes()"> Chỉ nhận diện tiếng Anh</label>
+                    <p class="hint">Khi học, Gemini nghe ưu tiên tiếng Anh. Robot vẫn đọc Việt + Anh. Giao tiếp hằng ngày không đổi.</p>
+                    <div id="speak_stt_codes" class="stt-codes">
+                        <label><input type="checkbox" name="speak_stt_code" value="en-US" checked onchange="paintSpeakSttCodes()"> en-US Mỹ</label>
+                        <label><input type="checkbox" name="speak_stt_code" value="en-GB" onchange="paintSpeakSttCodes()"> en-GB Anh</label>
+                        <label><input type="checkbox" name="speak_stt_code" value="en-IN" onchange="paintSpeakSttCodes()"> en-IN Ấn</label>
+                        <label><input type="checkbox" name="speak_stt_code" value="en" onchange="paintSpeakSttCodes()"> en chung</label>
+                    </div>
+                    <p class="hint">Chọn một hoặc nhiều mã. Gemini không có mã Úc; en-US / en vẫn nghe giọng Úc.</p>
                     <p class="hint">Không cần MAC Xiaozhi khi học bằng Gemini.</p>
                 </div>
                 <button type="button" class="btn btn-save" id="btn_save_speak_ai" onclick="saveSpeakIdentity()">Lưu nhà cung cấp học</button>
@@ -764,9 +866,9 @@
                 <p class="hint">Chọn mức này trước khi học. Robot chỉ gửi đúng phần giải thích đã chọn cho AI.</p>
                 <div class="ai-pick three" id="explain_pick">
                     <label data-for="off">
-                        <input type="radio" name="explain_level" value="off" checked onchange="saveExplainLevel()">
-                        <b>Chỉ nói</b>
-                        <small>không giảng nghĩa</small>
+                        <input type="radio" name="explain_level" value="minimal" checked onchange="saveExplainLevel()">
+                        <b>Ít</b>
+                        <small>nói mẫu, ít giảng</small>
                     </label>
                     <label data-for="basic">
                         <input type="radio" name="explain_level" value="basic" onchange="saveExplainLevel()">
@@ -825,6 +927,10 @@
                 <div class="device-id" id="ndaily_device_id">Device-Id: …</div>
                 <p class="mac-hint" id="ndaily_client_id">Client-Id: …</p>
                 <button type="button" class="btn btn-save" id="btn_activate_ndaily" onclick="saveDailyIdentity()">Lưu nhà cung cấp giao tiếp</button>
+                <h2 style="margin-top:18px">Prompt Xiaozhi hằng ngày</h2>
+                <p class="hint">Dán vào agent Xiaozhi của <b>giao tiếp</b> (pool 20 MAC). Không dán prompt dạy học. Agent này chỉ trò chuyện; khi bé kêu học thì gọi start rồi dừng, robot mở Gemini dạy.</p>
+                <textarea id="xiaozhi_daily_prompt" class="ai-field" readonly style="min-height:160px;font-size:0.85em"></textarea>
+                <button type="button" class="btn btn-save" onclick="copyXiaozhiPrompt('xiaozhi_daily_prompt', 'Đã copy prompt giao tiếp')">📋 Copy prompt giao tiếp</button>
             </div>
             <div class="app-card">
                 <h2>Xiaozhi tự cấu hình</h2>
@@ -863,6 +969,31 @@
                 <div class="app-hi" style="font-size:1.15em">Cài đặt robot</div>
                 <span style="width:40px"></span>
             </div>
+            <div class="app-card">
+                <h2>Âm lượng</h2>
+                <div class="slider-row">
+                    <label><span>Loa</span><span id="rset_volume_val">70</span></label>
+                    <input type="range" id="rset_volume" min="0" max="100" value="70" oninput="onRsetVolume()">
+                </div>
+            </div>
+            <div class="app-card" id="rset_bri_card">
+                <h2>Độ sáng màn hình</h2>
+                <div class="slider-row">
+                    <label><span>Backlight</span><span id="rset_bri_val">50</span></label>
+                    <input type="range" id="rset_brightness" min="0" max="100" value="50" oninput="onRsetBrightness()">
+                </div>
+            </div>
+            <div class="app-card">
+                <h2>Khơi gợi khi im lặng</h2>
+                <p class="hint">Đang học mà bé không nói, robot nhắc lại sau:</p>
+                <div class="ex-btns" id="rset_silence_btns">
+                    <button type="button" data-slp="10" onclick="setSilenceSec(10)">10 giây</button>
+                    <button type="button" data-slp="20" onclick="setSilenceSec(20)">20 giây</button>
+                    <button type="button" data-slp="30" onclick="setSilenceSec(30)">30 giây</button>
+                </div>
+            </div>
+            <button type="button" class="btn btn-save" style="margin:0 16px 12px" onclick="saveRobotSettings()">Lưu âm lượng / sáng / khơi gợi</button>
+            <p class="hint" style="padding:0 20px">Cân chỉnh chân robot ở bên dưới.</p>
             <div id="app_tools_host" class="app-tools-host"></div>
         </div>
 
@@ -891,6 +1022,32 @@
         </div>
     </div>
 
+    <div id="act_player" class="act-player" onclick="if(event.target===this)closeActPlayer()">
+        <div class="act-box">
+            <div class="act-top">
+                <button type="button" class="btn" style="background:#eef1f4;color:#445;margin:0" onclick="closeActPlayer()">← Lộ trình</button>
+                <div>
+                    <b id="act_title">Hoạt động</b>
+                    <div class="hint" id="act_prog">0/0</div>
+                </div>
+            </div>
+            <img class="hero" id="act_img" alt="">
+            <div class="act-pattern" id="act_pattern"></div>
+            <div class="act-grid" id="act_grid" hidden></div>
+            <p class="act-guide" id="act_guide"></p>
+            <div class="act-hint" id="act_hint" hidden></div>
+            <input id="act_typein" placeholder="Gõ câu trên điện thoại (không phải STT robot)" autocomplete="off">
+            <p class="hint" id="act_stt_note">Robot nghe bằng Gemini/Xiaozhi. Không giả lập giọng nói trên web.</p>
+            <div class="act-nav">
+                <button type="button" style="background:#eef1f4" onclick="actReplay()">Nghe lại</button>
+                <button type="button" class="go" style="background:#6a4dff;color:#fff" onclick="actSubmitTyped()">Gửi câu</button>
+            </div>
+            <div class="act-nav">
+                <button type="button" style="background:#e7fbf7;color:#0f766e" onclick="actHeardPractice()">Đã nói với robot</button>
+                <button type="button" style="background:#eef1f4" onclick="actNext()">Câu tiếp</button>
+            </div>
+        </div>
+    </div>
     <div id="explain_help_modal" class="modal-backdrop" hidden onclick="if(event.target===this)hideExplainHelp()">
         <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="explain_help_title">
             <div class="modal-head">
@@ -901,9 +1058,9 @@
             <div class="modal-body">
                 <ul class="ex-help-list">
                     <li data-ex="off">
-                        <b>Chỉ nói <i class="now">ĐANG CHỌN</i></b>
-                        <span>Robot đọc từ / câu tiếng Anh trên thẻ rồi kêu bé nhắc lại. Không giảng nghĩa tiếng Việt, không đưa ví dụ.</span>
-                        <em>Đang chọn mức này: robot chỉ luyện nói, AI không nhận phần giải thích của bài học. Hợp khi bé đã biết từ, muốn phản xạ nhanh.</em>
+                        <b>Ít <i class="now">ĐANG CHỌN</i></b>
+                        <span>Robot đọc từ / câu tiếng Anh rồi kêu bé nhắc lại. Giảng rất ít hoặc không giảng nghĩa.</span>
+                        <em>Đang chọn mức Ít: robot luyện nói, không đưa bản giải thích basic/detailed.</em>
                     </li>
                     <li data-ex="basic">
                         <b>Cơ bản <i class="now">ĐANG CHỌN</i></b>
@@ -1159,6 +1316,15 @@
             <div class="slider-row">
                 <label><span>Backlight</span><span id="brightness_val">50</span></label>
                 <input type="range" id="brightness" min="0" max="100" value="50" oninput="onBrightnessInput()">
+            </div>
+        </div>
+        <div class="card">
+            <h2>🗣️ Khơi gợi khi im lặng</h2>
+            <p class="hint">Đang học mà bé không nói, robot nhắc lại sau:</p>
+            <div class="ex-btns" id="old_silence_btns">
+                <button type="button" data-slp="10" onclick="setSilenceSec(10)">10 giây</button>
+                <button type="button" data-slp="20" onclick="setSilenceSec(20)">20 giây</button>
+                <button type="button" data-slp="30" onclick="setSilenceSec(30)">30 giây</button>
             </div>
         </div>
         <div class="card">
@@ -2242,7 +2408,6 @@
             }
             if (name === 'ota') {
                 pollOtaStatus();
-                if (!otaCheckedOnce) checkOfficialUpdate();
             }
         }
 
@@ -2753,9 +2918,49 @@
 
         function onVolumeInput() {
             document.getElementById('volume_val').textContent = document.getElementById('volume').value;
+            const a = document.getElementById('rset_volume');
+            const b = document.getElementById('rset_volume_val');
+            if (a) a.value = document.getElementById('volume').value;
+            if (b) b.textContent = document.getElementById('volume').value;
         }
         function onBrightnessInput() {
             document.getElementById('brightness_val').textContent = document.getElementById('brightness').value;
+            const a = document.getElementById('rset_brightness');
+            const b = document.getElementById('rset_bri_val');
+            if (a) a.value = document.getElementById('brightness').value;
+            if (b) b.textContent = document.getElementById('brightness').value;
+        }
+        function onRsetVolume() {
+            const v = document.getElementById('rset_volume').value;
+            document.getElementById('rset_volume_val').textContent = v;
+            const o = document.getElementById('volume');
+            if (o) { o.value = v; document.getElementById('volume_val').textContent = v; }
+        }
+        function onRsetBrightness() {
+            const v = document.getElementById('rset_brightness').value;
+            document.getElementById('rset_bri_val').textContent = v;
+            const o = document.getElementById('brightness');
+            if (o) { o.value = v; document.getElementById('brightness_val').textContent = v; }
+        }
+        let silenceSec = 20;
+        function paintSilenceSec(sec) {
+            silenceSec = (sec <= 15) ? 10 : (sec <= 25 ? 20 : 30);
+            document.querySelectorAll('#rset_silence_btns button, #old_silence_btns button').forEach(function (btn) {
+                btn.classList.toggle('on', Number(btn.getAttribute('data-slp')) === silenceSec);
+            });
+        }
+        async function setSilenceSec(sec) {
+            paintSilenceSec(sec);
+            try {
+                await fetch('/api/robot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ silence_sec: silenceSec })
+                });
+                showToast('✅ Khơi gợi sau ' + silenceSec + ' giây');
+            } catch (e) {
+                showToast('❌ Không lưu được mức khơi gợi');
+            }
         }
 
         async function loadRobotSettings() {
@@ -2767,15 +2972,23 @@
                 const vol = Math.max(0, Math.min(100, Number(data.volume) || 70));
                 document.getElementById('volume').value = vol;
                 document.getElementById('volume_val').textContent = vol;
+                const rVol = document.getElementById('rset_volume');
+                if (rVol) { rVol.value = vol; document.getElementById('rset_volume_val').textContent = vol; }
                 const briCard = document.getElementById('brightness_card');
+                const rBriCard = document.getElementById('rset_bri_card');
                 if (data.has_brightness) {
-                    briCard.style.display = '';
+                    if (briCard) briCard.style.display = '';
+                    if (rBriCard) rBriCard.style.display = '';
                     const bri = Math.max(0, Math.min(100, Number(data.brightness) || 50));
                     document.getElementById('brightness').value = bri;
                     document.getElementById('brightness_val').textContent = bri;
+                    const rBri = document.getElementById('rset_brightness');
+                    if (rBri) { rBri.value = bri; document.getElementById('rset_bri_val').textContent = bri; }
                 } else {
-                    briCard.style.display = 'none';
+                    if (briCard) briCard.style.display = 'none';
+                    if (rBriCard) rBriCard.style.display = 'none';
                 }
+                paintSilenceSec(Number(data.silence_sec) || 20);
                 const demand = !!data.motors_on_demand;
                 document.getElementById('motor_demand').checked = demand;
                 document.getElementById('motor_always').checked = !demand;
@@ -2791,8 +3004,9 @@
             btn.textContent = 'Đang lưu...';
             try {
                 const body = {
-                    volume: parseInt(document.getElementById('volume').value, 10),
-                    motors_on_demand: document.getElementById('motor_demand').checked
+                    volume: parseInt((document.getElementById('rset_volume') || document.getElementById('volume')).value, 10),
+                    motors_on_demand: document.getElementById('motor_demand').checked,
+                    silence_sec: silenceSec
                 };
                 const briCard = document.getElementById('brightness_card');
                 if (briCard.style.display !== 'none') {
@@ -3162,38 +3376,63 @@
             toggleDailyAiFields();
             refreshSpeakStatus();
             loadConfig();
-            setTimeout(function() { if (!otaCheckedOnce) checkOfficialUpdate(); }, 1500);
             loadSpeakUnit();
         });
 
         let speakUnit = null;
         let browseUnit = 'u01';
+        let pathOpenUnit = '';
+        let pathOpenAct = '';
+        const unitCache = {};
         let pathTrack = 'a1';
-        let speakStatus = { on: false, base: 'http://192.168.100.161:8765', level: 'a1', unit: 'u01', index: 0, total: 0, words_done: 0, phrases_done: 0, age: 6, likes: '', xiaozhi_prompt: '' };
+        let speakStatus = { on: false, base: 'http://192.168.100.161:8765', lan: 'http://192.168.100.161:8765', cloud: 'https://emun.pages.dev', source: 'auto', live: '', level: 'a1', unit: 'u01', index: 0, total: 0, words_done: 0, phrases_done: 0, age: 6, likes: '', xiaozhi_prompt: '' };
+        let lastSpeakPathKey = '';
         let lessonIdx = 0;
         let quizHide = false;
+        let a1Catalog = null;
+        const actCache = {};
+        let progressHex = '';
+        let studentSlot = 0;
         const A1_UNITS = [
-            ['u01','About Me','hello','👋'],['u02','Family','father','👨‍👩‍👧'],
-            ['u03','My Family & Likes','mother-u03','❤️'],['u04','Numbers','one','🔢'],
-            ['u05','Numbers & Quantities','one-u05','🐟'],['u06','Colors','red','🎨'],
-            ['u07','Shapes','circle','🔵'],['u08','Toys','ball','🧸'],
-            ['u09','In the House','bed','🏠'],['u10','Where Is It?','ball-u10','📍'],
-            ['u11','At School','book','📚'],['u12','Clothes','shirt','👗'],
-            ['u13','Food & Drinks','apple','🍎'],['u14','Fruits','apple-u22','🍓'],
-            ['u15','Snacks and Desserts','cookie','🍪'],['u16','Body Parts','head','🧍'],
-            ['u17','Feelings','happy','😊'],['u18','Daily Routines','wake-up','⏰'],
-            ['u19','Actions','run','🏃'],['u20','Hobbies & Activities','read-books','🎯'],
-            ['u21','Playground','slide','🛝'],['u22','Sports','soccer','⚽'],
-            ['u23','Health and Hygiene','soap','🧼'],['u24','Everyday Conversations','please','💬'],
-            ['u25','Animals','elephant','🦒'],['u26','Animals Around Us','dog','🐶'],
-            ['u27','Sea Animals','crab','🦀'],['u28','Nature and Insects','butterfly','🦋'],
-            ['u29','Nature','sun','🌳'],['u30','Weather & Seasons','sunny','🌤️'],
-            ['u31','Opposites','big','↕️'],['u32','Places Around Town','home','🏘️'],
-            ['u33','Transport','car','🚗'],['u34','Jobs','doctor','👩‍⚕️'],
-            ['u35','Musical Instruments','guitar','🎸'],['u36','Speaking Practice & Review','boy-u36','🗣️']
+            ['u01','About Me','Giới thiệu bản thân'],['u02','Family','Gia đình'],
+            ['u03','My Family & Likes','Gia đình và sở thích'],['u04','Numbers','Số đếm'],
+            ['u05','Numbers & Quantities','Số đếm và số lượng'],['u06','Colors','Màu sắc'],
+            ['u07','Shapes','Hình dạng'],['u08','Toys','Đồ chơi'],
+            ['u09','In the House','Trong nhà'],['u10','Where Is It?','Đồ vật ở đâu?'],
+            ['u11','At School','Ở trường'],['u12','Clothes','Quần áo'],
+            ['u13','Food & Drinks','Đồ ăn và thức uống'],['u14','Fruits','Trái cây'],
+            ['u15','Snacks and Desserts','Đồ ăn vặt'],['u16','Body Parts','Bộ phận cơ thể'],
+            ['u17','Feelings','Cảm xúc'],['u18','Daily Routines','Sinh hoạt hằng ngày'],
+            ['u19','Actions','Hành động'],['u20','Hobbies & Activities','Sở thích'],
+            ['u21','Playground','Sân chơi'],['u22','Sports','Thể thao'],
+            ['u23','Health and Hygiene','Sức khỏe'],['u24','Everyday Conversations','Giao tiếp'],
+            ['u25','Animals','Động vật'],['u26','Animals Around Us','Động vật quanh ta'],
+            ['u27','Sea Animals','Động vật biển'],['u28','Nature and Insects','Côn trùng'],
+            ['u29','Nature','Thiên nhiên'],['u30','Weather & Seasons','Thời tiết'],
+            ['u31','Opposites','Từ trái nghĩa'],['u32','Places Around Town','Địa điểm'],
+            ['u33','Transport','Giao thông'],['u34','Jobs','Nghề nghiệp'],
+            ['u35','Musical Instruments','Nhạc cụ'],['u36','Speaking Practice & Review','Ôn tập'],
+            ['u37','Hoi An, Here I Come!','Khám phá Hội An'],['u38','Doing Housework','Giúp việc nhà'],
+            ['u39','The Art Club','Câu lạc bộ mỹ thuật'],['u40','Activities at the Art Club','Hoạt động mỹ thuật'],
+            ['u41','At the Birthday Party','Tiệc sinh nhật'],['u42','In the Sky','Trên bầu trời'],
+            ['u43','Christmas Is Coming!','Giáng sinh sắp đến']
         ];
+        const KNOWN_ACTS = ['learn-words','repeat-phrases','picture-naming','complete-sentences','flip-and-say','missing-image','answer-questions','unit-review'];
+        function knownActIndex(actId) {
+            if (actId === 'flip-pairs' || actId === 'flip-and-say') return 4;
+            return KNOWN_ACTS.indexOf(actId);
+        }
+        function a1UnitList() {
+            if (a1Catalog && a1Catalog.units && a1Catalog.units.length) return a1Catalog.units;
+            return A1_UNITS.map(function (u, i) {
+                return { id: u[0], number: i + 1, title_en: u[1], title_vi: u[2], goal_vi: '', activity_count: 8 };
+            });
+        }
         function a1UnitInfo(id) {
-            return A1_UNITS.find(function (u) { return u[0] === id; }) || A1_UNITS[0];
+            const row = a1UnitList().find(function (u) { return (u.id || u[0]) === id; });
+            if (row && row.id) return [row.id, row.title_en, row.title_vi, row.goal_vi];
+            const fb = A1_UNITS.find(function (u) { return u[0] === id; }) || A1_UNITS[0];
+            return [fb[0], fb[1], fb[2], ''];
         }
         function unitNum(id) {
             return parseInt(String(id || 'u01').replace(/\D/g, ''), 10) || 1;
@@ -3208,13 +3447,14 @@
             if (!strip) return;
             const cur = speakUnitId();
             strip.innerHTML = '';
-            A1_UNITS.forEach(function (u, i) {
+            a1UnitList().forEach(function (u, i) {
+                const id = u.id || u[0];
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.className = 'unit-pill' + (u[0] === cur ? ' on' : '');
-                b.textContent = String(i + 1);
-                b.title = u[1];
-                b.onclick = function () { selectA1Unit(u[0]); };
+                b.className = 'unit-pill' + (id === cur ? ' on' : '');
+                b.textContent = String(u.number || (i + 1));
+                b.title = u.title_en || u[1];
+                b.onclick = function () { selectA1Unit(id); };
                 strip.appendChild(b);
             });
             const on = strip.querySelector('.unit-pill.on');
@@ -3224,10 +3464,46 @@
             if (id) browseUnit = id;
             await startSpeak(0);
         }
+        function courseUrl() {
+            const el = document.getElementById('speak_base');
+            const typed = el && document.activeElement === el ? (el.value || '') : '';
+            const st = speakStatus || {};
+            return String(typed || st.live || st.base || (el && el.value) || '').trim().replace(/\/$/, '');
+        }
+        function courseHosts() {
+            const u = courseUrl();
+            return u ? [u] : [];
+        }
+        function courseHost() {
+            const hosts = courseHosts();
+            return hosts.length ? hosts[0] : '';
+        }
+        async function fetchCourse(path) {
+            const p = String(path || '').replace(/^\//, '');
+            const urls = courseHosts().map(function (h) { return h + '/' + p; });
+            urls.push('/' + p);
+            for (let i = 0; i < urls.length; i++) {
+                try {
+                    const res = await fetch(urls[i], { cache: 'no-store' });
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data && typeof data === 'object' && !data.error) {
+                        const cut = urls[i].lastIndexOf('/' + p);
+                        if (cut > 0 && speakStatus) speakStatus.live = urls[i].slice(0, cut);
+                        return data;
+                    }
+                } catch (e) {}
+            }
+            return null;
+        }
         function unitCoverUrl(uid, cover) {
-            const base = ((speakStatus && speakStatus.base) || '').replace(/\/$/, '');
-            const path = '/speak/a1/' + uid + '/' + cover + '.jpg';
-            return base ? base + path : path;
+            const cat = (a1Catalog && a1Catalog.units || []).find(function (u) { return u.id === uid; }) || {};
+            const prefix = courseHost();
+            if (cat.cover && String(cat.cover).indexOf('/') >= 0) return prefix + '/' + String(cat.cover).replace(/^\//, '');
+            const id = cover || cat.cover_id || cat.preview_cover;
+            if (!id) return '';
+            if (String(id).indexOf('/') >= 0) return prefix + '/' + String(id).replace(/^\//, '');
+            return prefix + '/speak/a1/' + uid + '/' + id + '.jpg';
         }
         function renderA1Chips() {
             const cards = (speakUnit && speakUnit.cards) || [];
@@ -3252,11 +3528,8 @@
             renderSpeakPath();
         }
         async function selectA1Unit(id) {
-            browseUnit = id;
             pathTrack = 'a1';
-            renderA1Chips();
-            renderUnitStrip();
-            await loadSpeakUnit();
+            await togglePathTopic(id);
         }
 
         function speakDoneIndex() {
@@ -3277,15 +3550,409 @@
         function speakUnitId() {
             return browseUnit || (speakStatus && speakStatus.unit) || 'u01';
         }
+        function learningUnitId() {
+            return (speakStatus && speakStatus.unit) || 'u01';
+        }
+        function unitCardImg(uid, card) {
+            const lv = speakLevel();
+            const base = courseHost();
+            const id = card && card.id ? card.id : '';
+            const path = '/speak/' + lv + '/' + uid + '/' + id + '.jpg';
+            return base ? base + path : path;
+        }
+        async function fetchUnitJson(uid) {
+            if (!uid) return null;
+            if (unitCache[uid]) return unitCache[uid];
+            const lv = speakLevel();
+            const data = await fetchCourse('speak/' + lv + '/' + uid + '.json');
+            if (data) unitCache[uid] = data;
+            return data;
+        }
+        function lanUrl(path) {
+            const base = courseHost();
+            return base ? (base + '/' + path.replace(/^\//, '')) : ('/' + path.replace(/^\//, ''));
+        }
+        async function fetchCatalog() {
+            if (a1Catalog) return a1Catalog;
+            a1Catalog = await fetchCourse('course/a1/catalog.json');
+            return a1Catalog;
+        }
+        async function fetchActivities(uid) {
+            if (!uid) return null;
+            if (actCache[uid]) return actCache[uid];
+            const data = await fetchCourse('course/a1/' + uid + '.activities.json');
+            if (data) actCache[uid] = data;
+            return data;
+        }
+        function firstCoverId(uid) {
+            const cat = (a1Catalog && a1Catalog.units || []).find(function (u) { return u.id === uid; });
+            if (cat && (cat.cover_id || cat.preview_cover)) return cat.cover_id || cat.preview_cover;
+            const cards = (unitCache[uid] && unitCache[uid].cards) || [];
+            const w = cards.find(function (c) { return c.type === 'word'; }) || cards[0];
+            return (w && w.id) || '';
+        }
+        function decodeProgByte(unitId, actIndex) {
+            const ui = (parseInt(String(unitId).replace(/\D/g, ''), 10) || 1) - 1;
+            if (ui < 0 || ui > 42 || actIndex < 0 || actIndex > 7 || !progressHex || progressHex.length < 688) return 0;
+            const off = (ui * 8 + actIndex) * 2;
+            return parseInt(progressHex.substr(off, 2), 16) || 0;
+        }
+        function actStatus(unitId, actIndex, actId) {
+            let i = actIndex;
+            if (actId) {
+                const k = knownActIndex(actId);
+                if (k >= 0) i = k;
+            }
+            const b = decodeProgByte(unitId, i);
+            const st = b & 3;
+            return st === 2 ? 'completed' : st === 3 ? 'needs_review' : st === 1 ? 'in_progress' : 'not_started';
+        }
+        function countUnitDone(uid) {
+            const acts = (actCache[uid] && actCache[uid].activities) || [];
+            const n = acts.length || ((a1Catalog && a1Catalog.units || []).find(function (u) { return u.id === uid; }) || {}).activity_count || 0;
+            let done = 0;
+            for (let i = 0; i < n; i++) {
+                const st = actStatus(uid, i, acts[i] && acts[i].id);
+                if (st === 'completed' || st === 'needs_review') done++;
+            }
+            return done;
+        }
+        function countCompletedActs() {
+            let n = 0;
+            a1UnitList().forEach(function (u) { n += countUnitDone(u.id || u[0]); });
+            return n;
+        }
+        function reviewUnlocked(uid, pack) {
+            const need = (pack && pack.review_unlock_requires) || ['learn-words', 'repeat-phrases', 'picture-naming'];
+            const acts = (pack && pack.activities) || [];
+            return need.every(function (id) {
+                const idx = acts.findIndex(function (a) { return a.id === id; });
+                const st = actStatus(uid, idx < 0 ? knownActIndex(id) : idx, id);
+                return st === 'completed' || st === 'needs_review';
+            });
+        }
+        const ASSESS_INFO = {
+            encourage: { title: 'Khích lệ', note: 'Sai một lần: công bố đáp án rồi sang câu. Không tính mastered.' },
+            guided: { title: 'Có hướng dẫn', note: 'Sai 1: gợi ý nhẹ. Sai 2: gợi ý rõ. Sai 3: công bố đáp án, cần ôn, không mastered. Mic không rõ không tính sai.' },
+            challenge: { title: 'Thử thách', note: 'Sai thì thử lại, không gợi ý. Lần 3 công bố đáp án và không mastered.' }
+        };
+        function paintAssessment(mode) {
+            const lv = ASSESS_INFO[mode] ? mode : 'guided';
+            document.querySelectorAll('.ex-btns button[data-as]').forEach(function (btn) {
+                btn.classList.toggle('on', btn.getAttribute('data-as') === lv);
+            });
+            document.querySelectorAll('[data-as-note]').forEach(function (el) {
+                el.textContent = 'Đang chọn ' + ASSESS_INFO[lv].title + ': ' + ASSESS_INFO[lv].note;
+            });
+        }
+        async function saveAssessment(mode) {
+            paintAssessment(mode);
+            try {
+                const data = await postSpeak({ action: 'assessment', mode: mode });
+                if (data && data.error) throw new Error(data.error);
+                showToast('✅ Mức kiểm tra: ' + ASSESS_INFO[mode].title);
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không lưu mức kiểm tra'));
+            }
+        }
+        function renderStudentBars() {}
+        async function selectStudent() {
+            try {
+                const name = (document.getElementById('profile_student_name') && document.getElementById('profile_student_name').value.trim()) || '';
+                const data = await postSpeak({ action: 'student', slot: 0, name: name });
+                if (data && data.error) throw new Error(data.error);
+                applySpeakStatus(data);
+            } catch (e) {}
+        }
+        let actPlayerOn = false;
+        let actPollTimer = 0;
+        let flipFace = 'preview';
+        function cardMedia(uid, card, field) {
+            const want = field || 'image';
+            const base = ((speakStatus && speakStatus.base) || '').replace(/\/$/, '');
+            const id = card && card.id ? card.id : '';
+            if (want === 'game_image') {
+                const local = id && base ? (base + '/game/a1/' + uid + '/' + id + '.jpg') : '';
+                return local || (card && card.game_image) || unitCardImg(uid, card);
+            }
+            return unitCardImg(uid, card);
+        }
+        function activityIds(act) {
+            if (speakStatus && speakStatus.round_cards && speakStatus.round_cards.length) return speakStatus.round_cards;
+            if (speakStatus && speakStatus.playlist && speakStatus.playlist.length) return speakStatus.playlist;
+            return (act && act.target_ids) || [];
+        }
+        function activityCard(uid, act, id) {
+            return currentCardById(id) || { id: id, en: id, vi: '' };
+        }
+        function hideAnswerInUi(act) {
+            const t = (act && act.type) || (speakStatus && speakStatus.activity_type) || '';
+            return t === 'name_picture' || t === 'flip_guess' || t === 'missing_picture' ||
+                t === 'complete_sentence' || t === 'unit_review' || t === 'ask_answer';
+        }
+        async function openActivityPreview(uid, actId) {
+            pathOpenUnit = uid;
+            pathOpenAct = (pathOpenAct === actId && pathOpenUnit === uid) ? '' : actId;
+            browseUnit = uid;
+            renderSpeakPath();
+            await Promise.all([fetchUnitJson(uid), fetchActivities(uid)]);
+            if (pathOpenUnit === uid) renderSpeakPath();
+        }
+        function renderActivityWords(uid, act) {
+            const box = document.createElement('div');
+            box.className = 'path-word-grid';
+            const ids = act.target_ids || [];
+            const cards = ((unitCache[uid] || {}).cards) || [];
+            const items = act.items || [];
+            ids.forEach(function (id) {
+                const card = cards.find(function (c) { return c.id === id; }) || { id: id, en: id, vi: '' };
+                const item = items.find(function (r) { return r.card_id === id; });
+                const en = (item && item.pattern_en) ? item.pattern_en : (card.en || id);
+                const vi = card.vi || '';
+                const cell = document.createElement('div');
+                cell.className = 'path-word';
+                cell.innerHTML = '<b>' + en + '</b>' + (vi ? '<small>' + vi + '</small>' : '');
+                box.appendChild(cell);
+            });
+            const go = document.createElement('button');
+            go.type = 'button';
+            go.className = 'path-learn-bot';
+            go.textContent = 'Học trên robot';
+            go.onclick = function () { startActivity(uid, act.id); };
+            const wrap = document.createElement('div');
+            wrap.appendChild(box);
+            wrap.appendChild(go);
+            return wrap;
+        }
+        async function startActivity(uid, actId) {
+            browseUnit = uid;
+            await startSpeak(0, uid, actId);
+        }
+        function openActPlayer() {
+            actPlayerOn = true;
+            const el = document.getElementById('act_player');
+            if (el) el.classList.add('show');
+            flipFace = 'preview';
+            renderActPlayer();
+            if (actPollTimer) clearInterval(actPollTimer);
+            actPollTimer = setInterval(function () {
+                refreshSpeakStatus().then(renderActPlayer);
+            }, 2500);
+        }
+        function closeActPlayer() {
+            actPlayerOn = false;
+            const el = document.getElementById('act_player');
+            if (el) el.classList.remove('show');
+            if (actPollTimer) { clearInterval(actPollTimer); actPollTimer = 0; }
+        }
+        function currentActPack() {
+            const uid = (speakStatus && speakStatus.unit) || speakUnitId();
+            return actCache[uid] || null;
+        }
+        function currentActDef() {
+            const pack = currentActPack();
+            const id = speakStatus && speakStatus.activity;
+            if (!pack || !id) return null;
+            return (pack.activities || []).find(function (a) { return a.id === id; }) || null;
+        }
+        function currentCardById(id) {
+            const uid = (speakStatus && speakStatus.unit) || speakUnitId();
+            const cards = ((unitCache[uid] || speakUnit || {}).cards) || [];
+            return cards.find(function (c) { return c.id === id; }) || null;
+        }
+        function renderActPlayer() {
+            if (!actPlayerOn) return;
+            const uid = (speakStatus && speakStatus.unit) || speakUnitId();
+            const act = currentActDef();
+            const type = (speakStatus && speakStatus.activity_type) || (act && act.type) || '';
+            const field = (speakStatus && speakStatus.image_field) || (act && act.image_field) || 'image';
+            const ids = activityIds(act);
+            const idx = speakStatus.index || 0;
+            const cardId = (speakStatus && speakStatus.card_id) || ids[idx] || '';
+            const card = cardId ? activityCard(uid, act, cardId) : null;
+            const title = document.getElementById('act_title');
+            if (title) title.textContent = (act && act.title_vi) || (speakStatus && speakStatus.activity) || 'Hoạt động';
+            const prog = document.getElementById('act_prog');
+            if (prog) {
+                const resolved = (speakStatus.resolved_count != null) ? speakStatus.resolved_count : idx;
+                const total = speakStatus.total_unique || speakStatus.total || ids.length || 0;
+                const st = speakStatus.flip_state || speakStatus.item_phase || '';
+                prog.textContent = resolved + '/' + total + (st ? ' · ' + st : '') +
+                    ' · ' + (act && act.scoring || speakStatus.assessment || '');
+            }
+            const img = document.getElementById('act_img');
+            const pattern = document.getElementById('act_pattern');
+            const grid = document.getElementById('act_grid');
+            const guide = document.getElementById('act_guide');
+            const hint = document.getElementById('act_hint');
+            if (hint) {
+                if (speakStatus.hint) { hint.hidden = false; hint.textContent = speakStatus.hint; }
+                else hint.hidden = true;
+            }
+            if (guide) guide.textContent = (speakStatus.teacher || speakStatus.say || (act && act.description_vi) || '');
+            const useGrid = type === 'flip_guess' || type === 'missing_picture' || (act && act.show_combined_grid);
+            if (useGrid) {
+                if (img) img.style.display = 'none';
+                if (grid) {
+                    grid.hidden = false;
+                    if (type === 'missing_picture' || (act && act.hide_count)) renderDataGrid(uid, act, field, 'missing');
+                    else renderDataGrid(uid, act, field, 'flip');
+                }
+            } else {
+                if (grid) grid.hidden = true;
+                if (img) {
+                    img.style.display = 'block';
+                    const nextSrc = card ? cardMedia(uid, card, field) : '';
+                    if (nextSrc && img.getAttribute('data-src') !== nextSrc) {
+                        img.setAttribute('data-src', nextSrc);
+                        img.src = nextSrc;
+                    }
+                }
+            }
+            if (pattern) {
+                const item = act && act.items && act.items.find(function (r) { return card && r.card_id === card.id; });
+                if (type === 'complete_sentence' || (act && act.items && item)) {
+                    pattern.textContent = (speakStatus.pattern_en || (item && item.pattern_en) || '');
+                } else if (hideAnswerInUi(act) && !speakStatus.reveal) {
+                    pattern.textContent = '';
+                } else {
+                    pattern.textContent = (card && card.en) || '';
+                }
+            }
+        }
+        function renderDataGrid(uid, act, field, mode) {
+            const grid = document.getElementById('act_grid');
+            if (!grid || !act) return;
+            const phase = (speakStatus && speakStatus.item_phase) || 'preview';
+            const flipState = (speakStatus && speakStatus.flip_state) || '';
+            const preview = phase === 'preview' || flipState === 'preview';
+            const awaiting = phase === 'listen' || flipState === 'await_answer';
+            let ids = activityIds(act);
+            if (mode === 'missing') {
+                const gsz = act.group_size || 4;
+                ids = (speakStatus.group_ids && speakStatus.group_ids.length)
+                    ? speakStatus.group_ids
+                    : ids.slice(0, gsz);
+            }
+            const hidden = speakStatus.hidden_id || '';
+            const openId = speakStatus.active_card_id || speakStatus.card_id || '';
+            const resolved = (speakStatus.resolved_ids) || [];
+            const previewId = speakStatus.preview_card_id || '';
+            grid.innerHTML = '';
+            ids.forEach(function (id) {
+                const card = activityCard(uid, act, id);
+                const b = document.createElement('button');
+                const done = resolved.indexOf(id) >= 0;
+                const faceDown = mode === 'flip' && !preview && id !== openId && !done;
+                const gone = mode === 'missing' && !preview && hidden && id === hidden;
+                if (faceDown) b.className = 'down';
+                if (gone) b.className = 'gone';
+                if (done) b.className = (b.className ? b.className + ' ' : '') + 'done';
+                if (preview && previewId && id === previewId) b.className = (b.className ? b.className + ' ' : '') + 'on';
+                b.disabled = !!(done || (mode === 'flip' && awaiting && id !== openId));
+                if (mode === 'flip' && faceDown) {
+                    b.innerHTML = '<span>🂠</span>';
+                } else {
+                    b.innerHTML = '<img src="' + cardMedia(uid, card, field) + '" alt="">';
+                }
+                if (mode === 'flip') {
+                    b.onclick = function () {
+                        if (preview || done || (awaiting && id !== openId)) return;
+                        const ev = 'fe-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+                        postSpeak({
+                            action: 'flip_select',
+                            card_id: id,
+                            session_id: speakStatus.session_id || '',
+                            round_id: speakStatus.round_id || '',
+                            client_event_id: ev,
+                            student_id: '0',
+                            unit_id: uid,
+                            activity_id: (speakStatus.activity || act.id || 'flip-and-say')
+                        }).then(function (d) {
+                            if (d) applySpeakStatus(d);
+                            renderActPlayer();
+                        });
+                    };
+                }
+                grid.appendChild(b);
+            });
+        }
+        async function actReplay() {
+            try { await postSpeak({ action: 'show' }); } catch (e) {}
+        }
+        async function actSubmitTyped() {
+            const text = (document.getElementById('act_typein') && document.getElementById('act_typein').value || '').trim();
+            if (!text) { showToast('Gõ câu hoặc nói với robot'); return; }
+            try {
+                const data = await postSpeak({ action: 'evaluate', text: text, source: 'ui' });
+                applySpeakStatus(Object.assign({}, speakStatus, data));
+                if (data.hint) showToast(data.hint);
+                if (data.feedback) showToast(data.feedback);
+                if (data.next_action === 'next') {
+                    const typein = document.getElementById('act_typein');
+                    if (typein) typein.value = '';
+                    await postSpeak({ action: 'next' });
+                    await refreshSpeakStatus();
+                }
+                renderActPlayer();
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không chấm được'));
+            }
+        }
+        async function actHeardPractice() {
+            const act = currentActDef();
+            const practice = act && act.scoring === 'practice';
+            if (!practice) {
+                showToast('Bài chấm điểm: nói với robot hoặc gõ câu. Không bấm đúng hộ.');
+                return;
+            }
+            try {
+                const data = await postSpeak({ action: 'evaluate', verdict: 'heard', source: 'ui', text: '' });
+                if (data && data.feedback) showToast(data.feedback);
+                if (data && data.next_action === 'next') await postSpeak({ action: 'next' });
+                await refreshSpeakStatus();
+                renderActPlayer();
+            } catch (e) {
+                showToast('❌ ' + (e.message || 'Không ghi lượt'));
+            }
+        }
+        async function actNext() {
+            try {
+                await postSpeak({ action: 'next', skip: true });
+                flipFace = 'preview';
+                await refreshSpeakStatus();
+                renderActPlayer();
+            } catch (e) {}
+        }
+        async function togglePathTopic(id) {
+            const next = (pathOpenUnit === id) ? '' : id;
+            pathOpenUnit = next;
+            if (!next) pathOpenAct = '';
+            if (next) browseUnit = next;
+            renderA1Chips();
+            renderUnitStrip();
+            renderSpeakPath();
+            if (!next) return;
+            await Promise.all([fetchUnitJson(next), fetchActivities(next)]);
+            if (pathOpenUnit === next) renderSpeakPath();
+        }
+        async function startPathLearnNow() {
+            const id = pathOpenUnit || learningUnitId();
+            browseUnit = id;
+            await startSpeak(0, id);
+        }
         function speakImg(card) {
             const lv = speakLevel();
             const u = speakUnitId();
-            const base = ((speakStatus && speakStatus.base) || (document.getElementById('speak_base') && document.getElementById('speak_base').value) || '').replace(/\/$/, '');
-            if (base) return base + '/speak/' + lv + '/' + u + '/' + card.id + '.jpg';
-            return '/speak/' + lv + '/' + u + '/' + card.id + '.jpg';
+            const path = '/speak/' + lv + '/' + u + '/' + card.id + '.jpg';
+            const host = courseHost();
+            return host ? host + path : path;
         }
         function speakImgFallback(card) {
-            return '/speak/' + speakLevel() + '/' + speakUnitId() + '/' + card.id + '.jpg';
+            const path = '/speak/' + speakLevel() + '/' + speakUnitId() + '/' + card.id + '.jpg';
+            const hosts = courseHosts();
+            if (hosts.length > 1) return hosts[1] + path;
+            return path;
         }
         async function postSpeak(body) {
             const resp = await fetch('/api/speak', {
@@ -3301,7 +3968,9 @@
             if (!st || st.error) return;
             speakStatus = Object.assign(speakStatus, st);
             const baseEl = document.getElementById('speak_base');
-            if (baseEl && document.activeElement !== baseEl && st.base) baseEl.value = st.base;
+            const one = st.live || st.base || st.lan || st.cloud || '';
+            if (baseEl && document.activeElement !== baseEl && one) baseEl.value = one;
+            paintSpeakSource();
             const ageEl = document.getElementById('profile_age');
             if (ageEl && document.activeElement !== ageEl && st.age != null) ageEl.value = st.age > 0 ? st.age : '';
             const dobEl = document.getElementById('profile_dob');
@@ -3314,13 +3983,19 @@
             if (promptEl && st.xiaozhi_prompt) promptEl.value = st.xiaozhi_prompt;
             const promptEn = document.getElementById('ai_xiaozhi_prompt_en');
             if (promptEn && st.xiaozhi_prompt_en) promptEn.value = st.xiaozhi_prompt_en;
+            const dailyPrompt = document.getElementById('xiaozhi_daily_prompt');
+            if (dailyPrompt && st.xiaozhi_daily_prompt) dailyPrompt.value = st.xiaozhi_daily_prompt;
             fillSpeakIdentity(st);
             fillDailyIdentity(st);
             const subR = document.getElementById('sub_robot');
             if (subR && document.activeElement !== subR && st.sub_robot != null) subR.checked = !!st.sub_robot;
             const subU = document.getElementById('sub_stt');
             if (subU && document.activeElement !== subU && st.sub_stt != null) subU.checked = !!st.sub_stt;
-            paintExplainLevel(st.explain_level || 'off');
+            paintExplainLevel(st.explain_level === 'off' ? 'minimal' : (st.explain_level || 'minimal'));
+            if (st.progress_hex) progressHex = st.progress_hex;
+            studentSlot = 0;
+            paintAssessment(st.assessment || 'guided');
+            renderStudentBars(st.students);
             const nameEl = document.getElementById('profile_name');
             if (nameEl) {
                 const name = (document.getElementById('student_name') && document.getElementById('student_name').value.trim())
@@ -3332,7 +4007,6 @@
             document.getElementById('app_conn_title').textContent = on ? 'Đang học cùng Emun' : 'Đã kết nối Emun';
             const isNew = (st.style || 'old') === 'new';
             const slot = st.slot || 'teach';
-            if (st.on && st.unit) browseUnit = st.unit;
             if (on) {
                 document.getElementById('app_conn_sub').textContent = 'Robot đang học — hãy nói với Emun. Ảnh thẻ hiện trên mặt robot.';
             } else if (isNew && slot === 'daily') {
@@ -3360,7 +4034,11 @@
                 ndBtn.textContent = onDaily ? '✅ Đang dùng — lưu lại để chào' : '💬 Lưu và bật giao tiếp hằng ngày';
             }
             renderSpeakHome();
-            renderSpeakPath();
+            const pathKey = [st.unit, st.on ? 1 : 0, st.progress_hex || '', st.student_slot].join('|');
+            if (pathKey !== lastSpeakPathKey) {
+                lastSpeakPathKey = pathKey;
+                renderSpeakPath();
+            }
             renderSpeakProfile();
         }
         async function refreshSpeakStatus() {
@@ -3383,7 +4061,6 @@
             }
             if (name === 'ota') {
                 pollOtaStatus();
-                if (!otaCheckedOnce) checkOfficialUpdate();
             }
             ['home','path','buddy','help','rank','profile','setup','control','ota','tools'].forEach(function (n) {
                 const panel = document.getElementById('app_' + n);
@@ -3391,7 +4068,12 @@
                 if (panel) panel.classList.toggle('active', n === name);
                 if (nav) nav.classList.toggle('active', n === name);
             });
-            if (name === 'path') { renderA1Chips(); renderSpeakPath(); }
+            if (name === 'path') {
+                renderA1Chips();
+                renderSpeakPath();
+                fetchCatalog().then(function () { renderSpeakPath(); });
+                if (pathOpenUnit) Promise.all([fetchUnitJson(pathOpenUnit), fetchActivities(pathOpenUnit)]).then(function () { renderSpeakPath(); });
+            }
             if (name === 'rank') renderSpeakRank();
             if (name === 'home') renderSpeakHome();
             window.scrollTo(0, 0);
@@ -3426,19 +4108,9 @@
             speakUnit = null;
             const lv = speakLevel();
             const uid = speakUnitId();
-            try {
-                const base = ((speakStatus && speakStatus.base) || '').replace(/\/$/, '');
-                if (base) {
-                    const res = await fetch(base + '/speak/' + lv + '/' + uid + '.json', { cache: 'no-store' });
-                    if (res.ok) speakUnit = await res.json();
-                }
-            } catch (e) {}
-            if (!speakUnit) {
-                try {
-                    const res = await fetch('/speak/' + lv + '/' + uid + '.json', { cache: 'no-store' });
-                    if (res.ok) speakUnit = await res.json();
-                } catch (e) {}
-            }
+            speakUnit = await fetchCourse('speak/' + lv + '/' + uid + '.json');
+            if (speakUnit && (speakUnit.unit || uid)) unitCache[speakUnit.unit || uid] = speakUnit;
+            await Promise.all([fetchCatalog(), fetchActivities(uid)]);
             renderSpeakHome();
             renderSpeakPath();
             renderSpeakProfile();
@@ -3472,16 +4144,17 @@
             const ageHome = document.getElementById('app_hello_age');
             const ageN = parseInt(ageEl && ageEl.value, 10) || ageFromDob((document.getElementById('profile_dob') || {}).value);
             if (ageHome) ageHome.textContent = ageN > 0 ? (ageN + ' tuổi') : '';
-            const info = a1UnitInfo(speakUnitId());
-            const unitTitle = speakUnit ? ((speakUnit.level || 'A1').toUpperCase() + ' · ' + (speakUnit.title_en || speakUnit.theme)) : ('A1 · ' + info[1]);
+            const info = a1UnitInfo(learningUnitId());
+            const learnJson = unitCache[learningUnitId()] || (speakUnit && speakUnit.unit === learningUnitId() ? speakUnit : null);
+            const unitTitle = learnJson ? ((learnJson.level || 'A1').toUpperCase() + ' · ' + (learnJson.title_en || learnJson.theme)) : ('A1 · ' + (info[1] || ''));
             const nowTitle = document.getElementById('now_unit_title');
             if (nowTitle) nowTitle.textContent = 'Chương trình học của ' + name;
             const nowGoal = document.getElementById('now_unit_goal');
             if (nowGoal) nowGoal.textContent = 'Bấm để robot bắt đầu dạy · ' + info[1];
             const homeLevel = document.getElementById('home_level');
-            if (homeLevel) homeLevel.textContent = 'CON ĐANG HỌC · ' + ((speakUnit && speakUnit.level) || 'A1').toUpperCase();
+            if (homeLevel) homeLevel.textContent = 'CON ĐANG HỌC · ' + ((learnJson && learnJson.level) || 'A1').toUpperCase();
             const homeTheme = document.getElementById('home_theme');
-            if (homeTheme) homeTheme.textContent = (speakUnit && (speakUnit.title_en || speakUnit.theme)) || info[1];
+            if (homeTheme) homeTheme.textContent = (learnJson && (learnJson.title_en || learnJson.theme)) || info[1];
             const line = document.getElementById('speak_unit_line');
             if (line) line.textContent = unitTitle;
             const goal = document.getElementById('speak_unit_goal');
@@ -3519,17 +4192,21 @@
             });
         }
         function renderSpeakPath() {
-            const cur = speakUnitId();
-            const info = a1UnitInfo(cur);
-            const n = Number(cur.slice(1)) || 1;
+            const learning = learningUnitId();
+            const learnInfo = a1UnitInfo(learning);
+            const learnN = Number(String(learning).replace(/\D/g, '')) || 1;
+            const learnJson = unitCache[learning];
             const lvl = document.getElementById('path_level');
-            if (lvl) lvl.textContent = 'CON ĐANG HỌC CHỦ ĐỀ ' + n;
+            if (lvl) lvl.textContent = 'CON ĐANG HỌC CHỦ ĐỀ ' + learnN;
             const theme = document.getElementById('path_theme');
-            if (theme) theme.textContent = (speakUnit && (speakUnit.title_en || speakUnit.theme)) || info[1];
+            if (theme) theme.textContent = (learnJson && (learnJson.title_en || learnJson.theme)) || learnInfo[1];
             const illu = document.querySelector('#app_path .now-learn .illu');
             if (illu) {
-                const cover = unitCoverUrl(cur, info[2]);
-                illu.innerHTML = '<img src="' + cover + '" alt="" style="width:72px;height:72px;border-radius:16px;object-fit:cover;background:#efe8ff" onerror="this.parentNode.textContent=\'' + (info[3] || '📚') + '\'">';
+                const coverId = firstCoverId(learning);
+                const cover = unitCoverUrl(learning, coverId);
+                illu.innerHTML = cover
+                    ? '<img src="' + cover + '" alt="" style="width:72px;height:72px;border-radius:16px;object-fit:cover;background:#efe8ff" onerror="this.parentNode.textContent=\'📚\'">'
+                    : '📚';
             }
             renderA1Chips();
             renderUnitStrip();
@@ -3540,52 +4217,67 @@
                 box.innerHTML = '<div class="app-card"><h2>STEM</h2><p class="hint">Sắp có hoạt động STEM trên robot. Hiện học lộ trình A1 trước.</p></div>';
                 return;
             }
-            const nav = document.createElement('div');
-            nav.className = 'unit-nav';
-            const prev = shiftUnitId(cur, -1);
-            const next = shiftUnitId(cur, 1);
-            nav.innerHTML =
-                '<button type="button" ' + (prev ? '' : 'disabled ') + 'onclick="selectA1Unit(\'' + (prev || cur) + '\')">‹ Unit trước</button>' +
-                '<button type="button" onclick="startA1Unit(\'' + cur + '\')">Học unit này</button>' +
-                '<button type="button" ' + (next ? '' : 'disabled ') + 'onclick="selectA1Unit(\'' + (next || cur) + '\')">Unit sau ›</button>';
-            box.appendChild(nav);
-            const cards = (speakUnit && speakUnit.cards) || [];
-            const doneN = Math.min(speakDoneIndex(), cards.length);
+            const openId = pathOpenUnit;
+            const units = a1UnitList();
+            const doneActs = countCompletedActs();
+            const pctEl = document.getElementById('track_a1_pct');
+            const totalActs = units.reduce(function (n, u) {
+                return n + (u.activity_count || ((actCache[u.id || u[0]] && actCache[u.id || u[0]].activities) || []).length || 0);
+            }, 0);
+            if (pctEl) pctEl.textContent = Math.round(100 * doneActs / Math.max(1, totalActs)) + '%';
             const head = document.createElement('div');
             head.className = 'sec-h';
-            head.innerHTML = '<h2>Thẻ unit ' + n + '</h2><span class="link">' + doneN + '/' + cards.length + '</span>';
+            head.innerHTML = '<h2>43 chủ đề</h2><span class="link">Bấm để xem 8 hoạt động</span>';
             box.appendChild(head);
-            if (!cards.length) {
-                const empty = document.createElement('div');
-                empty.className = 'app-card';
-                empty.innerHTML = '<p class="hint">Chưa tải được JSON unit. Kiểm tra máy :8765 rồi bấm Học unit này.</p>';
-                box.appendChild(empty);
-            }
-            cards.forEach(function (c, i) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'topic-row';
-                btn.onclick = function () { openLesson(i); };
-                const fallback = speakImgFallback(c);
-                const mark = speakCardDone(i) ? '<span class="done-dot">✓</span>' : '';
-                btn.innerHTML = '<img src="' + speakImg(c) + '" alt="" onerror="this.onerror=null;this.src=\'' + fallback + '\'">' +
-                    '<div class="t"><span class="tag ' + c.type + '">' + speakTypeLabel(c.type) +
-                    '</span><b>' + (c.en || '') + '</b><small>' + (c.vi || '') + '</small></div>' + mark;
-                box.appendChild(btn);
-            });
-            const more = document.createElement('div');
-            more.className = 'sec-h';
-            more.innerHTML = '<h2>Mọi chủ đề — bấm để xem, Học unit này để robot dạy</h2>';
-            box.appendChild(more);
-            A1_UNITS.forEach(function (u, i) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'topic-row' + (u[0] === cur ? ' current' : '');
-                btn.onclick = function () { selectA1Unit(u[0]); };
-                const src = unitCoverUrl(u[0], u[2]);
-                btn.innerHTML = '<img src="' + src + '" alt="" onerror="this.style.background=\'#efe8ff\'">' +
-                    '<div class="t"><small>CHỦ ĐỀ ' + (i + 1) + (u[0] === cur ? ' · ĐANG XEM' : '') + '</small><b>' + u[1] + '</b></div>';
-                box.appendChild(btn);
+            units.forEach(function (u, i) {
+                const uid = u.id || u[0];
+                const wrap = document.createElement('div');
+                const isOpen = uid === openId;
+                const isLearn = uid === learning;
+                wrap.className = 'path-topic' + (isOpen ? ' open' : '') + (isLearn ? ' learning' : '');
+                const src = unitCoverUrl(uid, firstCoverId(uid));
+                const mark = isLearn ? ' · ĐANG HỌC' : '';
+                const doneU = countUnitDone(uid);
+                const nAct = (u.activity_count || ((actCache[uid] && actCache[uid].activities) || []).length || 0);
+                const thumb = src
+                    ? '<img src="' + src + '" alt="" onerror="this.style.background=\'#efe8ff\'">'
+                    : '<span class="path-thumb" aria-hidden="true"></span>';
+                wrap.innerHTML =
+                    '<button type="button" class="path-topic-h" onclick="togglePathTopic(\'' + uid + '\')">' +
+                    thumb +
+                    '<div class="t"><small>CHỦ ĐỀ ' + (u.number || (i + 1)) + mark + ' · ' + doneU + '/' + nAct + '</small><b>' +
+                    (u.title_en || u[1]) + '</b><small>' + (u.title_vi || '') + '</small></div>' +
+                    '<span class="chev">›</span></button>';
+                const words = document.createElement('div');
+                words.className = 'path-words';
+                if (isOpen) {
+                    const meta = a1UnitList().find(function (x) { return x.id === uid; }) || {};
+                    words.innerHTML = '<p class="goal">' + (meta.goal_vi || (unitCache[uid] && unitCache[uid].goal_vi) || 'Đang tải mục tiêu…') + '</p>';
+                    const acts = (actCache[uid] && actCache[uid].activities) || [];
+                    if (!acts.length) {
+                        words.innerHTML += '<p class="hint">Đang tải hoạt động từ máy nhà / Pages…</p>';
+                    } else {
+                        acts.forEach(function (a, ai) {
+                            const st = actStatus(uid, ai, a.id);
+                            const locked = a.type === 'unit_review' && !reviewUnlocked(uid, actCache[uid]);
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            if (locked) btn.disabled = true;
+                            btn.className = 'path-act' + (pathOpenAct === a.id ? ' on' : '');
+                            btn.onclick = function () { openActivityPreview(uid, a.id); };
+                            const label = st === 'needs_review' ? 'Cần ôn' : st === 'completed' ? 'Xong' : st === 'in_progress' ? 'Dở' : (locked ? 'Khóa' : 'Chưa học');
+                            btn.innerHTML = '<div class="ico">' + (ai + 1) + '</div><div style="flex:1"><b>' + (a.title_vi || a.id) +
+                                '</b><small>' + (a.description_vi || '') + ' · ' + ((a.target_ids || []).length || '?') + ' cụm · ' + (a.duration_minutes || '?') + ' phút</small></div>' +
+                                '<span class="st ' + (st === 'needs_review' ? 'need' : (st === 'not_started' || locked ? 'wait' : '')) + '">' + label + '</span>';
+                            words.appendChild(btn);
+                            if (pathOpenAct === a.id) {
+                                words.appendChild(renderActivityWords(uid, a));
+                            }
+                        });
+                    }
+                }
+                wrap.appendChild(words);
+                box.appendChild(wrap);
             });
         }
         function renderSpeakRank() {
@@ -3665,23 +4357,36 @@
             return i < 0 ? 0 : i;
         }
         let startSpeakBusy = false;
-        async function startSpeak(index) {
+        function setCourseLoading(on, title, sub) {
+            const el = document.getElementById('course_loading');
+            const t = document.getElementById('course_loading_title');
+            const s = document.getElementById('course_loading_sub');
+            if (t) t.textContent = title || 'Đang tải khóa học';
+            if (s) s.textContent = sub || 'Robot đang kéo bài và hình từ server…';
+            if (el) el.hidden = !on;
+        }
+        async function startSpeak(index, unitId, activityId) {
             if (startSpeakBusy) return;
             startSpeakBusy = true;
+            setCourseLoading(true);
             try {
+                if (unitId) browseUnit = unitId;
                 const body = {
                     action: 'start',
                     level: speakLevel(),
-                    unit: speakUnitId(),
+                    unit: unitId || speakUnitId(),
                     index: (index == null ? -1 : index)
                 };
+                if (activityId) body.activity = activityId;
                 const data = await postSpeak(body);
                 if (data && data.error) throw new Error(data.error);
                 await refreshSpeakStatus();
-                showToast('✅ Robot đang vào bài học — đang kết nối AI dạy và chào');
+                showToast(activityId ? '✅ Robot đang vào hoạt động' : '✅ Robot đang vào bài học — đang kết nối AI dạy và chào');
+                if (activityId) openActPlayer();
             } catch (e) {
-                showToast('❌ ' + (e.message || 'Không bắt đầu được. Kiểm tra máy :8765'));
+                showToast('❌ ' + (e.message || 'Không bắt đầu được. Kiểm tra máy :8765 hoặc Pages'));
             } finally {
+                setCourseLoading(false);
                 startSpeakBusy = false;
             }
         }
@@ -3694,13 +4399,31 @@
                 showToast('❌ ' + e.message);
             }
         }
+        function paintSpeakSource() {
+            const hint = document.getElementById('speak_src_hint');
+            if (!hint) return;
+            const raw = ((document.getElementById('speak_base') || {}).value || '').trim().toLowerCase();
+            if (raw.indexOf('https://') === 0) {
+                hint.textContent = 'HTTPS — robot dùng đúng link này, không chuyển sang máy nhà.';
+            } else if (raw.indexOf('http://') === 0) {
+                hint.textContent = 'HTTP — robot dùng đúng link này, không chuyển sang Pages.';
+            } else if (raw) {
+                hint.textContent = 'Thêm http:// hoặc https:// ở đầu link.';
+            } else {
+                hint.textContent = 'Một link. Bắt đầu bằng http:// thì robot kéo HTTP. https:// thì HTTPS. Không dự phòng link kia.';
+            }
+        }
         async function saveSpeakBase() {
-            const base = (document.getElementById('speak_base').value || '').trim();
-            if (!base) { showToast('Nhập địa chỉ máy, ví dụ http://192.168.100.161:8765'); return; }
+            const base = ((document.getElementById('speak_base') || {}).value || '').trim().replace(/\/$/, '');
+            if (!base) { showToast('Nhập một địa chỉ http:// hoặc https://'); return; }
+            if (!/^https?:\/\//i.test(base)) { showToast('Link phải bắt đầu bằng http:// hoặc https://'); return; }
             try {
                 await postSpeak({ action: 'base', base: base });
+                Object.keys(unitCache).forEach(function (k) { delete unitCache[k]; });
+                Object.keys(actCache).forEach(function (k) { delete actCache[k]; });
+                a1Catalog = null;
                 await loadSpeakUnit();
-                showToast('✅ Đã lưu địa chỉ bài học');
+                showToast('✅ Đã lưu ' + (/^https:\/\//i.test(base) ? 'HTTPS' : 'HTTP') + ' — ' + base);
             } catch (e) {
                 showToast('❌ ' + e.message);
             }
@@ -3718,9 +4441,14 @@
         }
         const EXPLAIN_LEVEL_INFO = {
             off: {
-                title: 'Chỉ nói',
-                note: 'Đang chọn Chỉ nói: robot đọc từ / câu tiếng Anh rồi kêu bé nhắc lại. Không giảng nghĩa, không đưa ví dụ. Hợp khi bé đã biết từ, muốn luyện nói nhanh.',
-                toast: '✅ Chỉ nói — không giảng nghĩa'
+                title: 'Ít',
+                note: 'Đang chọn Ít: robot đọc từ / câu tiếng Anh rồi kêu bé nhắc lại. Không đưa bản giải thích basic/detailed.',
+                toast: '✅ Ít — nói mẫu, ít giảng'
+            },
+            minimal: {
+                title: 'Ít',
+                note: 'Đang chọn Ít: robot đọc từ / câu tiếng Anh rồi kêu bé nhắc lại. Không đưa bản giải thích basic/detailed.',
+                toast: '✅ Ít — nói mẫu, ít giảng'
             },
             basic: {
                 title: 'Cơ bản',
@@ -3738,12 +4466,14 @@
             return r ? r.value : 'off';
         }
         function paintExplainLevel(level) {
-            const lv = EXPLAIN_LEVEL_INFO[level] ? level : 'off';
-            const radio = document.querySelector('input[name="explain_level"][value="' + lv + '"]');
+            const lv = EXPLAIN_LEVEL_INFO[level] ? (level === 'off' ? 'minimal' : level) : 'minimal';
+            const radio = document.querySelector('input[name="explain_level"][value="' + lv + '"]') ||
+                document.querySelector('input[name="explain_level"][value="minimal"]');
             if (radio) radio.checked = true;
-            paintAiPick('explain_pick', lv);
-            document.querySelectorAll('.ex-btns button').forEach(function (btn) {
-                btn.classList.toggle('on', btn.getAttribute('data-ex') === lv);
+            paintAiPick('explain_pick', lv === 'minimal' ? 'off' : lv);
+            document.querySelectorAll('.ex-btns button[data-ex]').forEach(function (btn) {
+                const v = btn.getAttribute('data-ex');
+                btn.classList.toggle('on', v === lv || (lv === 'minimal' && v === 'off'));
             });
             const info = EXPLAIN_LEVEL_INFO[lv];
             document.querySelectorAll('[data-ex-note]').forEach(function (el) {
@@ -3752,7 +4482,8 @@
             const sub = document.getElementById('explain_help_sub');
             if (sub) sub.textContent = 'Đang chọn: ' + info.title;
             document.querySelectorAll('.ex-help-list li').forEach(function (li) {
-                li.classList.toggle('on', li.getAttribute('data-ex') === lv);
+                const ex = li.getAttribute('data-ex');
+                li.classList.toggle('on', ex === lv || (lv === 'minimal' && ex === 'off'));
             });
         }
         async function saveExplainLevel(level) {
@@ -3796,8 +4527,37 @@
             const btn = document.getElementById('btn_save_speak_ai');
             if (btn) btn.textContent = be === 'gemini' ? 'Lưu Gemini học bài' : 'Lưu Xiaozhi học bài';
         }
+        function speakSttCodesSelected() {
+            return Array.prototype.map.call(
+                document.querySelectorAll('input[name="speak_stt_code"]:checked'),
+                function (el) { return el.value; }
+            );
+        }
+        function paintSpeakSttCodes() {
+            const on = !!(document.getElementById('speak_stt_en') && document.getElementById('speak_stt_en').checked);
+            const box = document.getElementById('speak_stt_codes');
+            if (box) box.style.opacity = on ? '1' : '0.45';
+            document.querySelectorAll('#speak_stt_codes label').forEach(function (lab) {
+                const inp = lab.querySelector('input');
+                lab.classList.toggle('on', !!(inp && inp.checked));
+            });
+        }
+        function fillSpeakStt(st) {
+            const en = document.getElementById('speak_stt_en');
+            if (en) en.checked = st.stt_english !== false;
+            const codes = String(st.stt_codes || 'en-US').split(/[,;|\s]+/).filter(Boolean);
+            document.querySelectorAll('input[name="speak_stt_code"]').forEach(function (inp) {
+                inp.checked = codes.indexOf(inp.value) >= 0;
+            });
+            if (!speakSttCodesSelected().length) {
+                const us = document.querySelector('input[name="speak_stt_code"][value="en-US"]');
+                if (us) us.checked = true;
+            }
+            paintSpeakSttCodes();
+        }
         function fillSpeakIdentity(st) {
             if (!st) return;
+            fillSpeakStt(st);
             const macEl = document.getElementById('speak_mac');
             if (macEl && document.activeElement !== macEl && st.mac != null) macEl.value = st.mac;
             const idEl = document.getElementById('speak_client_id');
@@ -3882,7 +4642,7 @@
             window.scrollTo(0, 0);
         }
         function goLearnEnglish() {
-            startSpeak();
+            startSpeak(0, learningUnitId());
         }
         async function goDailyChat() {
             switchApp('home');
@@ -4023,6 +4783,8 @@
                 return;
             }
             try {
+                let codes = speakSttCodesSelected();
+                if (!codes.length) codes = ['en-US'];
                 const data = await postSpeak({
                     action: 'identity',
                     mac: mac,
@@ -4030,7 +4792,9 @@
                     ai_backend: backend,
                     key: (document.getElementById('speak_ai_key').value || '').trim(),
                     model: (document.getElementById('speak_ai_model').value || '').trim(),
-                    voice: document.getElementById('speak_ai_voice').value || ''
+                    voice: document.getElementById('speak_ai_voice').value || '',
+                    stt_english: !!(document.getElementById('speak_stt_en') && document.getElementById('speak_stt_en').checked),
+                    stt_codes: codes.join(',')
                 });
                 if (data && data.error) throw new Error(data.error);
                 document.getElementById('speak_ai_key').value = '';
@@ -4048,6 +4812,7 @@
             const name = (document.getElementById('profile_student_name') && document.getElementById('profile_student_name').value || '').trim();
             try {
                 await postSpeak({ action: 'profile', age: age, likes: likes, dob: dob, name: name });
+                await postSpeak({ action: 'student', slot: studentSlot, name: name });
                 const oldName = document.getElementById('student_name');
                 if (oldName) oldName.value = name;
                 if (currentConfig) currentConfig.student_name = name;

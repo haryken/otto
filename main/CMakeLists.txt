@@ -748,6 +748,8 @@ elseif(CONFIG_BOARD_TYPE_OTTO_ROBOT)
     set(BUILTIN_ICON_FONT font_awesome_16_4)
     set(DEFAULT_EMOJI_COLLECTION otto-gif)
     list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot)
+    # GLOB below is cached; keep this file in SOURCES so incremental builds still link it.
+    list(APPEND SOURCES ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/speak_progress.cc)
     list(APPEND OTTO_EMBED_FILES
         ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/self_control.html
         ${CMAKE_CURRENT_LIST_DIR}/boards/otto-robot/trim_guide.png
@@ -833,6 +835,7 @@ else()
     )
 endif()
 list(APPEND SOURCES ${BOARD_SOURCES})
+list(REMOVE_DUPLICATES SOURCES)
 
 # Select audio processor according to Kconfig
 if(CONFIG_USE_AUDIO_PROCESSOR)

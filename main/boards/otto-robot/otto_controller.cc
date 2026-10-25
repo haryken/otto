@@ -1332,12 +1332,19 @@ public:
 
         mcp_server.AddTool(
             "self.speak.status",
-            "Trang thai che do hoc noi. need_intro/phase=intro: CHI noi field say, chua day tu. "
-            "phase=done/finished: het chu de, CHI noi field say, hoi hoc lai, KHONG daily. "
-            "on=true va phase=card: goi card + show. on=false: tro chuyen binh thuong.",
+            "Trang thai hoc noi. Xiaozhi DANG HOC: CAM goi (firmware tu lo, goi de gay 400). "
+            "Gemini: phase=card goi card+show. phase=done: CHI noi say. "
+            "on=false: tro chuyen binh thuong.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                std::string skip = SpeakLesson::Get().XiaozhiSkipToolJson();
+                if (!skip.empty()) {
+                    return skip;
+                }
+                if (SpeakLesson::Get().UsesXiaozhiTeach()) {
+                    return SpeakLesson::Get().XiaozhiTeachStatus();
+                }
                 return SpeakLesson::Get().StatusJson();
             });
 
@@ -1351,49 +1358,101 @@ public:
                 Property("level", kPropertyTypeString, "a1"),
                 Property("unit", kPropertyTypeString, "u01"),
                 Property("index", kPropertyTypeInteger, -1),
-                Property("backend", kPropertyTypeString, "")
+                Property("backend", kPropertyTypeString, ""),
+                Property("activity", kPropertyTypeString, "")
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 std::string level = properties["level"].value<std::string>();
                 std::string unit = properties["unit"].value<std::string>();
                 int index = properties["index"].value<int>();
                 std::string backend = properties["backend"].value<std::string>();
-                std::string out = SpeakLesson::Get().Start(level, unit, index, backend);
+                std::string activity = properties["activity"].value<std::string>();
+                std::string out = SpeakLesson::Get().Start(level, unit, index, backend, false, activity);
                 if (out.find("\"error\"") != std::string::npos) {
                     return out;
                 }
-                return std::string("Đã sang học tiếng Anh. Đang đóng phiên cũ và kết nối lại (~vài giây), rồi chào như lúc đổi cấp độ. "
-                                   "Lượt sau gọi self.speak.status; phase=intro thì CHỈ nói field say.\n") + out;
+                if (SpeakLesson::Get().UsesXiaozhiTeach()) {
+                    std::string skip = SpeakLesson::Get().XiaozhiSkipToolJson();
+                    if (!skip.empty() && out.find("skip") != std::string::npos) {
+                        return skip;
+                    }
+                    return std::string("Đang học. Ảnh+JSON robot đã có. Nói teacher. "
+                                       "CẤM start/heard/next. card tối đa 1 lần.\n") + out;
+                }
+                return std::string("Đã bật chế độ học. Robot sẽ đóng phiên giao tiếp và mở đúng AI dạy học đã lưu (Gemini nếu đang chọn Gemini). "
+                                   "Chỉ nói: Mình chuyển sang học nhé! rồi DỪNG. Đừng gọi card/show trên phiên giao tiếp này.\n") + out;
             });
 
         mcp_server.AddTool(
             "self.speak.card",
-            "Lay THE HOC HIEN TAI. phase=intro: CHI noi field say, dung, cho tre. "
-            "phase=card: roi self.speak.show, noi HET field teacher "
-            "(teacher da gom giai thich neu phu huynh chon Co ban/Chi tiet). Khong cat, khong bia.",
+            "Lay THE HOC HIEN TAI. Xiaozhi DANG HOC: CAM goi neu da noi duoc bai. "
+            "Anh firmware tu hien. Gemini: phase=card roi show, noi HET teacher.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                if (SpeakLesson::Get().IsTeaching()) {
+                    return SpeakLesson::Get().XiaozhiTeachStatus();
+                }
                 return SpeakLesson::Get().CurrentCardJson();
             });
 
         mcp_server.AddTool(
             "self.speak.show",
-            "Hien anh the hien tai len mat robot. Goi sau card khi phase=card. Bo qua neu phase=intro.",
+            "Hien anh the hien tai. Xiaozhi: CAM goi, firmware da hien anh (goi = 400). "
+            "Gemini: goi sau card khi phase=card.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                if (SpeakLesson::Get().IsTeaching()) {
+                    return "{\"ok\":true,\"shown\":true,\"rule\":\"Ảnh đã hiện. CẤM gọi show. Nói teacher.\"}";
+                }
                 return SpeakLesson::Get().ShowCurrent();
             });
 
         mcp_server.AddTool(
+            "self.speak.heard",
+            "Gemini: cham cau tre, gui text=loi vua nghe. "
+            "Xiaozhi DANG HOC: CAM goi heard (firmware tu cham STT). Goi heard 2 lan = loi 400 tool_call_id. "
+            "Chi dung Gemini, khong dung Xiaozhi khi on=true.",
+            PropertyList({
+                Property("text", kPropertyTypeString, ""),
+                Property("verdict", kPropertyTypeString, "")
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                auto& lesson = SpeakLesson::Get();
+                std::string skip = lesson.XiaozhiSkipToolJson();
+                if (!skip.empty()) {
+                    return skip;
+                }
+                if (lesson.UsesXiaozhiTeach()) {
+                    return "{\"ok\":true,\"skip\":true,\"rule\":\"Firmware tự chấm STT. CẤM heard. Nói feedback/teacher.\"}";
+                }
+                if (lesson.HoldMicForIntro()) {
+                    return "{\"ok\":true,\"skip\":true,\"rule\":\"Đang dạy thẻ mới một hơi. CẤM heard. Đọc hết combo/teacher. CẤM bắt đọc thẻ cũ.\"}";
+                }
+                std::string out = lesson.Evaluate(
+                    properties["text"].value<std::string>(),
+                    properties["verdict"].value<std::string>(),
+                    "voice");
+                lesson.KickAfterGrade();
+                return out;
+            });
+
+        mcp_server.AddTool(
             "self.speak.next",
-            "Tre da noi (bat ky gi cung tinh dung). Khen ngan, goi tool nay de sang the sau, roi show. "
-            "Neu phase=done: het chu de — CHI noi field say. Khong next/daily. "
-            "Hoc lai: start index=0 cung unit. Tiep: start index=0 unit=next_unit. Nghi: self.speak.off.",
+            "Gemini: sang the khi next_action=next. "
+            "Xiaozhi DANG HOC: CAM goi next (firmware tu sang the, goi = 400). "
+            "phase=done: CHI noi say.",
             PropertyList(),
             [](const PropertyList& properties) -> ReturnValue {
                 (void)properties;
+                std::string skip = SpeakLesson::Get().XiaozhiSkipToolJson();
+                if (!skip.empty()) {
+                    return skip;
+                }
+                if (SpeakLesson::Get().UsesXiaozhiTeach()) {
+                    return "{\"ok\":true,\"skip\":true,\"rule\":\"Firmware tự sang thẻ. CẤM next. Nói teacher.\"}";
+                }
                 return SpeakLesson::Get().Next();
             });
 

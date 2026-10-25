@@ -23,6 +23,9 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
     virtual void ShowQrCode(const char* text) override;
     virtual void HideQrCode() override;
+    /** Full-screen face text while JSON/JPEG fetch; hide when the card image lands. */
+    void ShowCourseLoading(const char* text);
+    void HideCourseLoading();
     virtual void SetupUI() override;
     virtual void RefreshChatOverlay() override;
     virtual void UpdateStatusBar(bool update_all = false) override;
@@ -43,9 +46,12 @@ class OttoEmojiDisplay : public SpiLcdDisplay {
 
     lv_obj_t* qr_overlay_ = nullptr;
     lv_obj_t* qr_image_ = nullptr;
+    lv_obj_t* load_overlay_ = nullptr;
+    lv_obj_t* load_label_ = nullptr;
     std::unique_ptr<LvglImage> qr_image_holder_;
     esp_timer_handle_t qr_timer_ = nullptr;
     bool qr_visible_ = false;
+    bool load_visible_ = false;
     bool talk_replaces_battery_ = false;
     const char* talk_icon_ = nullptr;
     std::string last_chat_role_;
