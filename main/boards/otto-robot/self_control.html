@@ -716,7 +716,7 @@
             <button type="button" class="menu-row" onclick="startSpeak()"><span class="menu-ico" style="background:#fff4d6">🎭</span><span><b>Nhập vai tình huống</b><small>Học thẻ + hỏi đáp trên robot</small></span><span class="chev">›</span></button>
             <button type="button" class="menu-row" onclick="openQuiz()"><span class="menu-ico" style="background:#e8f0ff">🏆</span><span><b>Thử thách đố vui</b><small>Nhìn hình, đoán từ</small></span><span class="chev">›</span></button>
             <div class="grp">Giải trí</div>
-            <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#ffe8f2">🎵</span><span><b>Bài hát</b><small>Nhảy / nhạc trên robot</small></span><span class="chev">›</span></button>
+            <button type="button" class="menu-row" onclick="switchApp('control')"><span class="menu-ico" style="background:#ffe8f2">🎵</span><span><b>Nhạc YouTube</b><small>Gõ tên bài, phát loa robot</small></span><span class="chev">›</span></button>
             <button type="button" class="menu-row" onclick="openLesson(0)"><span class="menu-ico" style="background:#e7fbf7">📖</span><span><b>Truyện thẻ</b><small>Lật thẻ bài trên điện thoại</small></span><span class="chev">›</span></button>
         </div>
 
@@ -1231,6 +1231,16 @@
 
     <div id="slot_control">
     <div id="tab_control" class="tab-panel">
+        <div class="card">
+            <h2>🎵 Nhạc YouTube</h2>
+            <p class="hint">Gõ tên bài hoặc ca sĩ. Robot tìm trên YouTube rồi phát loa. Khi đang giao tiếp cũng nói: «phát nhạc Baby Shark».</p>
+            <input type="text" id="yt_query" placeholder="Ví dụ: Baby Shark, Đen Vâu..." autocomplete="off">
+            <div class="btn-row" style="margin-top:10px">
+                <button type="button" class="btn-action home" onclick="playYoutubeMusic()">▶️ Phát</button>
+                <button type="button" class="btn-action stop" onclick="stopYoutubeMusic()">⏹ Dừng nhạc</button>
+            </div>
+            <div class="status" id="yt_status">Chưa phát</div>
+        </div>
         <div class="card">
             <h2>🎮 Di chuyển</h2>
             <p class="hint">Đi/quay xong tự Home (ease-out, thời gian theo góc lệch).</p>
@@ -2411,6 +2421,45 @@
             }
         }
 
+        async function playYoutubeMusic() {
+            const input = document.getElementById('yt_query');
+            const st = document.getElementById('yt_status');
+            const q = ((input && input.value) || '').trim();
+            if (!q) {
+                showToast('Nhập tên bài hoặc ca sĩ');
+                return;
+            }
+            if (st) st.textContent = 'Đang tìm: ' + q + '…';
+            try {
+                const resp = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'music_play', query: q })
+                });
+                const data = await resp.json();
+                if (data && data.success === false) throw new Error(data.error || 'Không phát được');
+                const title = data.title || data.id || q;
+                if (st) st.textContent = 'Đang phát: ' + title;
+                showToast('🎵 Đang phát ' + title);
+            } catch (err) {
+                if (st) st.textContent = 'Lỗi: ' + err.message;
+                showToast('❌ ' + err.message);
+            }
+        }
+        async function stopYoutubeMusic() {
+            const st = document.getElementById('yt_status');
+            try {
+                await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'music_stop' })
+                });
+                if (st) st.textContent = 'Đã dừng';
+                showToast('⏹ Đã dừng nhạc');
+            } catch (err) {
+                showToast('❌ ' + err.message);
+            }
+        }
         async function sendAction(action) {
             const st = document.getElementById('control_status');
             st.textContent = 'Đang gửi: ' + action + '...';

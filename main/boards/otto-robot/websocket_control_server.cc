@@ -8,6 +8,7 @@
 #include "log_buffer.h"
 #include "ota.h"
 #include "otto_course_units.h"
+#include "otto_music_player.h"
 #include "otto_web_control.h"
 #include "speak_lesson.h"
 #include "system_info.h"
@@ -1207,7 +1208,23 @@ esp_err_t WebSocketControlServer::api_action_post_handler(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    std::string err = OttoWebControlAction(action->valuestring);
+    const char* act = action->valuestring;
+    if (strcmp(act, "music_play") == 0) {
+        cJSON* q = cJSON_GetObjectItem(root, "query");
+        const char* query = (cJSON_IsString(q) && q->valuestring) ? q->valuestring : "";
+        std::string result = OttoMusic::PlayFirstSearchResult(query);
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, result.empty() ? "{\"success\":false}" : result.c_str());
+        return ESP_OK;
+    }
+    if (strcmp(act, "music_stop") == 0) {
+        OttoMusic::Stop();
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"success\":true}");
+        return ESP_OK;
+    }
+
+    std::string err = OttoWebControlAction(act);
     cJSON_Delete(root);
     if (!err.empty()) {
         cJSON* out = cJSON_CreateObject();

@@ -6,8 +6,10 @@
 #include <vector>
 
 #include <cJSON.h>
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/idf_additions.h>
 #include <freertos/task.h>
 
 #include <board.h>
@@ -48,7 +50,16 @@ static constexpr UBaseType_t kMusicTaskPriority = 5;
 
 static std::atomic<bool> g_stop_requested{false};
 static std::atomic<bool> g_is_playing{false};
+static std::atomic<bool> g_busy{false};
 static TaskHandle_t g_play_task = nullptr;
+
+static void HoldWifiForMusicHttp() {
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+}
+
+static void ClearMusicBusy() {
+    g_busy.store(false);
+}
 
 static std::string UrlEncodeQuery(const std::string& input) {
     static const char* hex = "0123456789ABCDEF";
@@ -146,7 +157,7 @@ static bool FindMp3PayloadOffset(const uint8_t* data, size_t len, size_t& skip_o
 }
 
 static bool HttpGetBody(const std::string& url, std::string& body, int& status_code) {
-    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    HoldWifiForMusicHttp();
     ESP_LOGI(TAG, "HTTP GET begin: %s", url.c_str());
     auto http = Board::GetInstance().GetNetwork()->CreateHttp(kMusicHttpConnectId);
     if (!http) {
@@ -274,6 +285,7 @@ static void ScheduleRestoreAfterMusic(Application& app) {
 static void FailMusicBeforePlay(Application& app) {
     g_is_playing.store(false);
     g_play_task = nullptr;
+    ClearMusicBusy();
     app.NotifyMusicSearchFailed();
 }
 
@@ -285,6 +297,14 @@ static void SearchAndPlayTask(void* param) {
     std::unique_ptr<std::string> query(static_cast<std::string*>(param));
     ESP_LOGI(TAG, "SearchAndPlayTask enter query=\"%s\" stop=%d playing=%d", query->c_str(),
              g_stop_requested.load() ? 1 : 0, g_is_playing.load() ? 1 : 0);
+    HoldWifiForMusicHttp();
+    // Music-only already closed Xiaozhi. Wait for MQTT/TLS teardown so YouTube
+    // HTTPS is not reset by LOW_POWER goodbye + leftover mbedtls SRAM.
+    for (int i = 0; i < 20 && app.IsAudioChannelOpened(); ++i) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    vTaskDelay(pdMS_TO_TICKS(300));
+    HoldWifiForMusicHttp();
     app.ShowMusicSearchingOnDisplay();
     SearchResult result;
     if (!YoutubeSearchFirst(*query, result)) {
@@ -297,6 +317,7 @@ static void SearchAndPlayTask(void* param) {
         ESP_LOGW(TAG, "SearchAndPlayTask aborted after search (stop requested)");
         g_is_playing.store(false);
         g_play_task = nullptr;
+        ClearMusicBusy();
         vTaskDelete(nullptr);
         return;
     }
@@ -322,8 +343,7 @@ static void StreamMp3Task(void* param) {
 
     auto& app = Application::GetInstance();
     auto& audio = app.GetAudioService();
-    // Music-only closes MQTT and may drop WiFi to LOW_POWER — force PERFORMANCE for stream.
-    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    HoldWifiForMusicHttp();
     audio.SetCaptureSuspended(true);
     audio.SetLocalPlaybackActive(true);
     // Keep wake word on so user can interrupt with Hi,Jason / BOOT.
@@ -350,6 +370,7 @@ static void StreamMp3Task(void* param) {
     }
     http->SetTimeout(kHttpTimeoutMs);
     http->SetHeader("Accept", "audio/mpeg,*/*");
+    HoldWifiForMusicHttp();
 
     if (!http->Open("GET", stream_url)) {
         ESP_LOGE(TAG, "Stream open failed (err %d)", http->GetLastError());
@@ -394,6 +415,7 @@ static void StreamMp3Task(void* param) {
         http->Close();
         g_is_playing.store(false);
         g_play_task = nullptr;
+        ClearMusicBusy();
         if (natural_end) {
             app.NotifyMusicFinished();
         } else {
@@ -406,7 +428,7 @@ static void StreamMp3Task(void* param) {
              http->GetStatusCode());
 
     app.EnterMusicOnlyMode();
-    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    HoldWifiForMusicHttp();
     app.ShowMusicPlayingOnDisplay();
 
     if (g_stop_requested.load()) {
@@ -635,6 +657,8 @@ namespace OttoMusic {
 
 bool IsPlaying() { return g_is_playing.load(); }
 
+bool IsBusy() { return g_busy.load() || g_is_playing.load() || g_play_task != nullptr; }
+
 void Stop() {
     if (!g_is_playing.load() && g_play_task == nullptr) {
         ScheduleRestoreAfterMusic(Application::GetInstance());
@@ -669,16 +693,28 @@ std::string PlayFirstSearchResult(const std::string& query) {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
     g_stop_requested.store(false);
+    g_busy.store(true);
+    HoldWifiForMusicHttp();
 
     Application::GetInstance().ShowMusicSearchingOnDisplay();
 
     auto* query_copy = new std::string(query);
-    BaseType_t created = xTaskCreatePinnedToCore(
-        SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, kMusicTaskPriority, &g_play_task, 0);
+    // 24 KB stack in internal SRAM fails while MQTT/TLS just closed (~18 KB free).
+    // Same PSRAM-stack path as Direct AI worker / firmware check.
+    BaseType_t created = xTaskCreatePinnedToCoreWithCaps(
+        SearchAndPlayTask, "otto_music", 8192 * 3, query_copy, kMusicTaskPriority, &g_play_task,
+        tskNO_AFFINITY, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (created != pdPASS) {
+        created = xTaskCreatePinnedToCore(
+            SearchAndPlayTask, "otto_music", 8192, query_copy, kMusicTaskPriority, &g_play_task, 0);
+    }
     if (created != pdPASS) {
         delete query_copy;
         g_play_task = nullptr;
-        ESP_LOGE(TAG, "PlayFirstSearchResult: xTaskCreate failed");
+        ClearMusicBusy();
+        ESP_LOGE(TAG, "PlayFirstSearchResult: xTaskCreate failed int_free=%u largest=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         Application::GetInstance().NotifyMusicSearchFailed();
         return R"({"success":false,"error":"failed to start playback task"})";
     }

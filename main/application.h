@@ -244,6 +244,8 @@ private:
     void ContinueOpenAudioChannel(ListeningMode mode);
     void ContinueWakeWordInvoke(const std::string& wake_word);
     void EnterMusicOnlyModeImpl();
+    /** Local music search/play must keep Wi-Fi PERFORMANCE (YouTube HTTPS). */
+    bool ShouldHoldWifiForMusic() const;
     void ShowMusicStatusOnDisplayImpl(const char* message);
     void NotifyMusicEndedImpl(const char* status_text, const char* wake_text);
     void NotifyMusicSearchFailedImpl();

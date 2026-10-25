@@ -7,6 +7,9 @@ namespace OttoMusic {
 /** True while a background stream task is running. */
 bool IsPlaying();
 
+/** True from play request until search/stream task fully exits. */
+bool IsBusy();
+
 /** Stop current playback (if any). */
 void Stop();
 

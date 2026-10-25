@@ -14,6 +14,7 @@
 #include "settings.h"
 #if CONFIG_BOARD_TYPE_OTTO_ROBOT
 #include "speak_lesson.h"
+#include "otto_music_player.h"
 #endif
 
 #include <cstring>
@@ -586,7 +587,14 @@ void Application::InitializeProtocol(bool prefer_websocket) {
     
     protocol_->OnAudioChannelClosed([this, &board]() {
         PrepareAudioChannelClose();
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+        // Music-only closes Xiaozhi then searches youtube.kytuoi.com over HTTPS.
+        // LOW_POWER (MAX_MODEM) here drops the TLS handshake (mbedtls -80).
+        if (ShouldHoldWifiForMusic()) {
+            ESP_LOGI(TAG, "Keep WiFi PERFORMANCE (music search/play)");
+            board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+        } else {
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+        }
         Schedule([this]() {
             if (suppress_channel_closed_idle_) {
                 ESP_LOGI(TAG, "Skip idle after channel close (course switch in progress)");
@@ -1215,11 +1223,24 @@ void Application::SetListeningMode(ListeningMode mode) {
     SetDeviceState(kDeviceStateListening);
 }
 
+bool Application::ShouldHoldWifiForMusic() const {
+    if (music_only_mode_entered_ || audio_service_.IsLocalPlaybackActive()) {
+        return true;
+    }
+#if CONFIG_BOARD_TYPE_OTTO_ROBOT
+    return OttoMusic::IsBusy();
+#else
+    return false;
+#endif
+}
+
 void Application::EnterMusicOnlyModeImpl() {
     if (music_only_mode_entered_) {
+        Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
         return;
     }
     music_only_mode_entered_ = true;
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
 
     aborted_ = true;
     if (protocol_) {
